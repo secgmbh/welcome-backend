@@ -14,10 +14,24 @@ from datetime import datetime, timezone
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# SECURITY: SECRET_KEY must be set via environment variable - no default
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("CRITICAL: SECRET_KEY environment variable is not set. Application cannot start without it.")
+if len(SECRET_KEY) < 32:
+    raise ValueError("CRITICAL: SECRET_KEY must be at least 32 characters long.")
+
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL')
+if not mongo_url:
+    raise ValueError("CRITICAL: MONGO_URL environment variable is not set.")
+
+db_name = os.environ.get('DB_NAME')
+if not db_name:
+    raise ValueError("CRITICAL: DB_NAME environment variable is not set.")
+
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 
 # Create the main app without a prefix
 app = FastAPI()
