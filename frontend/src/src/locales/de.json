@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "home": "Home",
+    "features": "Features",
+    "pricing": "Preise",
+    "resources": "Ressourcen",
+    "integrations": "Integrationen",
+    "login": "Anmelden",
+    "register": "Kostenlos starten"
+  },
+  "resources": {
+    "title": "Ressourcen & Wissen",
+    "subtitle": "Entdecken Sie hilfreiche Guides, Tutorials und Success Stories, um das Beste aus Welcome Link herauszuholen.",
+    "guides": {
+      "title": "Beliebte Guides",
+      "readMore": "Jetzt lesen",
+      "guide1": {
+        "title": "Der ultimative Guide zur digitalen Gästemappe",
+        "category": "Guide",
+        "readTime": "10 min",
+        "description": "Erfahren Sie, wie Sie eine professionelle digitale Gästemappe erstellen, die Ihre Gäste begeistert und Rückfragen reduziert."
+      },
+      "guide2": {
+        "title": "Upselling-Strategien für Hotels",
+        "category": "Strategie",
+        "readTime": "8 min",
+        "description": "Bewährte Methoden, um Ihren Zusatzumsatz um bis zu 40% zu steigern ohne aufdringlich zu wirken."
+      },
+      "guide3": {
+        "title": "QR-Codes effektiv einsetzen",
+        "category": "Tutorial",
+        "readTime": "5 min",
+        "description": "Best Practices für die Platzierung und Nutzung von QR-Codes in Ihrer Unterkunft."
+      }
+    },
+    "videos": {
+      "title": "Video-Tutorials"
+    },
+    "caseStudies": {
+      "title": "Erfolgsgeschichten"
+    },
+    "templates": {
+      "title": "Kostenlose Vorlagen",
+      "download": "Download"
+    },
+    "cta": {
+      "title": "Haben Sie noch Fragen?",
+      "subtitle": "Unser Team hilft Ihnen gerne weiter",
+      "start": "Kostenlos starten",
+      "contact": "Support kontaktieren"
+    }
+  },
+  "common": {
+    "loading": "Lädt...",
+    "error": "Ein Fehler ist aufgetreten",
+    "success": "Erfolgreich",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "previous": "Zurück",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "sort": "Sortieren",
+    "more": "Mehr"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "home": "Home",
+    "features": "Features",
+    "pricing": "Pricing",
+    "resources": "Resources",
+    "integrations": "Integrations",
+    "login": "Log in",
+    "register": "Get Started"
+  },
+  "resources": {
+    "title": "Resources & Knowledge",
+    "subtitle": "Discover helpful guides, tutorials, and success stories to get the most out of Welcome Link.",
+    "guides": {
+      "title": "Popular Guides",
+      "readMore": "Read now",
+      "guide1": {
+        "title": "The Ultimate Guide to Digital Guest Folders",
+        "category": "Guide",
+        "readTime": "10 min",
+        "description": "Learn how to create a professional digital guest folder that delights your guests and reduces inquiries."
+      },
+      "guide2": {
+        "title": "Upselling Strategies for Hotels",
+        "category": "Strategy",
+        "readTime": "8 min",
+        "description": "Proven methods to increase your additional revenue by up to 40% without being pushy."
+      },
+      "guide3": {
+        "title": "Using QR Codes Effectively",
+        "category": "Tutorial",
+        "readTime": "5 min",
+        "description": "Best practices for placement and use of QR codes in your accommodation."
+      }
+    },
+    "videos": {
+      "title": "Video Tutorials"
+    },
+    "caseStudies": {
+      "title": "Success Stories"
+    },
+    "templates": {
+      "title": "Free Templates",
+      "download": "Download"
+    },
+    "cta": {
+      "title": "Have Questions?",
+      "subtitle": "Our team is happy to help",
+      "start": "Get Started Free",
+      "contact": "Contact Support"
+    }
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "more": "More"
+  }
+}
