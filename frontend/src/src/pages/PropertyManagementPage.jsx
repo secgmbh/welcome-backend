@@ -49,10 +49,10 @@ export default function PropertyManagementPage() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">
-              Verwaltungs-Dashboard
+              Property Management
             </h1>
             <p className="text-gray-600 dark:text-gray-300">
-              Verwalten Sie Ihre Unterkünfte, Links und analysieren Sie die Nutzung
+              Verwalten Sie Ihre Unterkünfte, QR-Codes und analysieren Sie die Performance
             </p>
           </div>
 
