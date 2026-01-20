@@ -11,6 +11,7 @@ const FeaturesPage = lazy(() => import('./pages/FeaturesPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const PropertyManagementPage = lazy(() => import('./pages/PropertyManagementPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 
@@ -42,6 +43,7 @@ function App() {
               <Route path="/pricing" element={<PricingPage />} />
               <Route path="/resources" element={<ResourcesPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/management" element={<PropertyManagementPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/demo" element={<LoginPage />} />
               <Route path="/integrations" element={<FeaturesPage />} />
