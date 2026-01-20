@@ -11,7 +11,6 @@ export default function PropertyManagementPage() {
     { id: 2, name: 'Strandvilla Ostsee', location: 'Deutschland' },
   ]);
   const [selectedProperty, setSelectedProperty] = useState(null);
-  const [qrVariant, setQrVariant] = useState('A');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -113,37 +112,7 @@ export default function PropertyManagementPage() {
 
               {activeTab === 'qrcodes' && selectedProperty && (
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">QR-Code Varianten</h2>
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => {
-                        setQrVariant('A');
-                        analytics.generatedQRCode(getQRUrl(), 'variant_a');
-                      }}
-                      className={`w-full p-3 rounded-lg border-2 transition-all ${
-                        qrVariant === 'A'
-                          ? 'border-[#F27C2C] bg-orange-50 dark:bg-orange-900/20'
-                          : 'border-gray-200 dark:border-slate-700'
-                      }`}
-                    >
-                      <div className="font-medium text-gray-900 dark:text-white">Variante A</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">Standard QR-Code</div>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setQrVariant('B');
-                        analytics.generatedQRCode(getQRUrl(), 'variant_b');
-                      }}
-                      className={`w-full p-3 rounded-lg border-2 transition-all ${
-                        qrVariant === 'B'
-                          ? 'border-[#F27C2C] bg-orange-50 dark:bg-orange-900/20'
-                          : 'border-gray-200 dark:border-slate-700'
-                      }`}
-                    >
-                      <div className="font-medium text-gray-900 dark:text-white">Variante B</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">QR-Code mit Logo</div>
-                    </button>
-                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">QR-Code Generator</h2>
 
                   {/* QR-Code Link */}
                   <div className="mt-6 p-4 bg-gray-50 dark:bg-slate-700 rounded-lg">
@@ -223,7 +192,7 @@ export default function PropertyManagementPage() {
               {activeTab === 'qrcodes' && selectedProperty && (
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-8">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-                    QR-Code Variante {qrVariant}
+                    QR-Code für {selectedProperty.name}
                   </h2>
                   <div className="flex flex-col items-center gap-6">
                     <QRCodeGenerator
@@ -231,13 +200,11 @@ export default function PropertyManagementPage() {
                       size={256}
                       level="H"
                       includeDownload={true}
-                      includeImage={qrVariant === 'B'}
+                      includeImage={true}
                     />
                     <div className="w-full p-4 bg-gray-50 dark:bg-slate-700 rounded-lg">
                       <p className="text-sm text-gray-700 dark:text-gray-300">
-                        {qrVariant === 'A'
-                          ? 'Standard QR-Code ohne Logo. Perfekt für Druck und universelle Nutzung.'
-                          : 'QR-Code mit Ihrem Logo im Mittelpunkt. Professioneller Look, erhöhte Erkennbarkeit.'}
+                        Scannen Sie diesen QR-Code, um direkt zur digitalen Gästemappe zu gelangen.
                       </p>
                     </div>
                   </div>
