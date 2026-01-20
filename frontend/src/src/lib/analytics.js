@@ -138,8 +138,8 @@ export const analytics = {
   trackPageView: (pageName, properties = {}) => trackPageView(pageName, properties),
 
   // QR Code
-  generatedQRCode: (url, variant) =>
-    trackAction('qr_code_generated', 'qr', { url, variant })
+  generatedQRCode: (url) =>
+    trackAction('qr_code_generated', 'qr', { url })
 };
 
 export default analytics;
