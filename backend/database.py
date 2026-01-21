@@ -35,12 +35,19 @@ class StatusCheck(Base):
 
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
+    # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        return database_url
+    
+    # Fallback: Baue URL aus einzelnen Komponenten (MySQL)
     db_host = os.environ.get('DB_HOST', 'jts0.your-database.de')
     db_user = os.environ.get('DB_USER', 'npuqdy_1')
     db_password = os.environ.get('DB_PASSWORD', 'c4]GK&$&-Xn4')
     db_name = os.environ.get('DB_NAME', 'npuqdy_db1')
+    db_port = os.environ.get('DB_PORT', '5432')
     
-    return f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}?charset=utf8mb4"
+    return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 def init_db():
     """Initialisiere Datenbank und erstelle Tabellen"""
