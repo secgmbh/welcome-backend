@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from sqlalchemy.orm import Session
 import os
 import logging
 from pathlib import Path
@@ -15,13 +15,12 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # ============ SECURITY: Validierung der Umgebungsvariablen ============
-MONGO_URL = os.environ.get('MONGO_URL')
-DB_NAME = os.environ.get('DB_NAME', 'welcome_link')
 JWT_SECRET = os.environ.get('SECRET_KEY')
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
@@ -32,12 +31,13 @@ if not JWT_SECRET:
 if JWT_SECRET and len(JWT_SECRET) < 32:
     raise ValueError("❌ SECRET_KEY muss mindestens 32 Zeichen lang sein!")
 
-# MongoDB connection (optional)
-client = None
-db = None
-if MONGO_URL:
-    client = AsyncIOMotorClient(MONGO_URL)
-    db = client[DB_NAME]
+# Database connection
+try:
+    engine, SessionLocal = init_db()
+    logger = logging.getLogger(__name__)
+    logger.info("✓ Datenbank initialisiert")
+except Exception as e:
+    raise ValueError(f"❌ Datenbankverbindung fehlgeschlagen: {str(e)}")
 
 # Password Hashing mit Bcrypt (SICHER!)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -158,13 +158,13 @@ def verify_token(token: str) -> dict:
         logger.warning(f"Ungültiger Token-Versuch: {str(e)}")
         raise HTTPException(status_code=401, detail="Ungültiger Token")
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     """Hole den aktuellen authentifizierten Benutzer"""
     if not credentials:
         raise HTTPException(status_code=401, detail="Authentifizierung erforderlich")
     
     payload = verify_token(credentials.credentials)
-    user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+    user = db.query(DBUser).filter(DBUser.id == payload["user_id"]).first()
     
     if not user:
         logger.warning(f"Benutzer {payload['user_id']} nicht gefunden")
@@ -174,90 +174,94 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 # ============ INIT DEMO USER ============
 
-async def init_demo_user():
+def init_demo_user(db: Session):
     """Erstelle Demo-Benutzer wenn nicht vorhanden"""
     demo_email = "demo@welcome-link.de"
-    existing = await db.users.find_one({"email": demo_email})
+    existing = db.query(DBUser).filter(DBUser.email == demo_email).first()
     
     if not existing:
-        demo_user = {
-            "id": str(uuid.uuid4()),
-            "email": demo_email,
-            "password_hash": hash_password("Demo123!"),  # Stark Passwort mit Validator
-            "name": "Demo Benutzer",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "is_demo": True
-        }
-        await db.users.insert_one(demo_user)
+        demo_user = DBUser(
+            id=str(uuid.uuid4()),
+            email=demo_email,
+            password_hash=hash_password("Demo123!"),
+            name="Demo Benutzer",
+            created_at=datetime.now(timezone.utc),
+            is_demo=True
+        )
+        db.add(demo_user)
+        db.commit()
         
         # Erstelle Demo-Properties
         demo_properties = [
-            {
-                "id": str(uuid.uuid4()),
-                "user_id": demo_user["id"],
-                "name": "Boutique Hotel Alpenblick",
-                "description": "Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.",
-                "address": "Zugspitzstraße 42, 82467 Garmisch-Partenkirchen",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "user_id": demo_user["id"],
-                "name": "Ferienwohnung Seeblick",
-                "description": "Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.",
-                "address": "Seepromenade 15, 88131 Lindau",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "user_id": demo_user["id"],
-                "name": "Stadtapartment München City",
-                "description": "Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.",
-                "address": "Maximilianstraße 28, 80539 München",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }
+            DBProperty(
+                id=str(uuid.uuid4()),
+                user_id=demo_user.id,
+                name="Boutique Hotel Alpenblick",
+                description="Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.",
+                address="Zugspitzstraße 42, 82467 Garmisch-Partenkirchen",
+                created_at=datetime.now(timezone.utc)
+            ),
+            DBProperty(
+                id=str(uuid.uuid4()),
+                user_id=demo_user.id,
+                name="Ferienwohnung Seeblick",
+                description="Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.",
+                address="Seepromenade 15, 88131 Lindau",
+                created_at=datetime.now(timezone.utc)
+            ),
+            DBProperty(
+                id=str(uuid.uuid4()),
+                user_id=demo_user.id,
+                name="Stadtapartment München City",
+                description="Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.",
+                address="Maximilianstraße 28, 80539 München",
+                created_at=datetime.now(timezone.utc)
+            )
         ]
         
         for prop in demo_properties:
-            await db.properties.insert_one(prop)
+            db.add(prop)
+        db.commit()
         
         logger.info("✓ Demo-Benutzer und Properties erstellt")
 
 # ============ AUTH ROUTES ============
 
 @api_router.post("/auth/register", response_model=AuthResponse)
-async def register(data: UserRegister):
+def register(data: UserRegister, db: Session = Depends(get_db)):
     """Registriere einen neuen Benutzer"""
     try:
         # Überprüfe ob E-Mail bereits existiert
-        existing = await db.users.find_one({"email": data.email.lower()})
+        existing = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
         if existing:
             logger.warning(f"Registrierungsversuch mit existierender E-Mail: {data.email}")
             raise HTTPException(status_code=400, detail="E-Mail bereits registriert")
         
         # Erstelle Benutzer
         user_id = str(uuid.uuid4())
-        user_doc = {
-            "id": user_id,
-            "email": data.email.lower(),
-            "password_hash": hash_password(data.password),
-            "name": data.name or data.email.split("@")[0],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "is_demo": False
-        }
+        db_user = DBUser(
+            id=user_id,
+            email=data.email.lower(),
+            password_hash=hash_password(data.password),
+            name=data.name or data.email.split("@")[0],
+            created_at=datetime.now(timezone.utc),
+            is_demo=False
+        )
         
-        await db.users.insert_one(user_doc)
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
         
         # Erstelle Token
-        token = create_token(user_id, user_doc["email"])
+        token = create_token(user_id, db_user.email)
         logger.info(f"Neuer Benutzer registriert: {data.email}")
         
         return AuthResponse(
             token=token,
             user=User(
                 id=user_id,
-                email=user_doc["email"],
-                name=user_doc["name"],
+                email=db_user.email,
+                name=db_user.name,
                 is_demo=False
             )
         )
@@ -265,31 +269,32 @@ async def register(data: UserRegister):
         raise
     except Exception as e:
         logger.error(f"Fehler bei Registrierung: {str(e)}")
+        db.rollback()
         raise HTTPException(status_code=500, detail="Registrierung fehlgeschlagen")
 
 @api_router.post("/auth/login", response_model=AuthResponse)
-async def login(data: UserLogin):
+def login(data: UserLogin, db: Session = Depends(get_db)):
     """Benutzer Login mit E-Mail und Passwort"""
     try:
         # Finde Benutzer (normalisiere E-Mail)
-        user = await db.users.find_one({"email": data.email.lower()})
+        user = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
         
-        if not user or not verify_password(data.password, user.get("password_hash", "")):
+        if not user or not verify_password(data.password, user.password_hash):
             logger.warning(f"Fehlgeschlagener Login-Versuch: {data.email}")
             # Gebe keine Details preis
             raise HTTPException(status_code=401, detail="E-Mail oder Passwort falsch")
         
         # Erstelle Token
-        token = create_token(user["id"], user["email"])
+        token = create_token(user.id, user.email)
         logger.info(f"Benutzer eingeloggt: {data.email}")
         
         return AuthResponse(
             token=token,
             user=User(
-                id=user["id"],
-                email=user["email"],
-                name=user.get("name"),
-                is_demo=user.get("is_demo", False)
+                id=user.id,
+                email=user.email,
+                name=user.name,
+                is_demo=user.is_demo
             )
         )
     except HTTPException:
@@ -299,7 +304,7 @@ async def login(data: UserLogin):
         raise HTTPException(status_code=500, detail="Login fehlgeschlagen")
 
 @api_router.post("/auth/magic-link")
-async def request_magic_link(data: MagicLinkRequest):
+def request_magic_link(data: MagicLinkRequest):
     """Fordere einen Magic Link an (würde in Production E-Mail senden)"""
     # TODO: Implementiere echten E-Mail-Versand mit SendGrid oder ähnlich
     # Für Demo: Nur bestätigung
@@ -307,61 +312,88 @@ async def request_magic_link(data: MagicLinkRequest):
     return {"message": "Magic Link wurde an Ihre E-Mail gesendet", "email": data.email}
 
 @api_router.get("/auth/me", response_model=User)
-async def get_me(user: dict = Depends(get_current_user)):
+def get_me(user: DBUser = Depends(get_current_user)):
     """Hole Profil des aktuellen Benutzers"""
-    return User(**user)
+    return User(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        created_at=user.created_at,
+        is_demo=user.is_demo
+    )
 
 # ============ PROPERTY ROUTES ============
 
 @api_router.get("/properties", response_model=List[Property])
-async def get_properties(user: dict = Depends(get_current_user)):
+def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole alle Properties des Benutzers"""
     try:
-        properties = await db.properties.find(
-            {"user_id": user["id"]}, 
-            {"_id": 0}
-        ).to_list(1000)
-        
-        return properties
+        properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        return [Property(
+            id=p.id,
+            user_id=p.user_id,
+            name=p.name,
+            description=p.description,
+            address=p.address,
+            created_at=p.created_at
+        ) for p in properties]
     except Exception as e:
         logger.error(f"Fehler beim Abrufen von Properties: {str(e)}")
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen von Properties")
 
 @api_router.post("/properties", response_model=Property)
-async def create_property(data: PropertyCreate, user: dict = Depends(get_current_user)):
+def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Erstelle eine neue Property"""
     try:
         prop_id = str(uuid.uuid4())
-        prop_doc = {
-            "id": prop_id,
-            "user_id": user["id"],
-            "name": data.name.strip(),
-            "description": data.description.strip() if data.description else None,
-            "address": data.address.strip() if data.address else None,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
+        db_property = DBProperty(
+            id=prop_id,
+            user_id=user.id,
+            name=data.name.strip(),
+            description=data.description.strip() if data.description else None,
+            address=data.address.strip() if data.address else None,
+            created_at=datetime.now(timezone.utc)
+        )
         
-        await db.properties.insert_one(prop_doc)
-        logger.info(f"Property erstellt: {prop_id} für Benutzer {user['id']}")
+        db.add(db_property)
+        db.commit()
+        db.refresh(db_property)
         
-        return Property(**prop_doc)
+        logger.info(f"Property erstellt: {prop_id} für Benutzer {user.id}")
+        
+        return Property(
+            id=db_property.id,
+            user_id=db_property.user_id,
+            name=db_property.name,
+            description=db_property.description,
+            address=db_property.address,
+            created_at=db_property.created_at
+        )
     except Exception as e:
         logger.error(f"Fehler beim Erstellen von Property: {str(e)}")
+        db.rollback()
         raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Property")
 
 @api_router.get("/properties/{property_id}", response_model=Property)
-async def get_property(property_id: str, user: dict = Depends(get_current_user)):
+def get_property(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole eine spezifische Property"""
     try:
-        prop = await db.properties.find_one(
-            {"id": property_id, "user_id": user["id"]},
-            {"_id": 0}
-        )
+        prop = db.query(DBProperty).filter(
+            DBProperty.id == property_id,
+            DBProperty.user_id == user.id
+        ).first()
         
         if not prop:
             raise HTTPException(status_code=404, detail="Property nicht gefunden")
         
-        return Property(**prop)
+        return Property(
+            id=prop.id,
+            user_id=prop.user_id,
+            name=prop.name,
+            description=prop.description,
+            address=prop.address,
+            created_at=prop.created_at
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -369,13 +401,19 @@ async def get_property(property_id: str, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Property")
 
 @api_router.delete("/properties/{property_id}")
-async def delete_property(property_id: str, user: dict = Depends(get_current_user)):
+def delete_property(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Lösche eine Property"""
     try:
-        result = await db.properties.delete_one({"id": property_id, "user_id": user["id"]})
+        prop = db.query(DBProperty).filter(
+            DBProperty.id == property_id,
+            DBProperty.user_id == user.id
+        ).first()
         
-        if result.deleted_count == 0:
+        if not prop:
             raise HTTPException(status_code=404, detail="Property nicht gefunden")
+        
+        db.delete(prop)
+        db.commit()
         
         logger.info(f"Property gelöscht: {property_id}")
         return {"message": "Property gelöscht"}
@@ -383,30 +421,35 @@ async def delete_property(property_id: str, user: dict = Depends(get_current_use
         raise
     except Exception as e:
         logger.error(f"Fehler beim Löschen von Property: {str(e)}")
+        db.rollback()
         raise HTTPException(status_code=500, detail="Fehler beim Löschen der Property")
 
 # ============ STATUS ROUTES ============
 
 @api_router.get("/")
-async def root():
+def root():
     return {"message": "Welcome Link API", "version": "1.0.0"}
 
 @api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    _ = await db.status_checks.insert_one(doc)
+def create_status_check(input: StatusCheckCreate, db: Session = Depends(get_db)):
+    status_obj = StatusCheck(**input.model_dump())
+    db_check = DBStatusCheck(
+        id=status_obj.id,
+        client_name=status_obj.client_name,
+        timestamp=status_obj.timestamp
+    )
+    db.add(db_check)
+    db.commit()
     return status_obj
 
 @api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    return status_checks
+def get_status_checks(db: Session = Depends(get_db)):
+    checks = db.query(DBStatusCheck).all()
+    return [StatusCheck(
+        id=c.id,
+        client_name=c.client_name,
+        timestamp=c.timestamp
+    ) for c in checks]
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -427,19 +470,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
-async def startup():
+def startup():
     """Initialisiere Demo-Benutzer beim Start"""
     try:
-        await init_demo_user()
+        db = SessionLocal()
+        init_demo_user(db)
+        db.close()
         logger.info("✓ Application gestartet, Demo-Benutzer initialisiert")
     except Exception as e:
         logger.error(f"Fehler beim Startup: {str(e)}")
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    """Beende MongoDB-Verbindung"""
+def shutdown_db_client():
+    """Beende Datenbankverbindung"""
     try:
-        client.close()
+        engine.dispose()
         logger.info("✓ Datenbankverbindung geschlossen")
     except Exception as e:
         logger.error(f"Fehler beim Shutdown: {str(e)}")
