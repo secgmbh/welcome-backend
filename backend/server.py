@@ -26,19 +26,18 @@ JWT_SECRET = os.environ.get('SECRET_KEY')
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
 
-# CRITICAL: Validiere alle notwendigen Variablen
-if not MONGO_URL:
-    raise ValueError("❌ MONGO_URL ist nicht gesetzt!")
-if not DB_NAME:
-    raise ValueError("❌ DB_NAME ist nicht gesetzt!")
+# CRITICAL: Validiere nur notwendige Variablen
 if not JWT_SECRET:
     raise ValueError("❌ SECRET_KEY ist nicht gesetzt!")
-if len(JWT_SECRET) < 32:
+if JWT_SECRET and len(JWT_SECRET) < 32:
     raise ValueError("❌ SECRET_KEY muss mindestens 32 Zeichen lang sein!")
 
-# MongoDB connection
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+# MongoDB connection (optional)
+client = None
+db = None
+if MONGO_URL:
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
 
 # Password Hashing mit Bcrypt (SICHER!)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
