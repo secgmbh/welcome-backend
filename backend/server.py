@@ -81,17 +81,8 @@ class StatusCheckCreate(BaseModel):
 # Auth Models
 class UserRegister(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, description="Mindestens 8 Zeichen")
+    password: str = Field(min_length=6, description="Mindestens 6 Zeichen")
     name: Optional[str] = Field(None, max_length=100)
-    
-    @validator('password')
-    def password_strength(cls, v):
-        """Überprüfe Passwort-Stärke"""
-        if not any(char.isupper() for char in v):
-            raise ValueError("Passwort muss mindestens einen Großbuchstaben enthalten")
-        if not any(char.isdigit() for char in v):
-            raise ValueError("Passwort muss mindestens eine Zahl enthalten")
-        return v
 
 class UserLogin(BaseModel):
     email: EmailStr
