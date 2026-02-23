@@ -27,9 +27,17 @@ ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
 
 # CRITICAL: Validiere nur notwendige Variablen
 if not JWT_SECRET:
-    raise ValueError("❌ SECRET_KEY ist nicht gesetzt!")
+    # Für Development: nutze Default-Secret
+    if ENVIRONMENT == 'development':
+        JWT_SECRET = 'dev-secret-key-change-in-production-12345'
+        import sys
+        print(f"⚠️  WARNING: Nutze Development-Secret für JWT! Ändere SECRET_KEY in Production!", file=sys.stderr)
+    else:
+        raise ValueError("❌ SECRET_KEY ist nicht gesetzt!")
+        
 if JWT_SECRET and len(JWT_SECRET) < 32:
-    raise ValueError("❌ SECRET_KEY muss mindestens 32 Zeichen lang sein!")
+    if ENVIRONMENT != 'development':
+        raise ValueError("❌ SECRET_KEY muss mindestens 32 Zeichen lang sein!")
 
 # Database connection
 try:
@@ -46,8 +54,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 limiter = Limiter(key_func=get_remote_address)
 
 # JWT Settings
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -168,7 +174,13 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 def init_demo_user(db: Session):
     """Erstelle Demo-Benutzer wenn nicht vorhanden"""
     demo_email = "demo@welcome-link.de"
-    existing = db.query(DBUser).filter(DBUser.email == demo_email).first()
+    logger.info(f"Prüfe ob Demo-Benutzer existiert: {demo_email}")
+    
+    try:
+        existing = db.query(DBUser).filter(DBUser.email == demo_email).first()
+    except Exception as e:
+        logger.error(f"❌ Fehler beim Abfragen Demo-Benutzer: {str(e)}")
+        raise
     
     if not existing:
         demo_user = DBUser(
@@ -468,12 +480,15 @@ logger = logging.getLogger(__name__)
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
     try:
+        logger.info("🚀 Startup-Event: Öffne DB-Session...")
         db = SessionLocal()
+        logger.info("✓ DB-Session geöffnet")
+        
         init_demo_user(db)
         db.close()
         logger.info("✓ Application gestartet, Demo-Benutzer initialisiert")
     except Exception as e:
-        logger.error(f"Fehler beim Startup: {str(e)}")
+        logger.error(f"❌ Fehler beim Startup: {str(e)}", exc_info=True)
 
 @app.on_event("shutdown")
 def shutdown_db_client():
