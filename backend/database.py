@@ -72,8 +72,13 @@ def init_db():
         with engine.connect() as conn:
             print(f"[DB] ✓ Connection erfolgreich")
         
-        # WARNUNG: Lösche nur in Entwicklung!
-        # Base.metadata.drop_all(bind=engine)
+        # Zwinge Tabellen-Reset (behebt alte/kaputte Schemas)
+        print(f"[DB] ⚠️  Lösche alte Tabellen für sauberen Reset...")
+        try:
+            Base.metadata.drop_all(bind=engine)
+            print(f"[DB] ✓ Alte Tabellen gelöscht")
+        except Exception as e:
+            print(f"[DB] ⚠️  Konnte Tabellen nicht löschen (Ignoriert): {e}")
         
         # Erstelle alle Tabellen
         print(f"[DB] Erstelle Tables...")
