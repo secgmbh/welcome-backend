@@ -6,6 +6,10 @@ import os
 
 Base = declarative_base()
 
+# Wird in init_db() initialisiert
+SessionLocal = None
+engine = None
+
 class User(Base):
     __tablename__ = "users"
     
@@ -55,6 +59,8 @@ def get_database_url():
 
 def init_db():
     """Initialisiere Datenbank und erstelle Tabellen"""
+    global SessionLocal, engine
+    
     database_url = get_database_url()
     engine = create_engine(database_url, pool_pre_ping=True, echo=False)
     
@@ -68,7 +74,6 @@ def init_db():
 
 def get_db():
     """Dependency für FastAPI - gibt DB Session"""
-    from server import SessionLocal
     db = SessionLocal()
     try:
         yield db
