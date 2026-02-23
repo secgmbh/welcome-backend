@@ -40,11 +40,12 @@ if JWT_SECRET and len(JWT_SECRET) < 32:
         raise ValueError("❌ SECRET_KEY muss mindestens 32 Zeichen lang sein!")
 
 # Database connection
+logger = logging.getLogger(__name__)
 try:
     engine, SessionLocal = init_db()
-    logger = logging.getLogger(__name__)
     logger.info("✓ Datenbank initialisiert")
 except Exception as e:
+    logger.error(f"❌ Datenbankverbindung fehlgeschlagen: {str(e)}", exc_info=True)
     raise ValueError(f"❌ Datenbankverbindung fehlgeschlagen: {str(e)}")
 
 # Password Hashing mit Bcrypt (SICHER!)
@@ -481,12 +482,21 @@ def startup():
     """Initialisiere Demo-Benutzer beim Start"""
     try:
         logger.info("🚀 Startup-Event: Öffne DB-Session...")
+        if not SessionLocal:
+            logger.error("❌ SessionLocal ist nicht initialisiert!")
+            return
+        
         db = SessionLocal()
         logger.info("✓ DB-Session geöffnet")
         
-        init_demo_user(db)
-        db.close()
-        logger.info("✓ Application gestartet, Demo-Benutzer initialisiert")
+        try:
+            init_demo_user(db)
+            db.commit()
+            logger.info("✓ Demo-Benutzer initialisiert")
+        finally:
+            db.close()
+        
+        logger.info("✓ Application gestartet")
     except Exception as e:
         logger.error(f"❌ Fehler beim Startup: {str(e)}", exc_info=True)
 

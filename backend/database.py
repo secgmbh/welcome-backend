@@ -62,15 +62,29 @@ def init_db():
     global SessionLocal, engine
     
     database_url = get_database_url()
-    engine = create_engine(database_url, pool_pre_ping=True, echo=False)
+    print(f"[DB] Verbinde zu: {database_url[:50]}...")
     
-    # Erstelle alle Tabellen
-    Base.metadata.create_all(bind=engine)
-    
-    # Erstelle Session Factory
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
-    return engine, SessionLocal
+    try:
+        engine = create_engine(database_url, pool_pre_ping=True, echo=False)
+        print(f"[DB] Engine erstellt")
+        
+        # Teste Connection
+        with engine.connect() as conn:
+            print(f"[DB] ✓ Connection erfolgreich")
+        
+        # Erstelle alle Tabellen
+        print(f"[DB] Erstelle Tables...")
+        Base.metadata.create_all(bind=engine)
+        print(f"[DB] ✓ Tables erstellt")
+        
+        # Erstelle Session Factory
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        print(f"[DB] ✓ SessionLocal initialisiert")
+        
+        return engine, SessionLocal
+    except Exception as e:
+        print(f"[DB] ❌ ERROR: {str(e)}")
+        raise
 
 def get_db():
     """Dependency für FastAPI - gibt DB Session"""
