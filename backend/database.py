@@ -40,12 +40,16 @@ def get_database_url():
     if database_url:
         return database_url
     
-    # Fallback: Baue URL aus einzelnen Komponenten (MySQL)
-    db_host = os.environ.get('DB_HOST', 'jts0.your-database.de')
-    db_user = os.environ.get('DB_USER', 'npuqdy_1')
-    db_password = os.environ.get('DB_PASSWORD', 'c4]GK&$&-Xn4')
-    db_name = os.environ.get('DB_NAME', 'npuqdy_db1')
+    # Fallback: Baue URL aus einzelnen Komponenten
+    db_host = os.environ.get('DB_HOST')
+    db_user = os.environ.get('DB_USER')
+    db_password = os.environ.get('DB_PASSWORD')
+    db_name = os.environ.get('DB_NAME')
     db_port = os.environ.get('DB_PORT', '5432')
+    
+    if not all([db_host, db_user, db_password, db_name]):
+        # Fallback zu SQLite für lokale Entwicklung
+        return "sqlite:///./app.db"
     
     return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 

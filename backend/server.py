@@ -270,14 +270,18 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         # Finde Benutzer (normalisiere E-Mail)
         user = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
         
-        if not user or not verify_password(data.password, user.password_hash):
-            logger.warning(f"Fehlgeschlagener Login-Versuch: {data.email}")
-            # Gebe keine Details preis
+        if not user:
+            logger.warning(f"Benutzer nicht gefunden: {data.email}")
+            raise HTTPException(status_code=401, detail="E-Mail oder Passwort falsch")
+        
+        # Überprüfe Passwort
+        if not verify_password(data.password, user.password_hash):
+            logger.warning(f"Falsches Passwort für: {data.email}")
             raise HTTPException(status_code=401, detail="E-Mail oder Passwort falsch")
         
         # Erstelle Token
         token = create_token(user.id, user.email)
-        logger.info(f"Benutzer eingeloggt: {data.email}")
+        logger.info(f"✓ Benutzer eingeloggt: {data.email}")
         
         return AuthResponse(
             token=token,
@@ -291,8 +295,8 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Fehler bei Login: {str(e)}")
-        raise HTTPException(status_code=500, detail="Login fehlgeschlagen")
+        logger.error(f"❌ Fehler bei Login: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)[:50]}")
 
 @api_router.post("/auth/magic-link")
 def request_magic_link(data: MagicLinkRequest):
