@@ -22,7 +22,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 # ============ SECURITY: Validierung der Umgebungsvariablen ============
 JWT_SECRET = os.environ.get('SECRET_KEY')
-CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'https://welcome-link.de,https://www.welcome-link.de,http://localhost:3000,http://localhost:5173').split(',')
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
 
 # CRITICAL: Validiere nur notwendige Variablen
