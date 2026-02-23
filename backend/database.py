@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text
+from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timezone
@@ -72,10 +72,18 @@ def init_db():
         with engine.connect() as conn:
             print(f"[DB] ✓ Connection erfolgreich")
         
+        # WARNUNG: Lösche nur in Entwicklung!
+        # Base.metadata.drop_all(bind=engine)
+        
         # Erstelle alle Tabellen
         print(f"[DB] Erstelle Tables...")
         Base.metadata.create_all(bind=engine)
         print(f"[DB] ✓ Tables erstellt")
+        
+        # Überprüfe ob Tables existieren
+        insp = inspect(engine)
+        tables = insp.get_table_names()
+        print(f"[DB] ✓ Existierende Tabellen: {tables}")
         
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -84,6 +92,8 @@ def init_db():
         return engine, SessionLocal
     except Exception as e:
         print(f"[DB] ❌ ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise
 
 def get_db():
