@@ -75,7 +75,10 @@ def init_db():
         # Zwinge Tabellen-Reset (behebt alte/kaputte Schemas)
         print(f"[DB] ⚠️  Lösche alte Tabellen für sauberen Reset...")
         try:
-            Base.metadata.drop_all(bind=engine)
+            # Drop alle Tabellen mit CASCADE
+            with engine.begin() as conn:
+                for table in reversed(Base.metadata.sorted_tables):
+                    conn.execute(table.drop(engine))
             print(f"[DB] ✓ Alte Tabellen gelöscht")
         except Exception as e:
             print(f"[DB] ⚠️  Konnte Tabellen nicht löschen (Ignoriert): {e}")
