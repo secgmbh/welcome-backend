@@ -24,6 +24,16 @@ services:
         value: https://api.welcome-link.de,https://www.welcome-link.de,https://welcome-link.de,https://welcome-link-frontend.onrender.com,http://localhost:3000
       - key: ENVIRONMENT
         value: production
+      - key: SMTP_HOST
+        value: mail.your-server.de
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        fromSecret: SMTP_USER
+      - key: SMTP_PASSWORD
+        fromSecret: SMTP_PASSWORD
+      - key: SMTP_FROM
+        value: info@welcome-link.de
 
   # Frontend Service
   - type: web
@@ -33,7 +43,9 @@ services:
     staticPublishPath: ./frontend/build
     envVars:
       - key: REACT_APP_BACKEND_URL
-        value: https://welcome-link-backend.onrender.com
+        value: https://api.welcome-link.de
+      - key: RESEND_API_KEY
+        fromSecret: RESEND_API_KEY
     routes:
       - type: rewrite
         source: /*
