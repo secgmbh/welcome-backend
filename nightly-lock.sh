@@ -72,7 +72,32 @@ main() {
     # Your nightly improvement tasks go here:
     echo "Running nightly checks..."
     
-    # Example: Check for outdated dependencies, run tests, etc.
+    # Task 1: Cleanup temporary files
+    find "$WORKING_DIR" -name "*.tmp" -o -name "*.log" -o -name "*.pyc" 2>/dev/null | xargs rm -f 2>/dev/null
+    echo "✓ Cleanup temporary files"
+    
+    # Task 2: Check for TODO comments
+    echo "Checking TODO comments..."
+    local todo_count=$(grep -r "TODO\|FIXME" "$WORKING_DIR" --include="*.py" --include="*.jsx" --include="*.js" 2>/dev/null | wc -l)
+    echo "  Found $todo_count TODO comments"
+    
+    # Task 3: Check for print statements in Python (should use logger)
+    echo "Checking for print() statements in Python..."
+    local print_count=$(grep -r "^\s*print(" "$WORKING_DIR" --include="*.py" 2>/dev/null | wc -l)
+    if [[ $print_count -gt 0 ]]; then
+        echo "  ⚠️  Found $print_count print() statements (should use logger)"
+    else
+        echo "  ✓ No print() statements found"
+    fi
+    
+    # Task 4: Check git status for uncommitted changes
+    echo "Checking git status..."
+    cd "$WORKING_DIR"
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        echo "  ⚠️  Uncommitted changes detected"
+    else
+        echo "  ✓ No uncommitted changes"
+    fi
     
     echo "Nightly improvements completed!"
 }
