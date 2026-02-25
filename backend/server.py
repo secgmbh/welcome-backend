@@ -29,7 +29,7 @@ ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
 if not JWT_SECRET:
     # Für Development: nutze Default-Secret
     if ENVIRONMENT == 'development':
-        JWT_SECRET = 'dev-secret-key-change-in-production-12345'
+        JWT_SECRET = 'welcome-link-dev-secret-key-change-in-production-12345'
         import sys
         print(f"⚠️  WARNING: Nutze Development-Secret für JWT! Ändere SECRET_KEY in Production!", file=sys.stderr)
     else:
@@ -38,6 +38,13 @@ if not JWT_SECRET:
 if JWT_SECRET and len(JWT_SECRET) < 32:
     if ENVIRONMENT != 'development':
         raise ValueError("❌ SECRET_KEY muss mindestens 32 Zeichen lang sein!")
+
+# ============ SMTP CONFIG (mit Fallback für Demo/Development) ============
+SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.your-server.de')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'td2dfTR87tFiw2Wg')
+SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
 
 # Database connection
 logger = logging.getLogger(__name__)
