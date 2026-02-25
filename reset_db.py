@@ -4,6 +4,7 @@ Reset database script - löscht alle Tabellen und erstellt sie neu.
 Nützlich für Render nach Fehlern oder Schema-Änderungen.
 """
 import os
+import sys
 from pathlib import Path
 
 # Setup environment
@@ -11,7 +12,9 @@ ROOT_DIR = Path(__file__).parent
 os.chdir(ROOT_DIR)
 os.environ.setdefault('ENVIRONMENT', 'production')
 
-from database import init_db, Base, engine
+# Import after env setup
+from sqlalchemy import create_engine, inspect
+from database import Base, get_database_url
 
 def reset_database():
     """Datenbank zurücksetzen - alle Tabellen löschen und neu erstellen"""
@@ -19,32 +22,46 @@ def reset_database():
     print("DATABASE RESET START")
     print("=" * 60)
     
+    database_url = get_database_url()
+    print(f"[1/4] DATABASE_URL: {database_url[:50]}...")
+    
     try:
-        print("[1/4] Prüfe Datenbankverbindung...")
-        database_url = os.environ.get('DATABASE_URL', 'nicht gesetzt')
-        print(f"      DATABASE_URL: {database_url[:20]}...")
+        # Erstelle Engine
+        print("[2/4] Erstelle Engine...")
+        engine = create_engine(database_url, pool_pre_ping=True)
+        print("      ✓ Engine erstellt")
         
-        print("[2/4] Öffne Verbindung...")
-        engine, SessionLocal = init_db()
-        print("      ✓ Verbindung hergestellt")
+        # Prüfe existierende Tabellen
+        print("[3/4] Prüfe existierende Tabellen...")
+        insp = inspect(engine)
+        tables = insp.get_table_names()
+        print(f"      Aktuelle Tabellen: {tables}")
         
-        print("[3/4] Lösche alle Tabellen...")
-        Base.metadata.drop_all(bind=engine)
-        print("      ✓ Tabellen gelöscht")
+        if tables:
+            print("[3a/4] Lösche alle Tabellen mit CASCADE...")
+            # Drop alle Tabellen einzeln (reihenfolge wichtig wegen foreign keys)
+            with engine.begin() as conn:
+                # Drop in umgekehrter Reihenfolge (abhaengigkeiten auflösen)
+                for table_name in reversed(tables):
+                    print(f"      Drop table: {table_name}")
+                    conn.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE")
+            print("      ✓ Alle Tabellen gelöscht")
+        else:
+            print("      ℹ️  Keine Tabellen zum Löschen")
         
+        # Erstelle alle Tabellen neu
         print("[4/4] Erstelle Tabellen neu...")
         Base.metadata.create_all(bind=engine)
         print("      ✓ Tabellen erstellt")
         
+        # Verifiziere
+        insp = inspect(engine)
+        tables = insp.get_table_names()
+        print(f"\n✓ Erstellte Tabellen: {tables}")
+        
         print("=" * 60)
         print("DATABASE RESET SUCCESSFUL")
         print("=" * 60)
-        
-        # Zeige erstellte Tabellen
-        from sqlalchemy import inspect
-        insp = inspect(engine)
-        tables = insp.get_table_names()
-        print(f"\nErstellte Tabellen: {tables}")
         
     except Exception as e:
         print(f"\n❌ FEHLER: {str(e)}")
@@ -56,4 +73,4 @@ def reset_database():
 
 if __name__ == "__main__":
     success = reset_database()
-    exit(0 if success else 1)
+    sys.exit(0 if success else 1)

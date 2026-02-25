@@ -88,6 +88,23 @@ def init_db():
         Base.metadata.create_all(bind=engine)
         print(f"[DB] ✓ Tables erstellt")
         
+        # Überprüfe ob users-Tabelle korrekt ist
+        try:
+            with engine.connect() as conn:
+                # Prüfe ob password_hash Spalte existiert
+                result = conn.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'password_hash'
+                """).fetchone()
+                if not result:
+                    print(f"[DB] ⚠️  password_hash Spalte fehlt in users-Tabelle - versuche ALTER TABLE...")
+                    conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)")
+                    conn.commit()
+                    print(f"[DB] ✓ password_hash Spalte hinzugefügt")
+        except Exception as e:
+            print(f"[DB] ⚠️  Konnte users-Tabelle nicht prüfen/ändern: {e}")
+        
         # Überprüfe ob Tables existieren
         insp = inspect(engine)
         tables = insp.get_table_names()
