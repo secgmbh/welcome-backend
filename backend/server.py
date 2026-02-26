@@ -305,6 +305,83 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail="Registrierung fehlgeschlagen")
 
+
+# ============ EMAIL VERIFICATION ROUTES ============
+
+@api_router.post("/auth/verify-email")
+def verify_email(data: dict, db: Session = Depends(get_db)):
+    """Verifiziere E-Mail mit Token"""
+    token = data.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token fehlt")
+    
+    try:
+        user = db.query(DBUser).filter(DBUser.email_verification_token == token).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Ungültiger Token")
+        
+        # Prüfe ob Token abgelaufen ist
+        if user.email_verification_token_expires and datetime.now(timezone.utc) > user.email_verification_token_expires:
+            raise HTTPException(status_code=400, detail="Token ist abgelaufen")
+        
+        # Verifiziere E-Mail
+        user.is_email_verified = True
+        user.email_verification_token = None  # Token zurücksetzen
+        db.commit()
+        
+        logger.info(f"✓ E-Mail verifiziert: {user.email}")
+        
+        return {"message": "E-Mail erfolgreich verifiziert", "email": user.email}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler bei Email-Verifizierung: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Verifizierung fehlgeschlagen")
+
+
+@api_router.post("/auth/resend-verification")
+def resend_verification(data: dict, db: Session = Depends(get_db)):
+    """Sende Verifizierungs-E-Mail erneut"""
+    email = data.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="E-Mail fehlt")
+    
+    try:
+        user = db.query(DBUser).filter(DBUser.email == email.lower()).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+        
+        # Prüfe ob bereits verifiziert
+        if user.is_email_verified:
+            raise HTTPException(status_code=400, detail="E-Mail bereits verifiziert")
+        
+        # Generiere neuen Token
+        import secrets
+        new_token = secrets.token_urlsafe(32)
+        from datetime import timedelta
+        user.email_verification_token = new_token
+        user.email_verification_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        db.commit()
+        
+        logger.info(f"Verifizierungs-E-Mail erneut gesendet an: {email}")
+        
+        # TODO: In Production echte E-Mail senden
+        return {
+            "message": "Verifizierungs-E-Mail erneut gesendet",
+            "email": email
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Resenden der Verifizierung: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Resenden")
+
 @api_router.post("/auth/login", response_model=AuthResponse)
 def login(data: UserLogin, db: Session = Depends(get_db)):
     """Benutzer Login mit E-Mail und Passwort"""
@@ -612,6 +689,35 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
     except Exception as e:
         logger.error(f"Fehler beim Erstellen des Guestview Tokens: {str(e)}")
         raise HTTPException(status_code=500, detail="Fehler beim Erstellen des Tokens")
+
+
+@api_router.get("/properties-with-qr")
+def get_properties_with_qr(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Hole alle Properties mit QR Code URLs"""
+    try:
+        properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        result = []
+        
+        for p in properties:
+            # QR Code URL für den Guestview Endpoint
+            # Für Demo: Verwende feste Demo-Guestview URL
+            qr_url = f"{process.env.get('FRONTEND_URL', 'https://www.welcome-link.de')}/guestview/demo-guest-view-token"
+            
+            result.append({
+                "id": p.id,
+                "user_id": p.user_id,
+                "name": p.name,
+                "description": p.description,
+                "address": p.address,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "qr_code_url": qr_url
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Fehler beim Abrufen von Properties mit QR Codes: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Abrufen von Properties")
+
 
 @api_router.get("/guestview/{token}")
 def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
