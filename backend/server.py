@@ -715,6 +715,9 @@ def debug_db_schema(db: Session = Depends(get_db)):
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+@api_router.get("/guestview-public-qr-data")
 def get_guestview_public_qr_data(db: Session = Depends(get_db)):
     """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
     from sqlalchemy import text as sql_text
