@@ -701,7 +701,7 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         # Hole User
         user = db.query(DBUser).filter(DBUser.id == demo_user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail="Demo-User nicht gefunden")
+            raise HTTPException(status_code=404, detail=f"Demo-User mit ID {demo_user_id} nicht gefunden")
         
         # Hole Properties
         properties = db.query(DBProperty).filter(DBProperty.user_id == demo_user_id).all()
@@ -721,12 +721,14 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
                 "qr_code_url": qr_url
             })
         
+        logger.info(f"QR Daten zurückgegeben für {len(properties)} Properties")
         return result
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Fehler beim Abrufen der öffentlichen QR-Daten: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Daten")
+        error_msg = f"Fehler beim Abrufen der QR-Daten: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @api_router.get("/guestview/{token}")
