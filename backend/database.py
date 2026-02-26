@@ -97,6 +97,22 @@ def init_db():
         tables = insp.get_table_names()
         print(f"[DB] ✓ Existierende Tabellen: {tables}")
         
+        # Überprüfe ob properties description Spalte existiert
+        try:
+            with engine.connect() as conn:
+                result = conn.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'properties' AND column_name = 'description'
+                """).fetchone()
+                if not result:
+                    print(f"[DB] ⚠️  description Spalte fehlt in properties-Tabelle - füge hinzu...")
+                    conn.execute("ALTER TABLE properties ADD COLUMN IF NOT EXISTS description TEXT")
+                    conn.commit()
+                    print(f"[DB] ✓ description Spalte hinzugefügt")
+        except Exception as e:
+            print(f"[DB] ⚠️  Konnte properties-Tabelle nicht prüfen/ändern: {e}")
+        
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print(f"[DB] ✓ SessionLocal initialisiert")
