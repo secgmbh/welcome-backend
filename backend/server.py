@@ -756,57 +756,6 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-@api_router.get("/guestview-qr-data")
-def get_guestview_qr_data(db: Session = Depends(get_db)):
-    """Öffentlicher Endpoint für QR Code Daten - direkte Abfrage ohne description"""
-    from sqlalchemy import text as sql_text
-    try:
-        demo_email = "demo@welcome-link.de"
-        user = db.query(DBUser).filter(DBUser.email == demo_email).first()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
-        
-        # hole Properties mit raw SQL - direkt in SQL String (keine Parameter)
-        stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = '3e6b2efc-e463-4bb5-b6df-3da7e9708048'")
-        sql_result = db.execute(stmt).fetchall()
-        
-        properties = []
-        for row in sql_result:
-            p = type('Property', (), {})()
-            p.id = str(row.id) if row.id else None
-            p.user_id = str(row.user_id) if row.user_id else None
-            p.name = row.name
-            p.address = row.address
-            p.created_at = row.created_at
-            p.description = None
-            properties.append(p)
-        
-        frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
-        qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
-        
-        result = []
-        for p in properties:
-            result.append({
-                "id": p.id,
-                "user_id": p.user_id,
-                "name": p.name,
-                "description": p.description,
-                "address": p.address,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-                "qr_code_url": qr_url
-            })
-        
-        logger.info(f"QR Daten zurückgegeben für {len(properties)} Properties")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_msg = f"Fehler beim Abrufen der QR-Daten: {str(e)}"
-        logger.error(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
-
-
 @api_router.post("/demo/init")
 def init_demo_user_endpoint(db: Session = Depends(get_db)):
     """Initialisiere Demo User manuell"""
@@ -818,18 +767,33 @@ def init_demo_user_endpoint(db: Session = Depends(get_db)):
 def get_guestview_qr_data_simple():
     """Simple QR Data Endpoint ohne Datenbank (für Demo)"""
     import json
-    from pathlib import Path
+    import os
     
     try:
-        json_path = Path(__file__).parent / "demo_properties.json"
-        with open(json_path, "r", encoding="utf-8") as f:
-            properties = json.load(f)
+        # Versuche verschiedene Pfade für die JSON Datei
+        json_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_properties.json"),
+            "backend/demo_properties.json",
+            "demo_properties.json"
+        ]
+        
+        json_data = None
+        for path in json_paths:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    json_data = json.load(f)
+                    break
+            except FileNotFoundError:
+                continue
+        
+        if json_data is None:
+            raise HTTPException(status_code=500, detail="demo_properties.json nicht gefunden")
         
         frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
         qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
         
         result = []
-        for p in properties:
+        for p in json_data:
             result.append({
                 "id": p.get("id"),
                 "user_id": p.get("user_id"),
@@ -840,8 +804,10 @@ def get_guestview_qr_data_simple():
                 "qr_code_url": qr_url
             })
         
-        logger.info(f"QR Daten (simple) zurückgegeben für {len(properties)} Properties")
+        logger.info(f"QR Daten (simple) zurückgegeben für {len(json_data)} Properties")
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = f"Fehler beim Abrufen der QR-Daten (simple): {str(e)}"
         logger.error(error_msg)
