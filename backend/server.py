@@ -807,6 +807,13 @@ def get_guestview_qr_data(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@api_router.post("/demo/init")
+def init_demo_user_endpoint(db: Session = Depends(get_db)):
+    """Initialisiere Demo User manuell"""
+    init_demo_user(db)
+    return {"message": "Demo User initialisiert"}
+
+
 @api_router.get("/guestview/{token}")
 def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
     """Rufe Guestview Daten anhand Token ab (ohne Auth)"""
