@@ -30,7 +30,7 @@
 - [ ] Buchungsübersicht & Export
 
 ### 3.2 Reporting
-- [ ] PDF Export für Gäste-Guide
+- [x] PDF Export für Gäste-Guide - FERTIG ✅
 - [ ] Export Funktionen
 
 ## Phase 4: Missing Features - ERLEDIGT ✅
@@ -53,9 +53,9 @@
 
 ## Phase 5: Next Features (Medium Priority)
 
-### 5.1 PDF Export für Gäste
-- [ ] PDF Generierung für Guestview (Gäste-Guide als PDF)
-- [ ] Template für PDF (LaTeX oder HTML-to-PDF)
+### 5.1 PDF Export für Gäste - FERTIG ✅
+- [x] PDF Generierung für Guestview (Gäste-Guide als PDF)
+- [x] Download Button für Guests
 
 ### 5.2 QR Code Download
 - [ ] Download Button für QR Codes
