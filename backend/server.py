@@ -814,6 +814,40 @@ def init_demo_user_endpoint(db: Session = Depends(get_db)):
     return {"message": "Demo User initialisiert"}
 
 
+@api_router.get("/guestview-qr-simple")
+def get_guestview_qr_data_simple():
+    """Simple QR Data Endpoint ohne Datenbank (für Demo)"""
+    import json
+    from pathlib import Path
+    
+    try:
+        json_path = Path(__file__).parent / "demo_properties.json"
+        with open(json_path, "r", encoding="utf-8") as f:
+            properties = json.load(f)
+        
+        frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
+        qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
+        
+        result = []
+        for p in properties:
+            result.append({
+                "id": p.get("id"),
+                "user_id": p.get("user_id"),
+                "name": p.get("name"),
+                "description": p.get("description"),
+                "address": p.get("address"),
+                "created_at": p.get("created_at"),
+                "qr_code_url": qr_url
+            })
+        
+        logger.info(f"QR Daten (simple) zurückgegeben für {len(properties)} Properties")
+        return result
+    except Exception as e:
+        error_msg = f"Fehler beim Abrufen der QR-Daten (simple): {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
 @api_router.get("/guestview/{token}")
 def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
     """Rufe Guestview Daten anhand Token ab (ohne Auth)"""
