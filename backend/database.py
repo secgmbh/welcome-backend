@@ -113,22 +113,6 @@ def init_db():
         except Exception as e:
             print(f"[DB] ⚠️  Konnte properties-Tabelle nicht prüfen/ändern: {e}")
         
-        # Prüfe ob properties.description Spalte existiert
-        try:
-            with engine.connect() as conn:
-                result = conn.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'description'
-                """).fetchone()
-                if not result:
-                    print(f"[DB] ⚠️  description Spalte fehlt in properties-Tabelle - füge hinzu...")
-                    conn.execute("ALTER TABLE properties ADD COLUMN IF NOT EXISTS description TEXT")
-                    conn.commit()
-                    print(f"[DB] ✓ description Spalte hinzugefügt")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte properties-Tabelle nicht prüfen/ändern: {e}")
-        
         # Prüfe ob properties.user_id korrekt ist (muss VARCHAR/TEXT sein für UUIDs)
         # Falls Integer -> Tabellen neu erstellen (Daten gehen verloren!)
         try:
