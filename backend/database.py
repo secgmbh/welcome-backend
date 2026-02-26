@@ -37,6 +37,14 @@ class StatusCheck(Base):
     client_name = Column(String(255), nullable=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class GuestView(Base):
+    __tablename__ = "guest_views"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    token = Column(String(36), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)
