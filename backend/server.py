@@ -466,6 +466,82 @@ def get_status_checks(db: Session = Depends(get_db)):
         timestamp=c.timestamp
     ) for c in checks]
 
+# ============ GUESTVIEW ROUTES ============
+
+@api_router.post("/guestview-token")
+def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Erstelle einzigartigen Token für passwortlose Gästeanmeldung"""
+    try:
+        token = str(uuid.uuid4())
+        
+        # Lösche alte Token für diesen User
+        old_tokens = db.query(DBGuestView).filter(DBGuestView.user_id == user.id).all()
+        for old in old_tokens:
+            db.delete(old)
+        
+        # Erstelle neuen Token
+        guest_view = DBGuestView(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            token=token,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        db.add(guest_view)
+        db.commit()
+        db.refresh(guest_view)
+        
+        logger.info(f"Guestview Token erstellt für User {user.email}: {token}")
+        
+        return {"guestview_url": f"/guestview/{token}", "token": token}
+    except Exception as e:
+        logger.error(f"Fehler beim Erstellen des Guestview Tokens: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Erstellen des Tokens")
+
+@api_router.get("/guestview/{token}")
+def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
+    """Rufe Guestview Daten anhand Token ab (ohne Auth)"""
+    try:
+        guest_view = db.query(DBGuestView).filter(DBGuestView.token == token).first()
+        
+        if not guest_view:
+            raise HTTPException(status_code=404, detail="Ungültiger Token")
+        
+        user = db.query(DBUser).filter(DBUser.id == guest_view.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User nicht gefunden")
+        
+        # Hole alle Properties des Users
+        properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        
+        logger.info(f"Guestview aufgerufen für User {user.email} via Token")
+        
+        return {
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "invoice_name": user.invoice_name,
+                "invoice_address": user.invoice_address,
+                "invoice_zip": user.invoice_zip,
+                "invoice_city": user.invoice_city,
+                "invoice_country": user.invoice_country,
+                "invoice_vat_id": user.invoice_vat_id
+            },
+            "properties": [{
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "address": p.address,
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            } for p in properties]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Abrufen des Guestviews: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Abrufen des Guestviews")
+
 # Include the router in the main app
 app.include_router(api_router)
 
