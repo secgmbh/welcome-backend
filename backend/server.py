@@ -692,7 +692,29 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
         raise HTTPException(status_code=500, detail="Fehler beim Erstellen des Tokens")
 
 
-@api_router.get("/guestview-public-qr-data")
+@api_router.get("/debug-db-schema")
+def debug_db_schema(db: Session = Depends(get_db)):
+    """Debug Endpoint für DB Schema"""
+    try:
+        # Prüfe user_id Type
+        result = db.execute("SELECT data_type FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'user_id'").fetchone()
+        user_id_type = result[0] if result else "N/A"
+        
+        # Prüfe description Spalte
+        result = db.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'").fetchone()
+        has_description = result is not None
+        
+        # Prüfe Tabellen
+        result = db.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'").fetchall()
+        tables = [r[0] for r in result]
+        
+        return {
+            "tables": tables,
+            "user_id_type": user_id_type,
+            "has_description": has_description
+        }
+    except Exception as e:
+        return {"error": str(e)}
 def get_guestview_public_qr_data(db: Session = Depends(get_db)):
     """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
     from sqlalchemy import text as sql_text
