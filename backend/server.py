@@ -695,6 +695,7 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
 @api_router.get("/guestview-public-qr-data")
 def get_guestview_public_qr_data(db: Session = Depends(get_db)):
     """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
+    from sqlalchemy import text as sql_text
     try:
         # Hole Demo-User anhand E-Mail (zuverlässiger als ID)
         demo_email = "demo@welcome-link.de"
@@ -706,7 +707,7 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         # Hole Properties - nutze text() für flexible Spaltenabfrage
         # Prüfe ob description Spalte existiert
         try:
-            result = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'")).fetchone()
+            result = db.execute(sql_text("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'")).fetchone()
             has_description = result is not None
         except:
             has_description = False
