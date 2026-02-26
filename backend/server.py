@@ -716,8 +716,9 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         else:
             # Ohne description Spalte - nur id, name, address
             from sqlalchemy import text as sql_text
-            stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = :user_id")
-            sql_result = db.execute(stmt, {"user_id": str(user.id)}).fetchall()
+            user_id_str = str(user.id)
+            stmt = sql_text(f"SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = '{user_id_str}'")
+            sql_result = db.execute(stmt).fetchall()
             properties = []
             for row in sql_result:
                 p = type('Property', (), {})()
