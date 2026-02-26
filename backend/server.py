@@ -697,38 +697,27 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
     """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
     from sqlalchemy import text as sql_text
     try:
-        # Hole Demo-User anhand E-Mail (zuverlässiger als ID)
+        # Hole Demo-User anhand E-Mail
         demo_email = "demo@welcome-link.de"
         user = db.query(DBUser).filter(DBUser.email == demo_email).first()
         
         if not user:
             raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
         
-        # Hole Properties - nutze text() für flexible Spaltenabfrage
-        # Prüfe ob description Spalte existiert
-        try:
-            result = db.execute(sql_text("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'")).fetchone()
-            has_description = result is not None
-        except:
-            has_description = False
+        # Hole Properties direkt mit raw SQL (um alle Spalten zu bekommen)
+        stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = :user_id")
+        sql_result = db.execute(stmt, {"user_id": str(user.id)}).fetchall()
         
-        if has_description:
-            properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
-        else:
-            # Ohne description Spalte - nutze text() für SQL
-            # CAST user_id immer zu VARCHAR um UUID vs Integer zu umgehen
-            stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE CAST(user_id AS VARCHAR) = :user_id")
-            sql_result = db.execute(stmt, {"user_id": str(user.id)}).fetchall()
-            properties = []
-            for row in sql_result:
-                p = type('Property', (), {})()
-                p.id = row.id
-                p.user_id = row.user_id
-                p.name = row.name
-                p.address = row.address
-                p.created_at = row.created_at
-                p.description = None
-                properties.append(p)
+        properties = []
+        for row in sql_result:
+            p = type('Property', (), {})()
+            p.id = row.id
+            p.user_id = row.user_id
+            p.name = row.name
+            p.address = row.address
+            p.created_at = row.created_at
+            p.description = None
+            properties.append(p)
         
         result = []
         
