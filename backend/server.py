@@ -873,6 +873,11 @@ logging.basicConfig(
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
     try:
+        logger.info("🚀 Startup-Event: Initialisiere DB...")
+        if not SessionLocal:
+            logger.info("DB nicht initialisiert, rufe init_db() auf...")
+            init_db()
+        
         logger.info("🚀 Startup-Event: Öffne DB-Session...")
         if not SessionLocal:
             logger.error("❌ SessionLocal ist nicht initialisiert!")
