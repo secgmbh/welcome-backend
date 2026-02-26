@@ -17,8 +17,8 @@
 - [x] GET /api/properties (Liste der Unterkünfte)
 - [x] POST /api/properties (Neue Unterkunft erstellen)
 - [x] DELETE /api/properties/{id} (Unterkunft löschen)
-- [ ] POST /auth/guestview-token (einzigartige URL generieren) - TODO
-- [ ] GET /auth/guestview/{token} (passwortlose Ansicht) - TODO
+- [x] POST /api/guestview-token (einzigartige URL generieren)
+- [x] GET /api/guestview/{token} (passwortlose Ansicht)
 
 ### 3. E-Mail Service ⚠️
 - [x] SMTP Fallback (info@welcome-link.de)
