@@ -56,50 +56,103 @@ main() {
     fi
     
     echo "Nightly improvements started..."
+    echo "Current time: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+    echo "Active window: 22:30-04:00"
+    echo ""
     
-    # Change to working directory
-    cd "$WORKING_DIR"
+    # Process Backend
+    process_backend
     
-    # Switch to nightly-improvements branch
-    git checkout nightly-improvements 2>/dev/null || {
-        echo "Branch nightly-improvements not found, creating..."
-        git checkout -b nightly-improvements
-    }
-    
-    # Pull latest changes
-    git pull origin nightly-improvements 2>/dev/null
-    
-    # Your nightly improvement tasks go here:
-    echo "Running nightly checks..."
-    
-    # Task 1: Cleanup temporary files
-    find "$WORKING_DIR" -name "*.tmp" -o -name "*.log" -o -name "*.pyc" 2>/dev/null | xargs rm -f 2>/dev/null
-    echo "✓ Cleanup temporary files"
-    
-    # Task 2: Check for TODO comments
-    echo "Checking TODO comments..."
-    local todo_count=$(grep -r "TODO\|FIXME" "$WORKING_DIR" --include="*.py" --include="*.jsx" --include="*.js" 2>/dev/null | wc -l)
-    echo "  Found $todo_count TODO comments"
-    
-    # Task 3: Check for print statements in Python (should use logger)
-    echo "Checking for print() statements in Python..."
-    local print_count=$(grep -r "^\s*print(" "$WORKING_DIR" --include="*.py" 2>/dev/null | wc -l)
-    if [[ $print_count -gt 0 ]]; then
-        echo "  ⚠️  Found $print_count print() statements (should use logger)"
+    # Process Frontend (check if directory exists)
+    if [[ -d "$WORKING_DIR/welcome-frontend" ]]; then
+        process_frontend
     else
-        echo "  ✓ No print() statements found"
+        echo "=== Frontend directory not found, skipping ==="
     fi
     
-    # Task 4: Check git status for uncommitted changes
-    echo "Checking git status..."
-    cd "$WORKING_DIR"
-    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        echo "  ⚠️  Uncommitted changes detected"
-    else
-        echo "  ✓ No uncommitted changes"
-    fi
-    
+    echo ""
     echo "Nightly improvements completed!"
+}
+
+process_backend() {
+    echo "=== Processing Backend (welcome-backend) ==="
+    cd "$WORKING_DIR/welcome-backend"
+    
+    # Check branch
+    local current_branch=$(git branch --show-current)
+    echo "Current branch: $current_branch"
+    
+    # Checkout nightly-improvements if on main
+    if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+        git checkout nightly-improvements 2>/dev/null || {
+            echo "Creating nightly-improvements branch..."
+            git checkout -b nightly-improvements
+        }
+    fi
+    
+    # Pull latest
+    git pull origin nightly-improvements 2>/dev/null || echo "No remote nightly-improvements branch"
+    
+    # Task 1: Cleanup temp files
+    find . -name "*.tmp" -o -name "*.log" -o -name "*.pyc" -o -name "__pycache__" 2>/dev/null | xargs rm -rf 2>/dev/null
+    echo "✓ Cleanup temp files"
+    
+    # Task 2: Check TODOs
+    local todo_count=$(grep -r "TODO\|FIXME" backend/ --include="*.py" 2>/dev/null | wc -l)
+    echo "  Backend TODOs: $todo_count"
+    
+    # Task 3: Check print statements
+    local print_count=$(grep -r "^\s*print(" backend/ --include="*.py" 2>/dev/null | wc -l)
+    if [[ $print_count -gt 0 ]]; then
+        echo "  ⚠️  Found $print_count print() statements"
+    else
+        echo "  ✓ No print() statements in backend"
+    fi
+    
+    # Task 4: Commit and push if changes
+    if ! git diff-index --quiet HEAD --; then
+        echo "  Committing changes..."
+        git add . && git commit -m "nightly: Backend improvements" && git push origin nightly-improvements 2>/dev/null && echo "  ✓ Pushed to nightly-improvements"
+    else
+        echo "  ✓ No changes to commit"
+    fi
+}
+
+process_frontend() {
+    echo ""
+    echo "=== Processing Frontend (welcome-frontend) ==="
+    cd "$WORKING_DIR/welcome-frontend"
+    
+    # Check branch
+    local current_branch=$(git branch --show-current)
+    echo "Current branch: $current_branch"
+    
+    # Checkout nightly-improvements if on main
+    if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+        git checkout nightly-improvements 2>/dev/null || {
+            echo "Creating nightly-improvements branch..."
+            git checkout -b nightly-improvements
+        }
+    fi
+    
+    # Pull latest
+    git pull origin nightly-improvements 2>/dev/null || echo "No remote nightly-improvements branch"
+    
+    # Task 1: Cleanup temp files
+    find . -name "*.tmp" -o -name "*.log" 2>/dev/null | xargs rm -rf 2>/dev/null
+    echo "✓ Cleanup temp files"
+    
+    # Task 2: Check TODOs
+    local todo_count=$(grep -r "TODO\|FIXME" frontend/src/ --include="*.jsx" --include="*.js" 2>/dev/null | wc -l)
+    echo "  Frontend TODOs: $todo_count"
+    
+    # Task 3: Commit and push if changes
+    if ! git diff-index --quiet HEAD --; then
+        echo "  Committing changes..."
+        git add . && git commit -m "nightly: Frontend improvements" && git push origin nightly-improvements 2>/dev/null && echo "  ✓ Pushed to nightly-improvements"
+    else
+        echo "  ✓ No changes to commit"
+    fi
 }
 
 main "$@"
