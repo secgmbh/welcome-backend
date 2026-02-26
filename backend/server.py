@@ -15,7 +15,7 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -197,7 +197,14 @@ def init_demo_user(db: Session):
             password_hash=hash_password("Demo123!"),
             name="Demo Benutzer",
             created_at=datetime.now(timezone.utc),
-            is_demo=True
+            is_demo=True,
+            # Dummy Rechnungsdaten
+            invoice_name="Alpenblick Hospitality GmbH",
+            invoice_address="Bergstraße 12",
+            invoice_zip="82467",
+            invoice_city="Garmisch-Partenkirchen",
+            invoice_country="Deutschland",
+            invoice_vat_id="DE123456789"
         )
         db.add(demo_user)
         db.commit()
@@ -234,7 +241,18 @@ def init_demo_user(db: Session):
             db.add(prop)
         db.commit()
         
-        logger.info("✓ Demo-Benutzer und Properties erstellt")
+        # Erstelle festen GuestView-Token für Demo
+        demo_guestview_token = "demo-guest-view-token"
+        guest_view = DBGuestView(
+            id=str(uuid.uuid4()),
+            user_id=demo_user.id,
+            token=demo_guestview_token,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(guest_view)
+        db.commit()
+        
+        logger.info(f"✓ Demo-Benutzer, Properties und GuestView-Token erstellt: /guestview/{demo_guestview_token}")
 
 # ============ AUTH ROUTES ============
 
