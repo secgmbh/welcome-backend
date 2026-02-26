@@ -825,6 +825,47 @@ def get_guestview_qr_data_simple():
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@api_router.get("/demo/init-guestview")
+def init_demo_guestview(db: Session = Depends(get_db)):
+    """Initialisiere Guestview Token für Demo User"""
+    from sqlalchemy import text as sql_text
+    try:
+        demo_email = "demo@welcome-link.de"
+        user = db.query(DBUser).filter(DBUser.email == demo_email.lower()).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
+        
+        demo_token = "demo-guest-view-token"
+        
+        # Prüfe ob Token existiert
+        existing = db.query(DBGuestView).filter(DBGuestView.token == demo_token).first()
+        
+        if existing:
+            logger.info(f"✓ Guestview Token existiert bereits: {demo_token}")
+            return {"token": demo_token, "url": f"/guestview/{demo_token}"}
+        
+        # Erstelle Token
+        from sqlalchemy import text as sql_text
+        stmt = sql_text("INSERT INTO guest_views (id, user_id, token, created_at) VALUES (:id, :user_id, :token, :created_at)")
+        db.execute(stmt, {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "token": demo_token,
+            "created_at": datetime.now(timezone.utc)
+        })
+        db.commit()
+        
+        logger.info(f"✓ Guestview Token erstellt: {demo_token}")
+        return {"token": demo_token, "url": f"/guestview/{demo_token}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = f"Fehler beim Erstellen des Guestview Tokens: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
 @api_router.get("/guestview/{token}")
 def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
     """Rufe Guestview Daten anhand Token ab (ohne Auth)"""
