@@ -67,6 +67,7 @@
 - [ ] Bundle-Erstellung
 - [ ] Partner-Empfehlungen
 
-### 5.4 Email Verification
-- [ ] Verification Link in Registration E-Mail
-- [ ] Backend Endpoint zum Verifizieren
+### 5.4 Email Verification - FERTIG ✅
+- [x] Verification Link in Registration E-Mail
+- [x] Backend Endpoint zum Verifizieren (`POST /api/auth/verify-email`)
+- [x] Resend Endpoint (`POST /api/auth/resend-verification`)
