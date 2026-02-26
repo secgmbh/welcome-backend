@@ -714,7 +714,7 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
                 "id": p.id,
                 "user_id": p.user_id,
                 "name": p.name,
-                "description": p.description,
+                "description": getattr(p, 'description', None),
                 "address": p.address,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
                 "qr_code_url": qr_url
