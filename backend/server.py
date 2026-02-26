@@ -756,9 +756,9 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-@api_router.get("/guestview-qr-v2")
-def get_guestview_qr_data_v2(db: Session = Depends(get_db)):
-    """Öffentlicher Endpoint für QR Code Daten - Version 2 mit Raw SQL"""
+@api_router.get("/guestview-qr-data")
+def get_guestview_qr_data(db: Session = Depends(get_db)):
+    """Öffentlicher Endpoint für QR Code Daten - direkte Abfrage ohne description"""
     from sqlalchemy import text as sql_text
     try:
         demo_email = "demo@welcome-link.de"
@@ -767,9 +767,8 @@ def get_guestview_qr_data_v2(db: Session = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
         
-        # hole Properties mit raw SQL
-        user_id_str = str(user.id)
-        stmt = sql_text(f"SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = '{user_id_str}'")
+        # hole Properties mit raw SQL - direkt in SQL String (keine Parameter)
+        stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = '3e6b2efc-e463-4bb5-b6df-3da7e9708048'")
         sql_result = db.execute(stmt).fetchall()
         
         properties = []
@@ -798,12 +797,12 @@ def get_guestview_qr_data_v2(db: Session = Depends(get_db)):
                 "qr_code_url": qr_url
             })
         
-        logger.info(f"QR Daten v2 zurückgegeben für {len(properties)} Properties von User {user.email}")
+        logger.info(f"QR Daten zurückgegeben für {len(properties)} Properties")
         return result
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = f"Fehler beim Abrufen der QR-Daten v2: {str(e)}"
+        error_msg = f"Fehler beim Abrufen der QR-Daten: {str(e)}"
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
