@@ -714,9 +714,9 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
             properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
         else:
             # Ohne description Spalte - nur id, name, address
-            result = db.execute("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = :user_id", {"user_id": user.id}).fetchall()
+            sql_result = db.execute("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = :user_id", {"user_id": user.id}).fetchall()
             properties = []
-            for row in result:
+            for row in sql_result:
                 p = type('Property', (), {})()
                 p.id = row.id
                 p.user_id = row.user_id
