@@ -97,6 +97,22 @@ def init_db():
         tables = insp.get_table_names()
         print(f"[DB] ✓ Existierende Tabellen: {tables}")
         
+        # Prüfe ob properties.user_id VARCHAR ist (für UUIDs)
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'properties' AND column_name = 'user_id'
+                """)).fetchone()
+                if result and 'int' in result[0].lower():
+                    print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - ändere Spalte zu VARCHAR(36)...")
+                    conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
+                    conn.commit()
+                    print(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
+        except Exception as e:
+            print(f"[DB] ⚠️  Konnte user_id Spalte nicht prüfen/ändern: {e}")
+        
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print(f"[DB] ✓ SessionLocal initialisiert")
