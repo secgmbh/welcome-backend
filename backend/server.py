@@ -716,19 +716,9 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
             properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
         else:
             # Ohne description Spalte - nutze text() für SQL
-            # Prüfe user_id Type
-            try:
-                type_result = db.execute("SELECT data_type FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'user_id'").fetchone()
-                is_int = type_result and 'int' in type_result[0].lower() if type_result else False
-            except:
-                is_int = False
-            
-            if is_int:
-                stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE CAST(user_id AS VARCHAR) = :user_id")
-                sql_result = db.execute(stmt, {"user_id": str(user.id)}).fetchall()
-            else:
-                stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = :user_id")
-                sql_result = db.execute(stmt, {"user_id": str(user.id)}).fetchall()
+            # CAST user_id immer zu VARCHAR um UUID vs Integer zu umgehen
+            stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE CAST(user_id AS VARCHAR) = :user_id")
+            sql_result = db.execute(stmt, {"user_id": str(user.id)}).fetchall()
             properties = []
             for row in sql_result:
                 p = type('Property', (), {})()
