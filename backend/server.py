@@ -43,8 +43,13 @@ if JWT_SECRET and len(JWT_SECRET) < 32:
 SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.your-server.de')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
 SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
-SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'td2dfTR87tFiw2Wg')
 SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
+
+# Warnung wenn Leeres Password (nur in Development)
+if not SMTP_PASSWORD and ENVIRONMENT == 'development':
+    import sys
+    print(f"⚠️  WARNING: SMTP_PASSWORD ist leer! E-Mails funktionieren nicht.", file=sys.stderr)
 
 # Database connection
 logger = logging.getLogger(__name__)
@@ -239,7 +244,6 @@ def init_demo_user(db: Session):
         
         for prop in demo_properties:
             db.add(prop)
-        db.commit()
         
         # Erstelle festen GuestView-Token für Demo
         demo_guestview_token = "demo-guest-view-token"
@@ -250,8 +254,8 @@ def init_demo_user(db: Session):
             created_at=datetime.now(timezone.utc)
         )
         db.add(guest_view)
-        db.commit()
         
+        db.commit()
         logger.info(f"✓ Demo-Benutzer, Properties und GuestView-Token erstellt: /guestview/{demo_guestview_token}")
 
 # ============ AUTH ROUTES ============
@@ -664,10 +668,11 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-# Configure logging (uses logger already defined above)
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True
 )
 
 @app.on_event("startup")
