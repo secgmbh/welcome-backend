@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, inspect
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timezone
 import os
 
@@ -87,38 +86,11 @@ def init_db():
         with engine.connect() as conn:
             print(f"[DB] ✓ Connection erfolgreich")
         
-        # Zwinge Tabellen-Reset (behebt alte/kaputte Schemas)
-        print(f"[DB] ⚠️  Lösche alte Tabellen für sauberen Reset...")
-        try:
-            # Drop alle Tabellen mit CASCADE
-            with engine.begin() as conn:
-                for table in reversed(Base.metadata.sorted_tables):
-                    conn.execute(table.drop(engine))
-            print(f"[DB] ✓ Alte Tabellen gelöscht")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte Tabellen nicht löschen (Ignoriert): {e}")
-        
-        # Erstelle alle Tabellen
-        print(f"[DB] Erstelle Tables...")
+        # Erstelle fehlende Tabellen (Fallback für neue Installationen)
+        # Schema-Änderungen werden über Alembic Migrations verwaltet
+        print(f"[DB] Erstelle fehlende Tables (falls nötig)...")
         Base.metadata.create_all(bind=engine)
-        print(f"[DB] ✓ Tables erstellt")
-        
-        # Überprüfe ob users-Tabelle korrekt ist
-        try:
-            with engine.connect() as conn:
-                # Prüfe ob password_hash Spalte existiert
-                result = conn.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'users' AND column_name = 'password_hash'
-                """).fetchone()
-                if not result:
-                    print(f"[DB] ⚠️  password_hash Spalte fehlt in users-Tabelle - versuche ALTER TABLE...")
-                    conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)")
-                    conn.commit()
-                    print(f"[DB] ✓ password_hash Spalte hinzugefügt")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte users-Tabelle nicht prüfen/ändern: {e}")
+        print(f"[DB] ✓ Tables erstellt/geprüft")
         
         # Überprüfe ob Tables existieren
         insp = inspect(engine)
