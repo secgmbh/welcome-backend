@@ -706,7 +706,7 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         # Hole Properties - nutze text() für flexible Spaltenabfrage
         # Prüfe ob description Spalte existiert
         try:
-            result = db.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'").fetchone()
+            result = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'")).fetchone()
             has_description = result is not None
         except:
             has_description = False
