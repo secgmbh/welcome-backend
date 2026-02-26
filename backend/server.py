@@ -702,8 +702,30 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
         
-        # Hole Properties
-        properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        # Hole Properties - nutze text() für flexible Spaltenabfrage
+        # Prüfe ob description Spalte existiert
+        try:
+            result = db.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'").fetchone()
+            has_description = result is not None
+        except:
+            has_description = False
+        
+        if has_description:
+            properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        else:
+            # Ohne description Spalte - nur id, name, address
+            result = db.execute("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = :user_id", {"user_id": user.id}).fetchall()
+            properties = []
+            for row in result:
+                p = type('Property', (), {})()
+                p.id = row.id
+                p.user_id = row.user_id
+                p.name = row.name
+                p.address = row.address
+                p.created_at = row.created_at
+                p.description = None
+                properties.append(p)
+        
         result = []
         
         frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
@@ -714,7 +736,7 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
                 "id": p.id,
                 "user_id": p.user_id,
                 "name": p.name,
-                "description": getattr(p, 'description', None),
+                "description": p.description,
                 "address": p.address,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
                 "qr_code_url": qr_url
