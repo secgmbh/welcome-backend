@@ -692,7 +692,7 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
 
 
 @api_router.get("/guestview-public-qr-data")
-def get_guestview_public_qr_data():
+def get_guestview_public_qr_data(db: Session = Depends(get_db)):
     """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
     try:
         # Feste Demo-User ID
