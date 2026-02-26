@@ -701,7 +701,8 @@ def get_properties_with_qr(user: DBUser = Depends(get_current_user), db: Session
         for p in properties:
             # QR Code URL für den Guestview Endpoint
             # Für Demo: Verwende feste Demo-Guestview URL
-            qr_url = f"{process.env.get('FRONTEND_URL', 'https://www.welcome-link.de')}/guestview/demo-guest-view-token"
+            frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
+            qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
             
             result.append({
                 "id": p.id,
