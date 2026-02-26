@@ -766,6 +766,58 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@api_router.get("/guestview-qr-v2")
+def get_guestview_qr_data_v2(db: Session = Depends(get_db)):
+    """Öffentlicher Endpoint für QR Code Daten - Version 2 mit Raw SQL"""
+    from sqlalchemy import text as sql_text
+    try:
+        demo_email = "demo@welcome-link.de"
+        user = db.query(DBUser).filter(DBUser.email == demo_email).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
+        
+        # hole Properties mit raw SQL
+        user_id_str = str(user.id)
+        stmt = sql_text(f"SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = '{user_id_str}'")
+        sql_result = db.execute(stmt).fetchall()
+        
+        properties = []
+        for row in sql_result:
+            p = type('Property', (), {})()
+            p.id = str(row.id) if row.id else None
+            p.user_id = str(row.user_id) if row.user_id else None
+            p.name = row.name
+            p.address = row.address
+            p.created_at = row.created_at
+            p.description = None
+            properties.append(p)
+        
+        frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
+        qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
+        
+        result = []
+        for p in properties:
+            result.append({
+                "id": p.id,
+                "user_id": p.user_id,
+                "name": p.name,
+                "description": p.description,
+                "address": p.address,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "qr_code_url": qr_url
+            })
+        
+        logger.info(f"QR Daten v2 zurückgegeben für {len(properties)} Properties von User {user.email}")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = f"Fehler beim Abrufen der QR-Daten v2: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
 @api_router.get("/guestview/{token}")
 def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
     """Rufe Guestview Daten anhand Token ab (ohne Auth)"""
