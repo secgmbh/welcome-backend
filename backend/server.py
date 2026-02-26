@@ -691,19 +691,26 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
         raise HTTPException(status_code=500, detail="Fehler beim Erstellen des Tokens")
 
 
-@api_router.get("/properties-with-qr")
-def get_properties_with_qr(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Hole alle Properties mit QR Code URLs"""
+@api_router.get("/guestview-public-qr-data")
+def get_guestview_public_qr_data():
+    """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
     try:
-        properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        # Feste Demo-User ID
+        demo_user_id = "3e6b2efc-e463-4bb5-b6df-3da7e9708048"  # demo@welcome-link.de
+        
+        # Hole User
+        user = db.query(DBUser).filter(DBUser.id == demo_user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Demo-User nicht gefunden")
+        
+        # Hole Properties
+        properties = db.query(DBProperty).filter(DBProperty.user_id == demo_user_id).all()
         result = []
         
+        frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
+        qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
+        
         for p in properties:
-            # QR Code URL für den Guestview Endpoint
-            # Für Demo: Verwende feste Demo-Guestview URL
-            frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
-            qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
-            
             result.append({
                 "id": p.id,
                 "user_id": p.user_id,
@@ -715,9 +722,11 @@ def get_properties_with_qr(user: DBUser = Depends(get_current_user), db: Session
             })
         
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Fehler beim Abrufen von Properties mit QR Codes: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Abrufen von Properties")
+        logger.error(f"Fehler beim Abrufen der öffentlichen QR-Daten: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Daten")
 
 
 @api_router.get("/guestview/{token}")
