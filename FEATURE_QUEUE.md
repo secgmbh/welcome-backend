@@ -16,12 +16,12 @@
 - [ ] Automatisierungsregeln
 
 ### 2.2 Link/QR Code
-- [ ] Link/QR Code Cards implementieren
+- [x] Link/QR Code Cards existieren
 - [ ] QR Code Download für Gäste
 
 ### 2.3 Profilverwaltung
-- [ ] Profil bearbeiten Seite
-- [ ] Rechnungsdaten bearbeiten
+- [x] Profil bearbeiten Seite existiert
+- [x] Rechnungsdaten bearbeiten existiert (Backend PUT /api/auth/profile)
 
 ## Phase 3: Analytics (Medium Priority)
 
@@ -33,19 +33,39 @@
 - [ ] PDF Export für Gäste-Guide
 - [ ] Export Funktionen
 
-## Phase 4: Missing Features - TO DO
+## Phase 4: Missing Features - ERLEDIGT ✅
 
-### 4.1 Dashboard Pages (fehlen komplett)
-- [ ] SettingsPage.jsx
-- [ ] AdminDashboardPage.jsx
-- [ ] PropertyManagementPage.jsx
-- [ ] PropertyDetailPage.jsx
+### 4.1 Dashboard Pages - ALLE EXISTIEREN ✅
+- [x] SettingsPage.jsx
+- [x] AdminDashboardPage.jsx
+- [x] PropertyManagementPage.jsx
+- [x] PropertyDetailPage.jsx
 
-### 4.2 API Endpoints (fehlen im Backend)
-- [ ] PUT /api/properties/{id} (Property aktualisieren)
-- [ ] PUT /api/users/{id} (User aktualisieren)
-- [ ] GET /api/users/profile (aktuelles Profil)
+### 4.2 API Endpoints - ALLE EXISTIEREN ✅
+- [x] PUT /api/properties/{id}
+- [x] GET /api/properties/{id}
+- [x] POST /api/properties
+- [x] DELETE /api/properties/{id}
+- [x] PUT /api/auth/profile
+- [x] GET /api/auth/me
 
 ---
 
-**NEXT:** Phase 4 - Dashboard Pages & API Endpoints fehlen noch
+## Phase 5: Next Features (Medium Priority)
+
+### 5.1 PDF Export für Gäste
+- [ ] PDF Generierung für Guestview (Gäste-Guide als PDF)
+- [ ] Template für PDF (LaTeX oder HTML-to-PDF)
+
+### 5.2 QR Code Download
+- [ ] Download Button für QR Codes
+- [ ] QR Code als PNG herunterladen
+
+### 5.3 Upsell-Management
+- [ ] A/B-Tests für Upsell-Pakete
+- [ ] Bundle-Erstellung
+- [ ] Partner-Empfehlungen
+
+### 5.4 Email Verification
+- [ ] Verification Link in Registration E-Mail
+- [ ] Backend Endpoint zum Verifizieren
