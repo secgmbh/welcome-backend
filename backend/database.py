@@ -86,43 +86,16 @@ def init_db():
         with engine.connect() as conn:
             print(f"[DB] ✓ Connection erfolgreich")
         
-        # Prüfe ob Tabellen existieren und lösche sie bei Bedarf (für Schema-Änderungen)
+        # Erstelle fehlende Tabellen (Fallback für neue Installationen)
+        # Schema-Änderungen werden über Alembic Migrations verwaltet
+        print(f"[DB] Erstelle fehlende Tables (falls nötig)...")
+        Base.metadata.create_all(bind=engine)
+        print(f"[DB] ✓ Tables erstellt/geprüft")
+        
+        # Überprüfe ob Tables existieren
         insp = inspect(engine)
         tables = insp.get_table_names()
         print(f"[DB] ✓ Existierende Tabellen: {tables}")
-        
-        # Wenn properties Tabelle existiert, lösche sie (für user_id String Änderung)
-        if 'properties' in tables:
-            print(f"[DB] ⚠️  properties Tabelle existiert - lösche für Reset...")
-            with engine.begin() as conn:
-                conn.execute(Property.__table__.drop(engine))
-            print(f"[DB] ✓ properties Tabelle gelöscht")
-        
-        # Wenn users Tabelle existiert, lösche sie (für invoice Spalten)
-        if 'users' in tables:
-            print(f"[DB] ⚠️  users Tabelle existiert - lösche für Reset...")
-            with engine.begin() as conn:
-                conn.execute(User.__table__.drop(engine))
-            print(f"[DB] ✓ users Tabelle gelöscht")
-        
-        # Wenn guest_views Tabelle existiert, lösche sie
-        if 'guest_views' in tables:
-            print(f"[DB] ⚠️  guest_views Tabelle existiert - lösche für Reset...")
-            with engine.begin() as conn:
-                conn.execute(GuestView.__table__.drop(engine))
-            print(f"[DB] ✓ guest_views Tabelle gelöscht")
-        
-        # Wenn status_checks Tabelle existiert, lösche sie
-        if 'status_checks' in tables:
-            print(f"[DB] ⚠️  status_checks Tabelle existiert - lösche für Reset...")
-            with engine.begin() as conn:
-                conn.execute(StatusCheck.__table__.drop(engine))
-            print(f"[DB] ✓ status_checks Tabelle gelöscht")
-        
-        # Erstelle alle Tabellen neu
-        print(f"[DB] Erstelle alle Tabellen neu...")
-        Base.metadata.create_all(bind=engine)
-        print(f"[DB] ✓ Tabellen neu erstellt")
         
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
