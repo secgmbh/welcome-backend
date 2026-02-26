@@ -97,45 +97,6 @@ def init_db():
         tables = insp.get_table_names()
         print(f"[DB] ✓ Existierende Tabellen: {tables}")
         
-        # Überprüfe ob properties description Spalte existiert
-        try:
-            with engine.connect() as conn:
-                result = conn.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'description'
-                """).fetchone()
-                if not result:
-                    print(f"[DB] ⚠️  description Spalte fehlt in properties-Tabelle - füge hinzu...")
-                    conn.execute("ALTER TABLE properties ADD COLUMN IF NOT EXISTS description TEXT")
-                    conn.commit()
-                    print(f"[DB] ✓ description Spalte hinzugefügt")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte properties-Tabelle nicht prüfen/ändern: {e}")
-        
-        # Prüfe ob properties.user_id korrekt ist (muss VARCHAR/TEXT sein für UUIDs)
-        # Falls Integer -> Tabellen neu erstellen (Daten gehen verloren!)
-        try:
-            with engine.connect() as conn:
-                result = conn.execute("""
-                    SELECT data_type 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'user_id'
-                """).fetchone()
-                if result and 'int' in result[0].lower():
-                    print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - Tabelle muss neu erstellt werden!")
-                    from sqlalchemy import inspect as sa_inspect
-                    inspector = sa_inspect(engine)
-                    tables = inspector.get_table_names()
-                    print(f"[DB] 🗑️  Lösche alle Tabellen für Reset: {tables}")
-                    for table in reversed(Base.metadata.sorted_tables):
-                        conn.execute(table.drop(engine))
-                    print(f"[DB] Erstelle alle Tabellen neu...")
-                    Base.metadata.create_all(bind=engine)
-                    print(f"[DB] ✓ Tabellen neu erstellt")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte user_id Spalte nicht prüfen: {e}")
-        
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print(f"[DB] ✓ SessionLocal initialisiert")
