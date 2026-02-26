@@ -43,7 +43,7 @@ if JWT_SECRET and len(JWT_SECRET) < 32:
 SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.your-server.de')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
 SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
-SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'td2dfTR87tFiw2Wg')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
 
 # Database connection
@@ -433,6 +433,99 @@ def get_property(property_id: str, user: DBUser = Depends(get_current_user), db:
         logger.error(f"Fehler beim Abrufen von Property: {str(e)}")
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Property")
 
+class PropertyUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    address: Optional[str] = Field(None, max_length=500)
+
+class UserProfileUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=100)
+    invoice_name: Optional[str] = Field(None, max_length=200)
+    invoice_address: Optional[str] = Field(None, max_length=500)
+    invoice_zip: Optional[str] = Field(None, max_length=20)
+    invoice_city: Optional[str] = Field(None, max_length=100)
+    invoice_country: Optional[str] = Field(None, max_length=100)
+    invoice_vat_id: Optional[str] = Field(None, max_length=50)
+
+@api_router.put("/properties/{property_id}", response_model=Property)
+def update_property(property_id: str, data: PropertyUpdate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Aktualisiere eine Property"""
+    try:
+        prop = db.query(DBProperty).filter(
+            DBProperty.id == property_id,
+            DBProperty.user_id == user.id
+        ).first()
+        
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property nicht gefunden")
+        
+        if data.name is not None:
+            prop.name = data.name.strip()
+        if data.description is not None:
+            prop.description = data.description.strip()
+        if data.address is not None:
+            prop.address = data.address.strip()
+        
+        db.commit()
+        db.refresh(prop)
+        
+        logger.info(f"Property aktualisiert: {property_id}")
+        
+        return Property(
+            id=prop.id,
+            user_id=prop.user_id,
+            name=prop.name,
+            description=prop.description,
+            address=prop.address,
+            created_at=prop.created_at
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Aktualisieren von Property: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren der Property")
+
+@api_router.put("/auth/profile")
+def update_profile(data: UserProfileUpdate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Aktualisiere Benutzerprofil"""
+    try:
+        if data.name is not None:
+            user.name = data.name.strip()
+        if data.invoice_name is not None:
+            user.invoice_name = data.invoice_name.strip()
+        if data.invoice_address is not None:
+            user.invoice_address = data.invoice_address.strip()
+        if data.invoice_zip is not None:
+            user.invoice_zip = data.invoice_zip.strip()
+        if data.invoice_city is not None:
+            user.invoice_city = data.invoice_city.strip()
+        if data.invoice_country is not None:
+            user.invoice_country = data.invoice_country.strip()
+        if data.invoice_vat_id is not None:
+            user.invoice_vat_id = data.invoice_vat_id.strip()
+        
+        db.commit()
+        db.refresh(user)
+        
+        logger.info(f"Profil aktualisiert: {user.email}")
+        
+        return {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "invoice_name": user.invoice_name,
+            "invoice_address": user.invoice_address,
+            "invoice_zip": user.invoice_zip,
+            "invoice_city": user.invoice_city,
+            "invoice_country": user.invoice_country,
+            "invoice_vat_id": user.invoice_vat_id
+        }
+    except Exception as e:
+        logger.error(f"Fehler beim Aktualisieren des Profils: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren des Profils")
+
 @api_router.delete("/properties/{property_id}")
 def delete_property(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Lösche eine Property"""
@@ -571,12 +664,11 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-# Configure logging
+# Configure logging (uses logger already defined above)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
