@@ -19,6 +19,13 @@ class User(Base):
     name = Column(String(100))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_demo = Column(Boolean, default=False)
+    # Invoice / Rechnungsdaten
+    invoice_name = Column(String(200))
+    invoice_address = Column(String(500))
+    invoice_zip = Column(String(20))
+    invoice_city = Column(String(100))
+    invoice_country = Column(String(100))
+    invoice_vat_id = Column(String(50))
 
 class Property(Base):
     __tablename__ = "properties"
