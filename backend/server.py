@@ -695,16 +695,15 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
 def get_guestview_public_qr_data(db: Session = Depends(get_db)):
     """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
     try:
-        # Feste Demo-User ID
-        demo_user_id = "3e6b2efc-e463-4bb5-b6df-3da7e9708048"  # demo@welcome-link.de
+        # Hole Demo-User anhand E-Mail (zuverlässiger als ID)
+        demo_email = "demo@welcome-link.de"
+        user = db.query(DBUser).filter(DBUser.email == demo_email).first()
         
-        # Hole User
-        user = db.query(DBUser).filter(DBUser.id == demo_user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail=f"Demo-User mit ID {demo_user_id} nicht gefunden")
+            raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
         
         # Hole Properties
-        properties = db.query(DBProperty).filter(DBProperty.user_id == demo_user_id).all()
+        properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
         result = []
         
         frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
@@ -721,7 +720,7 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
                 "qr_code_url": qr_url
             })
         
-        logger.info(f"QR Daten zurückgegeben für {len(properties)} Properties")
+        logger.info(f"QR Daten zurückgegeben für {len(properties)} Properties von User {user.email}")
         return result
     except HTTPException:
         raise
