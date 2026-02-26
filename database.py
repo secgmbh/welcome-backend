@@ -19,6 +19,9 @@ class User(Base):
     name = Column(String(100))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_demo = Column(Boolean, default=False)
+    is_email_verified = Column(Boolean, default=False)
+    email_verification_token = Column(String(64), unique=True, index=True)
+    email_verification_token_expires = Column(DateTime)
 
 class Property(Base):
     __tablename__ = "properties"

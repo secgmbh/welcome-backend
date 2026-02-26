@@ -15,11 +15,11 @@
 - [ ] Partner-Empfehlungen
 - [ ] Automatisierungsregeln
 
-### 2.2 Link/QR Code
+### 2.2 Link/QR Code - FERTIG ✅
 - [x] Link/QR Code Cards existieren
-- [ ] QR Code Download für Gäste
+- [x] QR Code Download für Gäste - FERTIG ✅
 
-### 2.3 Profilverwaltung
+### 2.3 Profilverwaltung - FERTIG ✅
 - [x] Profil bearbeiten Seite existiert
 - [x] Rechnungsdaten bearbeiten existiert (Backend PUT /api/auth/profile)
 
@@ -29,7 +29,7 @@
 - [ ] Detaillierte Statistiken zu Properties
 - [ ] Buchungsübersicht & Export
 
-### 3.2 Reporting
+### 3.2 Reporting - FERTIG ✅
 - [x] PDF Export für Gäste-Guide - FERTIG ✅
 - [ ] Export Funktionen
 
@@ -57,9 +57,10 @@
 - [x] PDF Generierung für Guestview (Gäste-Guide als PDF)
 - [x] Download Button für Guests
 
-### 5.2 QR Code Download
-- [ ] Download Button für QR Codes
-- [ ] QR Code als PNG herunterladen
+### 5.2 QR Code Download - FERTIG ✅
+- [x] Download Button für QR Codes
+- [x] QR Code als PNG herunterladen
+- [x] QR Code cards in Guestview
 
 ### 5.3 Upsell-Management
 - [ ] A/B-Tests für Upsell-Pakete
