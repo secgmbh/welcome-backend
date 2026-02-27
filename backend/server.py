@@ -16,7 +16,7 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1039,6 +1039,58 @@ class ABTestResponse(BaseModel):
     created_at: str
     updated_at: str
 
+
+# ============== PARTNER API MODELS ==============
+class PartnerCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    category: str
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    image_url: Optional[str] = None
+    commission_rate: Optional[float] = 0
+    is_active: Optional[bool] = True
+
+class PartnerResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    category: str
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    image_url: Optional[str] = None
+    commission_rate: float
+    is_active: bool
+    created_at: str
+
+
+# ============== SMART RULES API MODELS ==============
+class SmartRuleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    trigger_type: str
+    condition: str
+    action: str
+    priority: Optional[int] = 0
+    is_active: Optional[bool] = True
+
+class SmartRuleResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    trigger_type: str
+    condition: str
+    action: str
+    priority: int
+    is_active: bool
+    created_at: str
+
 @api_router.get("/ab-tests", response_model=List[ABTestResponse], dependencies=[Depends(get_current_user)])
 def get_ab_tests(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Hole alle A/B Tests für den aktuellen User"""
@@ -1108,6 +1160,139 @@ def delete_ab_test(ab_test_id: str, db: Session = Depends(get_db), user: User = 
     db.delete(db_ab_test)
     db.commit()
     return {"message": "A/B Test gelöscht"}
+
+
+# ============== PARTNER API ENDPOINTS ==============
+from database import Partner as DBPartner, SmartRule as DBSmartRule
+
+@api_router.get("/partners", response_model=List[PartnerResponse], dependencies=[Depends(get_current_user)])
+def get_partners(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Partner für den aktuellen User"""
+    partners = db.query(DBPartner).filter(DBPartner.user_id == user.id).all()
+    return partners
+
+@api_router.post("/partners", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
+def create_partner(partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle einen neuen Partner"""
+    partner_obj = DBPartner(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        name=partner.name,
+        description=partner.description,
+        category=partner.category,
+        address=partner.address,
+        phone=partner.phone,
+        email=partner.email,
+        website=partner.website,
+        image_url=partner.image_url,
+        commission_rate=partner.commission_rate or 0,
+        is_active=partner.is_active if partner.is_active is not None else True
+    )
+    db.add(partner_obj)
+    db.commit()
+    db.refresh(partner_obj)
+    return partner_obj
+
+@api_router.put("/partners/{partner_id}", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
+def update_partner(partner_id: str, partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere einen Partner"""
+    db_partner = db.query(DBPartner).filter(
+        DBPartner.id == partner_id,
+        DBPartner.user_id == user.id
+    ).first()
+    if not db_partner:
+        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
+    
+    db_partner.name = partner.name
+    db_partner.description = partner.description
+    db_partner.category = partner.category
+    db_partner.address = partner.address
+    db_partner.phone = partner.phone
+    db_partner.email = partner.email
+    db_partner.website = partner.website
+    db_partner.image_url = partner.image_url
+    db_partner.commission_rate = partner.commission_rate or 0
+    db_partner.is_active = partner.is_active if partner.is_active is not None else db_partner.is_active
+    db.commit()
+    db.refresh(db_partner)
+    return db_partner
+
+@api_router.delete("/partners/{partner_id}", dependencies=[Depends(get_current_user)])
+def delete_partner(partner_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche einen Partner"""
+    db_partner = db.query(DBPartner).filter(
+        DBPartner.id == partner_id,
+        DBPartner.user_id == user.id
+    ).first()
+    if not db_partner:
+        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
+    
+    db.delete(db_partner)
+    db.commit()
+    return {"message": "Partner gelöscht"}
+
+
+# ============== SMART RULES API ENDPOINTS ==============
+@api_router.get("/smart-rules", response_model=List[SmartRuleResponse], dependencies=[Depends(get_current_user)])
+def get_smart_rules(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Smart Rules für den aktuellen User"""
+    smart_rules = db.query(DBSmartRule).filter(DBSmartRule.user_id == user.id).order_by(DBSmartRule.priority).all()
+    return smart_rules
+
+@api_router.post("/smart-rules", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
+def create_smart_rule(smart_rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle eine neue Smart Rule"""
+    smart_rule_obj = DBSmartRule(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        name=smart_rule.name,
+        description=smart_rule.description,
+        trigger_type=smart_rule.trigger_type,
+        condition=smart_rule.condition,
+        action=smart_rule.action,
+        priority=smart_rule.priority or 0,
+        is_active=smart_rule.is_active if smart_rule.is_active is not None else True
+    )
+    db.add(smart_rule_obj)
+    db.commit()
+    db.refresh(smart_rule_obj)
+    return smart_rule_obj
+
+@api_router.put("/smart-rules/{smart_rule_id}", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
+def update_smart_rule(smart_rule_id: str, smart_rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere eine Smart Rule"""
+    db_smart_rule = db.query(DBSmartRule).filter(
+        DBSmartRule.id == smart_rule_id,
+        DBSmartRule.user_id == user.id
+    ).first()
+    if not db_smart_rule:
+        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
+    
+    db_smart_rule.name = smart_rule.name
+    db_smart_rule.description = smart_rule.description
+    db_smart_rule.trigger_type = smart_rule.trigger_type
+    db_smart_rule.condition = smart_rule.condition
+    db_smart_rule.action = smart_rule.action
+    db_smart_rule.priority = smart_rule.priority or 0
+    db_smart_rule.is_active = smart_rule.is_active if smart_rule.is_active is not None else db_smart_rule.is_active
+    db.commit()
+    db.refresh(db_smart_rule)
+    return db_smart_rule
+
+@api_router.delete("/smart-rules/{smart_rule_id}", dependencies=[Depends(get_current_user)])
+def delete_smart_rule(smart_rule_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche eine Smart Rule"""
+    db_smart_rule = db.query(DBSmartRule).filter(
+        DBSmartRule.id == smart_rule_id,
+        DBSmartRule.user_id == user.id
+    ).first()
+    if not db_smart_rule:
+        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
+    
+    db.delete(db_smart_rule)
+    db.commit()
+    return {"message": "Smart Rule gelöscht"}
+
 
 @api_router.patch("/ab-tests/{ab_test_id}/activate", response_model=ABTestResponse, dependencies=[Depends(get_current_user)])
 def activate_ab_test(ab_test_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -1330,6 +1515,193 @@ def remove_bundle_extra(bundle_id: str, extra_id: str, db: Session = Depends(get
     return {"message": "Extra aus Bundle entfernt"}
 
 # ============== END STORE CONFIGURATOR API ENDPOINTS ==============
+
+# ============== PARTNER API ENDPOINTS ==============
+class PartnerCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    image_url: Optional[str] = None
+    commission_rate: Optional[float] = 0
+    is_active: Optional[bool] = True
+
+class PartnerResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str]
+    category: Optional[str]
+    address: Optional[str]
+    phone: Optional[str]
+    email: Optional[str]
+    website: Optional[str]
+    image_url: Optional[str]
+    commission_rate: float
+    is_active: bool
+    created_at: str
+
+@api_router.get("/partners", response_model=List[PartnerResponse], dependencies=[Depends(get_current_user)])
+def get_partners(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Partner für den aktuellen User"""
+    from database import Partner
+    partners = db.query(Partner).filter(Partner.user_id == user.id).all()
+    return partners
+
+@api_router.post("/partners", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
+def create_partner(partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle einen neuen Partner"""
+    from database import Partner
+    partner_obj = Partner(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        name=partner.name,
+        description=partner.description,
+        category=partner.category,
+        address=partner.address,
+        phone=partner.phone,
+        email=partner.email,
+        website=partner.website,
+        image_url=partner.image_url,
+        commission_rate=partner.commission_rate or 0,
+        is_active=partner.is_active if partner.is_active is not None else True
+    )
+    db.add(partner_obj)
+    db.commit()
+    db.refresh(partner_obj)
+    return partner_obj
+
+@api_router.put("/partners/{partner_id}", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
+def update_partner(partner_id: str, partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere einen Partner"""
+    from database import Partner
+    db_partner = db.query(Partner).filter(
+        Partner.id == partner_id,
+        Partner.user_id == user.id
+    ).first()
+    if not db_partner:
+        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
+    
+    db_partner.name = partner.name
+    db_partner.description = partner.description
+    db_partner.category = partner.category
+    db_partner.address = partner.address
+    db_partner.phone = partner.phone
+    db_partner.email = partner.email
+    db_partner.website = partner.website
+    db_partner.image_url = partner.image_url
+    db_partner.commission_rate = partner.commission_rate or 0
+    db_partner.is_active = partner.is_active if partner.is_active is not None else db_partner.is_active
+    db.commit()
+    db.refresh(db_partner)
+    return db_partner
+
+@api_router.delete("/partners/{partner_id}", dependencies=[Depends(get_current_user)])
+def delete_partner(partner_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche einen Partner"""
+    from database import Partner
+    db_partner = db.query(Partner).filter(
+        Partner.id == partner_id,
+        Partner.user_id == user.id
+    ).first()
+    if not db_partner:
+        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
+    
+    db.delete(db_partner)
+    db.commit()
+    return {"message": "Partner gelöscht"}
+
+
+# ============== SMART RULES API ENDPOINTS ==============
+class SmartRuleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    trigger_type: Optional[str] = None
+    condition: Optional[str] = None
+    action: Optional[str] = None
+    priority: Optional[int] = 0
+    is_active: Optional[bool] = True
+
+class SmartRuleResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str]
+    trigger_type: Optional[str]
+    condition: Optional[str]
+    action: Optional[str]
+    priority: int
+    is_active: bool
+    created_at: str
+
+@api_router.get("/smart-rules", response_model=List[SmartRuleResponse], dependencies=[Depends(get_current_user)])
+def get_smart_rules(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Smart Rules für den aktuellen User"""
+    from database import SmartRule
+    smart_rules = db.query(SmartRule).filter(SmartRule.user_id == user.id).all()
+    return smart_rules
+
+@api_router.post("/smart-rules", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
+def create_smart_rule(rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle eine neue Smart Rule"""
+    from database import SmartRule
+    rule_obj = SmartRule(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        name=rule.name,
+        description=rule.description,
+        trigger_type=rule.trigger_type,
+        condition=rule.condition,
+        action=rule.action,
+        priority=rule.priority or 0,
+        is_active=rule.is_active if rule.is_active is not None else True
+    )
+    db.add(rule_obj)
+    db.commit()
+    db.refresh(rule_obj)
+    return rule_obj
+
+@api_router.put("/smart-rules/{rule_id}", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
+def update_smart_rule(rule_id: str, rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere eine Smart Rule"""
+    from database import SmartRule
+    db_rule = db.query(SmartRule).filter(
+        SmartRule.id == rule_id,
+        SmartRule.user_id == user.id
+    ).first()
+    if not db_rule:
+        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
+    
+    db_rule.name = rule.name
+    db_rule.description = rule.description
+    db_rule.trigger_type = rule.trigger_type
+    db_rule.condition = rule.condition
+    db_rule.action = rule.action
+    db_rule.priority = rule.priority or 0
+    db_rule.is_active = rule.is_active if rule.is_active is not None else db_rule.is_active
+    db.commit()
+    db.refresh(db_rule)
+    return db_rule
+
+@api_router.delete("/smart-rules/{rule_id}", dependencies=[Depends(get_current_user)])
+def delete_smart_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche eine Smart Rule"""
+    from database import SmartRule
+    db_rule = db.query(SmartRule).filter(
+        SmartRule.id == rule_id,
+        SmartRule.user_id == user.id
+    ).first()
+    if not db_rule:
+        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
+    
+    db.delete(db_rule)
+    db.commit()
+    return {"message": "Smart Rule gelöscht"}
+
+# ============== END SMART RULES API ENDPOINTS ==============
 
 @app.on_event("startup")
 def startup():
