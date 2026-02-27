@@ -104,10 +104,16 @@
 - [x] Booking Formular für Gäste - ✅ implemented
 
 ## Phase 6: Info-Szenen & Amenity (Medium Priority) - **27.02.2026**
-- [ ] Info-Szenen Editor (Drag-and-Drop sortierbar)
-- [ ] Amenity/Details Anzeige für Properties
-- [ ] KI-Inhalts-Generator für Szenen
-- [ ] Szenen-Management im Dashboard
+- [x] Info-Szenen Editor (Drag-and-Drop sortierbar) - ✅ implemented
+- [x] Amenity/Details Anzeige für Properties - ✅ implemented
+- [ ] KI-Inhalts-Generator für Szenen - TODO
+- [x] Szenen-Management im Dashboard - ✅ implemented
+
+## Phase 7: Frontend Szenen Editor (Medium Priority) - **27.02.2026**
+- [ ] Szenen-Editor UI (Drag-and-Drop)
+- [ ] Amenity-Manager
+- [ ] KI-Inhalts-Generator UI
+- [ ] Image Upload für Szenen
 
 ## Design (gemäß MVP-Liste) ✅
 - Kartenbasiertes Layout
