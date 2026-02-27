@@ -143,6 +143,29 @@ class SmartRule(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+
+class Booking(Base):
+    __tablename__ = "bookings"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    guest_name = Column(String(200))
+    guest_email = Column(String(200))
+    guest_phone = Column(String(50))
+    check_in = Column(DateTime)
+    check_out = Column(DateTime)
+    guests = Column(Integer)
+    message = Column(Text)
+    total_price = Column(Float)
+    tipping_percentage = Column(Integer, default=0)
+    tipping_amount = Column(Float, default=0)
+    status = Column(String(50), default='pending')  # pending, confirmed, cancelled
+    payment_method = Column(String(50))  # paypal, apple_pay, google_pay, none
+    invoice_generated = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)
