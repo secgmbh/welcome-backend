@@ -124,9 +124,33 @@
 - [x] GlobalStatsResponse model
 - [x] GET /api/stats/global endpoint (total_hosts, total_properties, total_bookings, total_revenue)
 
-### Phase 14: Branding & AI Enhancement (in Arbeit) ⏳
-- [ ] Branding-Engine (brandColor dynamisch)
-- [ ] AI Copywriter (automatische Generierung)
+### Phase 14: Branding & AI Enhancement ✅
+- [x] User DB Model mit brand_color, logo_url
+- [x] Branding API: GET, PUT /api/branding
+- [x] AI Copywriter API: POST /api/ai/copywriter
+- [x] BrandingEditor.jsx UI
+- [x] AICopywriter.jsx UI
+
+### Phase 15: Key-Safe Info ✅
+- [x] Property DB Model mit keysafe_location, keysafe_code, keysafe_instructions
+- [x] Key-Safe API: GET, PUT /api/properties/{id}/keysafe
+- [x] KeySafeInfoCard.jsx UI
+
+### Phase 16: Kalender-Sync (.ics Export) ✅
+- [x] GET /api/scenes/export/ics
+- [x] GET /api/properties/{id}/scenes/export/ics
+- [x] SceneEditor.jsx: Export Button
+
+### Phase 17: Host-Spezifische Statistiken ✅
+- [x] PropertyStatsResponse model
+- [x] GET /api/stats/host/{host_id}
+- [x] GET /api/stats/property/{id}
+- [x] GET /api/stats/bookings/export.csv
+
+### Phase 18: Dashboard Erweiterung (in Arbeit) ⏳
+- [ ] Host Stats Dashboard UI
+- [ ] Property Stats Dashboard UI
+- [ ] CSV Export Button
 - [ ] KI-Inhalts-Generator für Szenen (UI fertig, API fehlt)
 
 ---
