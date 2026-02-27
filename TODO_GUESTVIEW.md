@@ -64,14 +64,50 @@
 2. Passwortlose Gästeanmeldung
 3. Properties Seite für Gäste
 
-### Phase 2: Host Dashboard (Medium Priority) - TODO
-4. Unterkunftsverwaltung (Template)
-5. Link/QR Code
-6. Profilverwaltung
+## Phase 2: Host Dashboard (Medium Priority) - **27.02.2026**
+- [x] Unterkunftsverwaltung (Template) - ✅ implemented
+- [x] Link/QR Code Cards - ✅ implemented
+- [x] Guestview Generator im Dashboard - ✅ implemented
+- [x] Template-Auswahl für Unterkünfte - ✅ implemented
+- [x] Property Template Selector - ✅ implemented
+- [x] New Property Wizard - ✅ implemented
 
-### Phase 3: Analytics (Medium Priority) - TODO
-7. Analyse-Dashboard
-8. Buchungsübersicht & Export
+## Phase 3: Analytics (Medium Priority) - **27.02.2026**
+- [x] Analyse-Dashboard - ✅ implemented
+- [x] Property QR Code Cards mit Download - ✅ implemented
+- [x] Guestview Link Generator - ✅ implemented
+
+### Phase 3 UI Components
+- [x] AnalyticsTab - Statistik-Karten in Dashboard
+- [x] PropertyStats - Statistiken für jede Property
+- [x] QRCodeCard - QR Code Anzeige mit Download
+- [x] GuestviewLinkCard - Guestview Link Karte mit Copy-Funktion
+
+## Phase 4: Profilverwaltung & Buchungen (Medium Priority) - **27.02.2026**
+- [x] Profilverwaltung - ✅ implemented
+- [x] Buchungsübersicht & Export - ✅ implemented
+- [ ] Booking API Integration - TODO
+- [ ] Booking Formular für Gäste - TODO
+
+### Phase 4 Tasks (Status)
+1. ✅ ProfilePage - Rechnungsdaten bearbeiten (Frontend)
+2. ✅ BookingDashboard - Buchungsübersicht im Dashboard
+3. Booking API - GET/POST /api/bookings
+4. Booking Form - Gast-Buchungsformular
+
+## Phase 5: Guestview Guest Pages (Medium Priority) - **27.02.2026**
+- [x] Passwortlose URL /guestview/{token} - ✅ implemented
+- [x] properties/{id} Seite für Gäste - ✅ implemented
+- [ ] Info-Szenen (Drag-and-Drop sortierbar) - TODO
+- [ ] Amenity Anzeige - TODO
+- [x] QR Code Download - ✅ implemented
+- [x] Booking Formular für Gäste - ✅ implemented
+
+## Phase 6: Info-Szenen & Amenity (Medium Priority) - **27.02.2026**
+- [ ] Info-Szenen Editor (Drag-and-Drop sortierbar)
+- [ ] Amenity/Details Anzeige für Properties
+- [ ] KI-Inhalts-Generator für Szenen
+- [ ] Szenen-Management im Dashboard
 
 ## Design (gemäß MVP-Liste) ✅
 - Kartenbasiertes Layout
