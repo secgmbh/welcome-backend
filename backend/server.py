@@ -1854,6 +1854,189 @@ def confirm_booking(booking_id: str, db: Session = Depends(get_db), user: User =
 
 # ============== END CHECKOUT & BOOKING API ENDPOINTS ==============
 
+# ============== CLEANER & TASK API ENDPOINTS ==============
+class CleanerLoginRequest(BaseModel):
+    cleaner_id: str
+
+class CleanerResponse(BaseModel):
+    id: str
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    property_ids: List[str]
+    created_at: str
+
+@api_router.post("/cleaner/login")
+def cleaner_login(request: CleanerLoginRequest, db: Session = Depends(get_db)):
+    """Cleaner anmelden (passwortloser Login via cleanerId)"""
+    # Hier würde die Validierung der cleanerId stattfinden
+    # Für MVP return dummy response
+    return {
+        "success": True,
+        "cleaner_id": request.cleaner_id,
+        "message": "Cleaner erfolgreich angemeldet"
+    }
+
+@api_router.get("/cleaner/profile")
+def get_cleaner_profile(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Cleaner Profil holen"""
+    # Hier würde das echte Profil aus der DB geladen
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "phone": None,
+        "property_ids": []
+    }
+
+
+class TaskCreate(BaseModel):
+    property_id: str
+    title: str
+    description: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: Optional[int] = 0
+
+class TaskResponse(BaseModel):
+    id: str
+    property_id: str
+    cleaner_id: Optional[str]
+    title: str
+    description: Optional[str]
+    due_date: Optional[str]
+    completed: bool
+    priority: int
+    created_at: str
+
+@api_router.get("/tasks", response_model=List[TaskResponse], dependencies=[Depends(get_current_user)])
+def get_tasks(db: Session = Depends(get_db), user: User = Depends(get_current_user), property_id: Optional[str] = None):
+    """Hole alle Aufgaben für den aktuellen User"""
+    from database import Task
+    query = db.query(Task).filter(Task.property_id.in_(
+        db.query(Property.id).filter(Property.user_id == user.id)
+    ))
+    if property_id:
+        query = query.filter(Task.property_id == property_id)
+    tasks = query.all()
+    return tasks
+
+@api_router.post("/tasks", response_model=TaskResponse, dependencies=[Depends(get_current_user)])
+def create_task(task: TaskCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle eine neue Aufgabe"""
+    from database import Task, Property
+    # Prüfe ob Property existiert und dem User gehört
+    property = db.query(Property).filter(
+        Property.id == task.property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    due_date = None
+    if task.due_date:
+        try:
+            due_date = datetime.fromisoformat(task.due_date.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Ungültiges Datumsformat")
+    
+    task_obj = Task(
+        id=str(uuid.uuid4()),
+        property_id=task.property_id,
+        cleaner_id=None,  # Wird beim Zuweisen gesetzt
+        title=task.title,
+        description=task.description,
+        due_date=due_date,
+        completed=False,
+        priority=task.priority or 0
+    )
+    db.add(task_obj)
+    db.commit()
+    db.refresh(task_obj)
+    return task_obj
+
+@api_router.put("/tasks/{task_id}", response_model=TaskResponse, dependencies=[Depends(get_current_user)])
+def update_task(task_id: str, task: TaskCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere eine Aufgabe"""
+    from database import Task
+    db_task = db.query(Task).filter(
+        Task.id == task_id,
+        Task.property_id.in_(
+            db.query(Property.id).filter(Property.user_id == user.id)
+        )
+    ).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
+    
+    db_task.title = task.title
+    db_task.description = task.description
+    db_task.priority = task.priority or 0
+    
+    if task.due_date:
+        try:
+            db_task.due_date = datetime.fromisoformat(task.due_date.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Ungültiges Datumsformat")
+    
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+@api_router.post("/tasks/{task_id}/complete", response_model=TaskResponse, dependencies=[Depends(get_current_user)])
+def complete_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Markiere eine Aufgabe als erledigt"""
+    from database import Task
+    db_task = db.query(Task).filter(
+        Task.id == task_id,
+        Task.property_id.in_(
+            db.query(Property.id).filter(Property.user_id == user.id)
+        )
+    ).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
+    
+    db_task.completed = True
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+@api_router.get("/tasks/export/ics", dependencies=[Depends(get_current_user)])
+def export_tasks_ics(db: Session = Depends(get_db), user: User = Depends(get_current_user), property_id: Optional[str] = None):
+    """Exportiere Aufgaben als .ics Datei"""
+    from database import Task
+    # Hole alle Aufgaben
+    query = db.query(Task).filter(Task.property_id.in_(
+        db.query(Property.id).filter(Property.user_id == user.id)
+    ))
+    if property_id:
+        query = query.filter(Task.property_id == property_id)
+    tasks = query.all()
+    
+    # Erstelle .ics content
+    ics_content = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Welcome Link//Tasks//DE
+"""
+    for task in tasks:
+        ics_content += f"""BEGIN:VEVENT
+SUMMARY:{task.title}
+DESCRIPTION:{task.description or ''}
+DTSTART:{task.due_date.strftime('%Y%m%dT%H%M%S') if task.due_date else datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}
+DTEND:{(task.due_date + timedelta(hours=1) if task.due_date else datetime.now(timezone.utc) + timedelta(hours=1)).strftime('%Y%m%dT%H%M%S')}
+STATUS:{"COMPLETED" if task.completed else "NEEDS-ACTION"}
+END:VEVENT
+"""
+    ics_content += "END:VCALENDAR"
+    
+    from fastapi.responses import Response
+    return Response(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": "attachment; filename=tasks.ics"}
+    )
+
+
+# ============== END CLEANER & TASK API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
