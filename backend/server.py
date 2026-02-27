@@ -1148,7 +1148,7 @@ class ExtraResponse(BaseModel):
     user_id: str
     name: str
     description: Optional[str] = None
-    price: int
+    price: float
     stock: int
     image_url: Optional[str]
     is_active: bool

@@ -95,7 +95,7 @@ class Extra(Base):
     user_id = Column(String(36), nullable=False, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text)
-    price = Column(Integer, default=0)
+    price = Column(Float, default=0)
     stock = Column(Integer, default=0)
     image_url = Column(String(500))
     is_active = Column(Boolean, default=True)
@@ -108,7 +108,7 @@ class Bundle(Base):
     user_id = Column(String(36), nullable=False, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text)
-    price = Column(Integer, default=0)
+    price = Column(Float, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
