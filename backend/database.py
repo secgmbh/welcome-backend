@@ -37,6 +37,10 @@ class Property(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text)
     address = Column(String(500))
+    # Key-Safe Info
+    keysafe_location = Column(String(500))
+    keysafe_code = Column(String(50))
+    keysafe_instructions = Column(Text)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class StatusCheck(Base):

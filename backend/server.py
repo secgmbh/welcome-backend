@@ -2156,6 +2156,69 @@ def ai_copywriter(request: AICopyRequest, db: Session = Depends(get_db), user: U
 
 # ============== END BRANDING & AI API ENDPOINTS ==============
 
+# ============== KEY-SAFE API ENDPOINTS ==============
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+
+class KeySafeResponse(BaseModel):
+    keysafe_location: Optional[str]
+    keysafe_code: Optional[str]
+    keysafe_instructions: Optional[str]
+    updated_at: str
+
+@api_router.get("/properties/{property_id}/keysafe", response_model=KeySafeResponse, dependencies=[Depends(get_current_user)])
+def get_keysafe_info(property_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole Key-Safe Info für ein Property"""
+    from database import Property
+    property = db.query(Property).filter(
+        Property.id == property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    return KeySafeResponse(
+        keysafe_location=property.keysafe_location,
+        keysafe_code=property.keysafe_code,
+        keysafe_instructions=property.keysafe_instructions,
+        updated_at=property.created_at.isoformat()
+    )
+
+class KeySafeUpdate(BaseModel):
+    keysafe_location: Optional[str] = None
+    keysafe_code: Optional[str] = None
+    keysafe_instructions: Optional[str] = None
+
+@api_router.put("/properties/{property_id}/keysafe", response_model=KeySafeResponse, dependencies=[Depends(get_current_user)])
+def update_keysafe_info(property_id: str, keysafe: KeySafeUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere Key-Safe Info"""
+    from database import Property
+    property = db.query(Property).filter(
+        Property.id == property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    if keysafe.keysafe_location is not None:
+        property.keysafe_location = keysafe.keysafe_location
+    if keysafe.keysafe_code is not None:
+        property.keysafe_code = keysafe.keysafe_code
+    if keysafe.keysafe_instructions is not None:
+        property.keysafe_instructions = keysafe.keysafe_instructions
+    
+    db.commit()
+    db.refresh(property)
+    return KeySafeResponse(
+        keysafe_location=property.keysafe_location,
+        keysafe_code=property.keysafe_code,
+        keysafe_instructions=property.keysafe_instructions,
+        updated_at=property.created_at.isoformat()
+    )
+
+
+# ============== END KEY-SAFE API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
