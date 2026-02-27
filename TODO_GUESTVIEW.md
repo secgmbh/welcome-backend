@@ -74,7 +74,6 @@
 
 ## Phase 3: Analytics (Medium Priority) - **27.02.2026**
 - [x] Analyse-Dashboard - ✅ implemented
-- [x] Buchungsübersicht & Export - TODO
 - [x] Property QR Code Cards mit Download - ✅ implemented
 - [x] Guestview Link Generator - ✅ implemented
 
@@ -83,6 +82,18 @@
 - [x] PropertyStats - Statistiken für jede Property
 - [x] QRCodeCard - QR Code Anzeige mit Download
 - [x] GuestviewLinkCard - Guestview Link Karte mit Copy-Funktion
+
+## Phase 4: Profilverwaltung & Buchungen (Medium Priority) - **27.02.2026**
+- [ ] Profilverwaltung - TODO
+- [ ] Buchungsübersicht & Export - TODO
+- [ ] Booking API Integration - TODO
+- [ ] Booking Formular für Gäste - TODO
+
+### Phase 4 Tasks
+1. ProfilePage - Rechnungsdaten bearbeiten (Frontend)
+2. BookingDashboard - Buchungsübersicht im Dashboard
+3. Booking API - GET/POST /api/bookings
+4. Booking Form - Gast-Buchungsformular
 
 ## Design (gemäß MVP-Liste) ✅
 - Kartenbasiertes Layout
