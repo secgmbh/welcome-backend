@@ -931,6 +931,93 @@ logging.basicConfig(
     force=True
 )
 
+# ============== SCENE API ENDPOINTS ==============
+class SceneCreate(BaseModel):
+    property_id: str
+    title: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    order: Optional[int] = 0
+
+class SceneResponse(BaseModel):
+    id: str
+    property_id: str
+    title: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    order: int
+    created_at: str
+
+@api_router.get("/scenes", response_model=List[SceneResponse], dependencies=[Depends(get_current_user)])
+def get_scenes(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Scenes für den aktuellen User"""
+    scenes = db.query(Scene).filter(Scene.property_id.in_(
+        db.query(Property.id).filter(Property.user_id == user.id)
+    )).order_by(Scene.order).all()
+    return scenes
+
+@api_router.post("/scenes", response_model=SceneResponse, dependencies=[Depends(get_current_user)])
+def create_scene(scene: SceneCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle eine neue Scene"""
+    # Prüfe, ob Property dem User gehört
+    property = db.query(Property).filter(
+        Property.id == scene.property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden oder nicht berechtigt")
+    
+    scene_obj = Scene(
+        id=str(uuid.uuid4()),
+        property_id=scene.property_id,
+        title=scene.title,
+        description=scene.description,
+        image_url=scene.image_url,
+        order=scene.order or 0
+    )
+    db.add(scene_obj)
+    db.commit()
+    db.refresh(scene_obj)
+    return scene_obj
+
+@api_router.put("/scenes/{scene_id}", response_model=SceneResponse, dependencies=[Depends(get_current_user)])
+def update_scene(scene_id: str, scene: SceneCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere eine Scene"""
+    db_scene = db.query(Scene).filter(
+        Scene.id == scene_id,
+        Scene.property_id.in_(
+            db.query(Property.id).filter(Property.user_id == user.id)
+        )
+    ).first()
+    if not db_scene:
+        raise HTTPException(status_code=404, detail="Scene nicht gefunden")
+    
+    db_scene.title = scene.title
+    db_scene.description = scene.description
+    db_scene.image_url = scene.image_url
+    db_scene.order = scene.order or 0
+    db.commit()
+    db.refresh(db_scene)
+    return db_scene
+
+@api_router.delete("/scenes/{scene_id}", dependencies=[Depends(get_current_user)])
+def delete_scene(scene_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche eine Scene"""
+    db_scene = db.query(Scene).filter(
+        Scene.id == scene_id,
+        Scene.property_id.in_(
+            db.query(Property.id).filter(Property.user_id == user.id)
+        )
+    ).first()
+    if not db_scene:
+        raise HTTPException(status_code=404, detail="Scene nicht gefunden")
+    
+    db.delete(db_scene)
+    db.commit()
+    return {"message": "Scene gelöscht"}
+
+# ============== END SCENE API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""

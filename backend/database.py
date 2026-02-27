@@ -51,6 +51,17 @@ class GuestView(Base):
     token = Column(String(36), unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class Scene(Base):
+    __tablename__ = "scenes"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    image_url = Column(String(500))
+    order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)
