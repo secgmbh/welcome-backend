@@ -85,15 +85,23 @@
 
 ## Phase 4: Profilverwaltung & Buchungen (Medium Priority) - **27.02.2026**
 - [x] Profilverwaltung - ✅ implemented
-- [ ] Buchungsübersicht & Export - TODO
+- [x] Buchungsübersicht & Export - ✅ implemented
 - [ ] Booking API Integration - TODO
 - [ ] Booking Formular für Gäste - TODO
 
 ### Phase 4 Tasks (Status)
 1. ✅ ProfilePage - Rechnungsdaten bearbeiten (Frontend)
-2. BookingDashboard - Buchungsübersicht im Dashboard
+2. ✅ BookingDashboard - Buchungsübersicht im Dashboard
 3. Booking API - GET/POST /api/bookings
 4. Booking Form - Gast-Buchungsformular
+
+## Phase 5: Guestview Guest Pages (Medium Priority) - **27.02.2026**
+- [ ] Passwortlose URL /guestview/{token} - TODO
+- [ ] properties/{id} Seite für Gäste - TODO
+- [ ] Info-Szenen (Drag-and-Drop sortierbar) - TODO
+- [ ] Amenity Anzeige - TODO
+- [ ] QR Code Download - TODO
+- [ ] Booking Formular für Gäste - TODO
 
 ## Design (gemäß MVP-Liste) ✅
 - Kartenbasiertes Layout
