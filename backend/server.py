@@ -2037,6 +2037,66 @@ END:VEVENT
 
 # ============== END CLEANER & TASK API ENDPOINTS ==============
 
+# ============== GLOBAL STATS & MONITORING API ENDPOINTS ==============
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+
+class GlobalStatsResponse(BaseModel):
+    total_hosts: int
+    total_properties: int
+    total_bookings: int
+    total_revenue: float
+    active_bookings_today: int
+    completed_bookings_today: int
+    updated_at: str
+
+@api_router.get("/stats/global", response_model=GlobalStatsResponse, dependencies=[Depends(get_current_user)])
+def get_global_stats(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole globale Plattform-Statistiken (nur für Admins oder alle User)"""
+    from database import User, Property, Booking
+    
+    # Zähle alle User (Hosts)
+    total_hosts = db.query(User).count()
+    
+    # Zähle alle Properties
+    total_properties = db.query(Property).count()
+    
+    # Zähle alle Buchungen
+    total_bookings = db.query(Booking).count()
+    
+    # Berechne Gesamtumsatz
+    total_revenue_result = db.query(db.func.sum(Booking.total_price)).scalar()
+    total_revenue = total_revenue_result or 0.0
+    
+    # Zähle aktive Buchungen heute
+    from datetime import datetime, date
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_end = today_start + timedelta(days=1)
+    
+    active_bookings_today = db.query(Booking).filter(
+        Booking.created_at >= today_start,
+        Booking.created_at < today_end
+    ).count()
+    
+    completed_bookings_today = db.query(Booking).filter(
+        Booking.created_at >= today_start,
+        Booking.created_at < today_end,
+        Booking.status == 'confirmed'
+    ).count()
+    
+    return GlobalStatsResponse(
+        total_hosts=total_hosts,
+        total_properties=total_properties,
+        total_bookings=total_bookings,
+        total_revenue=total_revenue,
+        active_bookings_today=active_bookings_today,
+        completed_bookings_today=completed_bookings_today,
+        updated_at=datetime.now(timezone.utc).isoformat()
+    )
+
+
+# ============== END GLOBAL STATS & MONITORING API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
