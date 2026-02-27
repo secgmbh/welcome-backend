@@ -2305,6 +2305,144 @@ END:VEVENT
 
 # ============== END CALENDAR EXPORT API ENDPOINTS ==============
 
+# ============== HOST STATS API ENDPOINTS ==============
+from fastapi.responses import Response, StreamingResponse
+import io
+import csv
+
+@api_router.get("/stats/host/{host_id}", response_model=List[PropertyStatsResponse], dependencies=[Depends(get_current_user)])
+def get_host_stats(host_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole Property-Statistiken für einen Host"""
+    from database import Property, Booking
+    from sqlalchemy import func
+    
+    # Hole alle Properties des Users
+    properties = db.query(Property).filter(Property.user_id == user.id).all()
+    
+    stats = []
+    for prop in properties:
+        # Zähle Buchungen für dieses Property
+        total_bookings = db.query(func.count(Booking.id)).filter(
+            Booking.property_id == prop.id
+        ).scalar() or 0
+        
+        # Berechne Gesamtumsatz
+        revenue_result = db.query(func.sum(Booking.total_price)).filter(
+            Booking.property_id == prop.id
+        ).scalar()
+        total_revenue = revenue_result or 0.0
+        
+        # Berechne Gesamtanzahl Gäste (Summe aller guests pro Buchung)
+        guests_result = db.query(func.sum(Booking.guest_count)).filter(
+            Booking.property_id == prop.id
+        ).scalar()
+        total_guests = guests_result or 0
+        
+        # Hole letzte Buchung
+        last_booking = db.query(Booking).filter(
+            Booking.property_id == prop.id
+        ).order_by(Booking.created_at.desc()).first()
+        
+        stats.append(PropertyStatsResponse(
+            property_id=prop.id,
+            property_name=prop.name,
+            total_bookings=total_bookings,
+            total_revenue=total_revenue,
+            total_guests=total_guests,
+            avg_rating=None,  # Würde Bewertungen benötigen
+            last_booking=last_booking.created_at.isoformat() if last_booking else None
+        ))
+    
+    return stats
+
+
+@api_router.get("/stats/property/{id}", response_model=PropertyStatsResponse, dependencies=[Depends(get_current_user)])
+def get_property_stats(id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole Statistiken für ein spezifisches Property"""
+    from database import Property, Booking
+    from sqlalchemy import func
+    
+    # Prüfe ob Property existiert und dem User gehört
+    property = db.query(Property).filter(
+        Property.id == id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    # Zähle Buchungen
+    total_bookings = db.query(func.count(Booking.id)).filter(
+        Booking.property_id == property.id
+    ).scalar() or 0
+    
+    # Berechne Umsatz
+    revenue_result = db.query(func.sum(Booking.total_price)).filter(
+        Booking.property_id == property.id
+    ).scalar()
+    total_revenue = revenue_result or 0.0
+    
+    # Berechnte Gäste
+    guests_result = db.query(func.sum(Booking.guest_count)).filter(
+        Booking.property_id == property.id
+    ).scalar()
+    total_guests = guests_result or 0
+    
+    # Hole letzte Buchung
+    last_booking = db.query(Booking).filter(
+        Booking.property_id == property.id
+    ).order_by(Booking.created_at.desc()).first()
+    
+    return PropertyStatsResponse(
+        property_id=property.id,
+        property_name=property.name,
+        total_bookings=total_bookings,
+        total_revenue=total_revenue,
+        total_guests=total_guests,
+        avg_rating=None,
+        last_booking=last_booking.created_at.isoformat() if last_booking else None
+    )
+
+
+@api_router.get("/stats/bookings/export.csv", dependencies=[Depends(get_current_user)])
+def export_bookings_csv(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Exportiere alle Buchungen des Users als CSV"""
+    from database import Booking, Property
+    
+    # Hole alle Buchungen des Users
+    bookings = db.query(Booking).join(Property).filter(Property.user_id == user.id).all()
+    
+    # Erstelle CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow(['Buchungs-ID', 'Property', 'Gast', 'Check-in', 'Check-out', 'Anzahl Gäste', 'Preis', 'Status', 'Zahlungsmethode', 'Erstellt am'])
+    
+    for booking in bookings:
+        writer.writerow([
+            booking.id,
+            booking.property_name,
+            booking.guest_name,
+            booking.check_in.strftime('%Y-%m-%d') if booking.check_in else '',
+            booking.check_out.strftime('%Y-%m-%d') if booking.check_out else '',
+            booking.guest_count or 0,
+            f"{booking.total_price:.2f}",
+            booking.status or 'pending',
+            booking.payment_method or 'unknown',
+            booking.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        ])
+    
+    output.seek(0)
+    
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=bookings.csv"}
+    )
+
+
+# ============== END HOST STATS API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
