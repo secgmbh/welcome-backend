@@ -2219,6 +2219,92 @@ def update_keysafe_info(property_id: str, keysafe: KeySafeUpdate, db: Session = 
 
 # ============== END KEY-SAFE API ENDPOINTS ==============
 
+# ============== CALENDAR EXPORT API ENDPOINTS ==============
+from fastapi.responses import Response
+
+@api_router.get("/scenes/export/ics", dependencies=[Depends(get_current_user)])
+def export_all_scenes_ics(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Exportiere alle Szenen als .ics Datei"""
+    from database import Scene, Property
+    # Hole alle Szenen für den User
+    scenes = db.query(Scene).join(Property).filter(Property.user_id == user.id).all()
+    
+    # Erstelle .ics content
+    ics_content = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Welcome Link//Scenes//DE
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Welcome Link Szenen
+X-WR-TIMEZONE:Europe/Berlin
+"""
+    for scene in scenes:
+        # Erstelle Event mit dem Erstellungsdatum als Startzeit
+        start_time = scene.created_at or datetime.now(timezone.utc)
+        end_time = start_time + timedelta(hours=1)
+        
+        ics_content += f"""BEGIN:VEVENT
+SUMMARY:{scene.title or 'Info-Szene'}
+DESCRIPTION:{scene.content or ''}
+DTSTART:{start_time.strftime('%Y%m%dT%H%M%S')}
+DTEND:{end_time.strftime('%Y%m%dT%H%M%S')}
+END:VEVENT
+"""
+    ics_content += "END:VCALENDAR"
+    
+    return Response(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": "attachment; filename=scenes.ics"}
+    )
+
+
+@api_router.get("/properties/{property_id}/scenes/export/ics", dependencies=[Depends(get_current_user)])
+def export_property_scenes_ics(property_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Exportiere Szenen für ein Property als .ics Datei"""
+    from database import Scene, Property
+    # Prüfe ob Property existiert und dem User gehört
+    property = db.query(Property).filter(
+        Property.id == property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    # Hole alle Szenen für dieses Property
+    scenes = db.query(Scene).filter(Scene.property_id == property_id).all()
+    
+    # Erstelle .ics content
+    ics_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Welcome Link//Scenes//DE
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:{property.name} Szenen
+X-WR-TIMEZONE:Europe/Berlin
+"""
+    for scene in scenes:
+        start_time = scene.created_at or datetime.now(timezone.utc)
+        end_time = start_time + timedelta(hours=1)
+        
+        ics_content += f"""BEGIN:VEVENT
+SUMMARY:{scene.title or 'Info-Szene'}
+DESCRIPTION:{scene.content or ''}
+DTSTART:{start_time.strftime('%Y%m%dT%H%M%S')}
+DTEND:{end_time.strftime('%Y%m%dT%H%M%S')}
+END:VEVENT
+"""
+    ics_content += "END:VCALENDAR"
+    
+    return Response(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename=property-{property_id}-scenes.ics"}
+    )
+
+
+# ============== END CALENDAR EXPORT API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
