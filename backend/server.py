@@ -16,7 +16,7 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1017,6 +1017,319 @@ def delete_scene(scene_id: str, db: Session = Depends(get_db), user: User = Depe
     return {"message": "Scene gelöscht"}
 
 # ============== END SCENE API ENDPOINTS ==============
+
+# ============== A/B TESTING API ENDPOINTS ==============
+class ABTestCreate(BaseModel):
+    property_id: str
+    name: str
+    variant_a_name: Optional[str] = "Variante A"
+    variant_b_name: Optional[str] = "Variante B"
+    variant_a_url: Optional[str] = None
+    variant_b_url: Optional[str] = None
+
+class ABTestResponse(BaseModel):
+    id: str
+    property_id: str
+    name: str
+    variant_a_name: str
+    variant_b_name: str
+    variant_a_url: Optional[str]
+    variant_b_url: Optional[str]
+    active: bool
+    created_at: str
+    updated_at: str
+
+@api_router.get("/ab-tests", response_model=List[ABTestResponse], dependencies=[Depends(get_current_user)])
+def get_ab_tests(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle A/B Tests für den aktuellen User"""
+    ab_tests = db.query(ABTest).filter(ABTest.property_id.in_(
+        db.query(Property.id).filter(Property.user_id == user.id)
+    )).all()
+    return ab_tests
+
+@api_router.post("/ab-tests", response_model=ABTestResponse, dependencies=[Depends(get_current_user)])
+def create_ab_test(ab_test: ABTestCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle einen neuen A/B Test"""
+    property = db.query(Property).filter(
+        Property.id == ab_test.property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden oder nicht berechtigt")
+    
+    ab_test_obj = ABTest(
+        id=str(uuid.uuid4()),
+        property_id=ab_test.property_id,
+        name=ab_test.name,
+        variant_a_name=ab_test.variant_a_name,
+        variant_b_name=ab_test.variant_b_name,
+        variant_a_url=ab_test.variant_a_url,
+        variant_b_url=ab_test.variant_b_url,
+        active=False
+    )
+    db.add(ab_test_obj)
+    db.commit()
+    db.refresh(ab_test_obj)
+    return ab_test_obj
+
+@api_router.put("/ab-tests/{ab_test_id}", response_model=ABTestResponse, dependencies=[Depends(get_current_user)])
+def update_ab_test(ab_test_id: str, ab_test: ABTestCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere einen A/B Test"""
+    db_ab_test = db.query(ABTest).filter(
+        ABTest.id == ab_test_id,
+        ABTest.property_id.in_(
+            db.query(Property.id).filter(Property.user_id == user.id)
+        )
+    ).first()
+    if not db_ab_test:
+        raise HTTPException(status_code=404, detail="A/B Test nicht gefunden")
+    
+    db_ab_test.name = ab_test.name
+    db_ab_test.variant_a_name = ab_test.variant_a_name
+    db_ab_test.variant_b_name = ab_test.variant_b_name
+    db_ab_test.variant_a_url = ab_test.variant_a_url
+    db_ab_test.variant_b_url = ab_test.variant_b_url
+    db.commit()
+    db.refresh(db_ab_test)
+    return db_ab_test
+
+@api_router.delete("/ab-tests/{ab_test_id}", dependencies=[Depends(get_current_user)])
+def delete_ab_test(ab_test_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche einen A/B Test"""
+    db_ab_test = db.query(ABTest).filter(
+        ABTest.id == ab_test_id,
+        ABTest.property_id.in_(
+            db.query(Property.id).filter(Property.user_id == user.id)
+        )
+    ).first()
+    if not db_ab_test:
+        raise HTTPException(status_code=404, detail="A/B Test nicht gefunden")
+    
+    db.delete(db_ab_test)
+    db.commit()
+    return {"message": "A/B Test gelöscht"}
+
+@api_router.patch("/ab-tests/{ab_test_id}/activate", response_model=ABTestResponse, dependencies=[Depends(get_current_user)])
+def activate_ab_test(ab_test_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktiviere einen A/B Test (deaktiviert andere für dieselbe Property)"""
+    db_ab_test = db.query(ABTest).filter(
+        ABTest.id == ab_test_id,
+        ABTest.property_id.in_(
+            db.query(Property.id).filter(Property.user_id == user.id)
+        )
+    ).first()
+    if not db_ab_test:
+        raise HTTPException(status_code=404, detail="A/B Test nicht gefunden")
+    
+    # Deaktiviere andere Tests für dieselbe Property
+    db.query(ABTest).filter(
+        ABTest.property_id == db_ab_test.property_id,
+        ABTest.id != ab_test_id
+    ).update({ABTest.active: False})
+    
+    db_ab_test.active = not db_ab_test.active  # Toggle
+    db.commit()
+    db.refresh(db_ab_test)
+    return db_ab_test
+
+# ============== END A/B TESTING API ENDPOINTS ==============
+
+# ============== STORE CONFIGURATOR API ENDPOINTS ==============
+class ExtraCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    price: int = 0
+    stock: int = 0
+    image_url: Optional[str] = None
+    is_active: bool = True
+
+class ExtraResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    price: int
+    stock: int
+    image_url: Optional[str]
+    is_active: bool
+    created_at: str
+
+@api_router.get("/extras", response_model=List[ExtraResponse], dependencies=[Depends(get_current_user)])
+def get_extras(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Extras für den aktuellen User"""
+    extras = db.query(Extra).filter(Extra.user_id == user.id).all()
+    return extras
+
+@api_router.post("/extras", response_model=ExtraResponse, dependencies=[Depends(get_current_user)])
+def create_extra(extra: ExtraCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle ein neues Extra (Upsell)"""
+    extra_obj = Extra(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        name=extra.name,
+        description=extra.description,
+        price=extra.price,
+        stock=extra.stock,
+        image_url=extra.image_url,
+        is_active=extra.is_active
+    )
+    db.add(extra_obj)
+    db.commit()
+    db.refresh(extra_obj)
+    return extra_obj
+
+@api_router.put("/extras/{extra_id}", response_model=ExtraResponse, dependencies=[Depends(get_current_user)])
+def update_extra(extra_id: str, extra: ExtraCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere ein Extra"""
+    db_extra = db.query(Extra).filter(
+        Extra.id == extra_id,
+        Extra.user_id == user.id
+    ).first()
+    if not db_extra:
+        raise HTTPException(status_code=404, detail="Extra nicht gefunden")
+    
+    db_extra.name = extra.name
+    db_extra.description = extra.description
+    db_extra.price = extra.price
+    db_extra.stock = extra.stock
+    db_extra.image_url = extra.image_url
+    db_extra.is_active = extra.is_active
+    db.commit()
+    db.refresh(db_extra)
+    return db_extra
+
+@api_router.delete("/extras/{extra_id}", dependencies=[Depends(get_current_user)])
+def delete_extra(extra_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche ein Extra"""
+    db_extra = db.query(Extra).filter(
+        Extra.id == extra_id,
+        Extra.user_id == user.id
+    ).first()
+    if not db_extra:
+        raise HTTPException(status_code=404, detail="Extra nicht gefunden")
+    
+    db.delete(db_extra)
+    db.commit()
+    return {"message": "Extra gelöscht"}
+
+# Bundle Endpoints
+class BundleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    price: int = 0
+    is_active: bool = True
+
+class BundleResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    price: int
+    is_active: bool
+    created_at: str
+
+@api_router.get("/bundles", response_model=List[BundleResponse], dependencies=[Depends(get_current_user)])
+def get_bundles(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Bundles für den aktuellen User"""
+    bundles = db.query(Bundle).filter(Bundle.user_id == user.id).all()
+    return bundles
+
+@api_router.post("/bundles", response_model=BundleResponse, dependencies=[Depends(get_current_user)])
+def create_bundle(bundle: BundleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle ein neues Bundle"""
+    bundle_obj = Bundle(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        name=bundle.name,
+        description=bundle.description,
+        price=bundle.price,
+        is_active=bundle.is_active
+    )
+    db.add(bundle_obj)
+    db.commit()
+    db.refresh(bundle_obj)
+    return bundle_obj
+
+@api_router.put("/bundles/{bundle_id}", response_model=BundleResponse, dependencies=[Depends(get_current_user)])
+def update_bundle(bundle_id: str, bundle: BundleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere ein Bundle"""
+    db_bundle = db.query(Bundle).filter(
+        Bundle.id == bundle_id,
+        Bundle.user_id == user.id
+    ).first()
+    if not db_bundle:
+        raise HTTPException(status_code=404, detail="Bundle nicht gefunden")
+    
+    db_bundle.name = bundle.name
+    db_bundle.description = bundle.description
+    db_bundle.price = bundle.price
+    db_bundle.is_active = bundle.is_active
+    db.commit()
+    db.refresh(db_bundle)
+    return db_bundle
+
+@api_router.delete("/bundles/{bundle_id}", dependencies=[Depends(get_current_user)])
+def delete_bundle(bundle_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lösche ein Bundle"""
+    db_bundle = db.query(Bundle).filter(
+        Bundle.id == bundle_id,
+        Bundle.user_id == user.id
+    ).first()
+    if not db_bundle:
+        raise HTTPException(status_code=404, detail="Bundle nicht gefunden")
+    
+    db.delete(db_bundle)
+    db.commit()
+    return {"message": "Bundle gelöscht"}
+
+# Bundle Extra Management
+class BundleExtraCreate(BaseModel):
+    extra_id: str
+    quantity: int = 1
+
+@api_router.post("/bundles/{bundle_id}/extras", dependencies=[Depends(get_current_user)])
+def add_bundle_extra(bundle_id: str, bundle_extra: BundleExtraCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Füge ein Extra zu einem Bundle hinzu"""
+    db_bundle = db.query(Bundle).filter(
+        Bundle.id == bundle_id,
+        Bundle.user_id == user.id
+    ).first()
+    if not db_bundle:
+        raise HTTPException(status_code=404, detail="Bundle nicht gefunden")
+    
+    # Prüfe ob Extra existiert
+    db_extra = db.query(Extra).filter(
+        Extra.id == bundle_extra.extra_id,
+        Extra.user_id == user.id
+    ).first()
+    if not db_extra:
+        raise HTTPException(status_code=404, detail="Extra nicht gefunden")
+    
+    bundle_extra_obj = BundleExtra(
+        id=str(uuid.uuid4()),
+        bundle_id=bundle_id,
+        extra_id=bundle_extra.extra_id,
+        quantity=bundle_extra.quantity
+    )
+    db.add(bundle_extra_obj)
+    db.commit()
+    return {"message": "Extra zum Bundle hinzugefügt"}
+
+@api_router.delete("/bundles/{bundle_id}/extras/{extra_id}", dependencies=[Depends(get_current_user)])
+def remove_bundle_extra(bundle_id: str, extra_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Entferne ein Extra aus einem Bundle"""
+    db_bundle_extra = db.query(BundleExtra).filter(
+        BundleExtra.bundle_id == bundle_id,
+        BundleExtra.extra_id == extra_id
+    ).first()
+    if not db_bundle_extra:
+        raise HTTPException(status_code=404, detail="Bundle-Extra nicht gefunden")
+    
+    db.delete(db_bundle_extra)
+    db.commit()
+    return {"message": "Extra aus Bundle entfernt"}
+
+# ============== END STORE CONFIGURATOR API ENDPOINTS ==============
 
 @app.on_event("startup")
 def startup():
