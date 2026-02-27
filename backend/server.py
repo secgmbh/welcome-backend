@@ -16,7 +16,7 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, Bundle as DBBundle, BundleExtra as DBBundleExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule, Scene as DBScene, Extra as DBExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1702,6 +1702,157 @@ def delete_smart_rule(rule_id: str, db: Session = Depends(get_db), user: User = 
     return {"message": "Smart Rule gelöscht"}
 
 # ============== END SMART RULES API ENDPOINTS ==============
+
+# ============== CHECKOUT & BOOKING API ENDPOINTS ==============
+class BookingCreate(BaseModel):
+    property_id: str
+    guest_name: str
+    guest_email: str
+    guest_phone: Optional[str] = None
+    check_in: str
+    check_out: str
+    guests: int
+    message: Optional[str] = None
+    total_price: float
+    tipping_percentage: Optional[int] = 0
+    tipping_amount: Optional[float] = 0
+    payment_method: Optional[str] = None
+
+class BookingResponse(BaseModel):
+    id: str
+    property_id: str
+    user_id: str
+    guest_name: Optional[str]
+    guest_email: Optional[str]
+    guest_phone: Optional[str]
+    check_in: Optional[str]
+    check_out: Optional[str]
+    guests: Optional[int]
+    message: Optional[str]
+    total_price: float
+    tipping_percentage: int
+    tipping_amount: float
+    status: str
+    payment_method: Optional[str]
+    invoice_generated: bool
+    created_at: str
+
+@api_router.get("/bookings", response_model=List[BookingResponse], dependencies=[Depends(get_current_user)])
+def get_bookings(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Buchungen für den aktuellen User"""
+    from database import Booking
+    bookings = db.query(Booking).filter(Booking.user_id == user.id).all()
+    return bookings
+
+@api_router.post("/bookings", response_model=BookingResponse, dependencies=[Depends(get_current_user)])
+def create_booking(booking: BookingCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle eine neue Buchung (Vorab-Validierung)"""
+    from database import Booking, Property
+    # Prüfe ob Property existiert und dem User gehört
+    property = db.query(Property).filter(
+        Property.id == booking.property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    # Validate dates
+    try:
+        check_in = datetime.fromisoformat(booking.check_in.replace('Z', '+00:00'))
+        check_out = datetime.fromisoformat(booking.check_out.replace('Z', '+00:00'))
+        if check_in >= check_out:
+            raise HTTPException(status_code=400, detail="Check-in muss vor Check-out liegen")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Ungültiges Datumsformat: {str(e)}")
+    
+    booking_obj = Booking(
+        id=str(uuid.uuid4()),
+        property_id=booking.property_id,
+        user_id=user.id,
+        guest_name=booking.guest_name,
+        guest_email=booking.guest_email,
+        guest_phone=booking.guest_phone,
+        check_in=check_in,
+        check_out=check_out,
+        guests=booking.guests,
+        message=booking.message,
+        total_price=booking.total_price,
+        tipping_percentage=booking.tipping_percentage or 0,
+        tipping_amount=booking.tipping_amount or 0,
+        status='pending',
+        payment_method=booking.payment_method,
+        invoice_generated=False
+    )
+    db.add(booking_obj)
+    db.commit()
+    db.refresh(booking_obj)
+    return booking_obj
+
+@api_router.post("/checkout/validate", dependencies=[Depends(get_current_user)])
+def validate_checkout(booking: BookingCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Validiere Checkout-Daten (ohne Buchung zu erstellen)"""
+    from database import Property
+    property = db.query(Property).filter(
+        Property.id == booking.property_id,
+        Property.user_id == user.id
+    ).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    try:
+        check_in = datetime.fromisoformat(booking.check_in.replace('Z', '+00:00'))
+        check_out = datetime.fromisoformat(booking.check_out.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ungültiges Datumsformat")
+    
+    return {
+        "valid": True,
+        "property_name": property.name,
+        "total_price": booking.total_price,
+        "tipping_amount": booking.tipping_amount or 0,
+        "final_total": booking.total_price + (booking.tipping_amount or 0)
+    }
+
+@api_router.get("/bookings/{booking_id}/invoice", dependencies=[Depends(get_current_user)])
+def get_booking_invoice(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole Rechnung als PDF für eine Buchung"""
+    from database import Booking, Property
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    # Generiere PDF-Rechnung
+    # Hier würde der eigentliche PDF-Generierungs-Code stehen
+    # Für MVP return dummy PDF response
+    return {
+        "booking_id": booking.id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "download_url": f"/api/bookings/{booking_id}/invoice/download",
+        "status": "ready"
+    }
+
+@api_router.post("/bookings/{booking_id}/confirm", response_model=BookingResponse, dependencies=[Depends(get_current_user)])
+def confirm_booking(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Buchung endgültig bestätigen"""
+    from database import Booking
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    booking.status = 'confirmed'
+    booking.invoice_generated = True
+    db.commit()
+    db.refresh(booking)
+    return booking
+
+
+# ============== END CHECKOUT & BOOKING API ENDPOINTS ==============
 
 @app.on_event("startup")
 def startup():
