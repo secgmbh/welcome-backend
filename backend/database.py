@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, inspect, text
+from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, Integer, Float, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timezone
 import os
@@ -60,6 +60,65 @@ class Scene(Base):
     description = Column(Text)
     image_url = Column(String(500))
     order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Extra(Base):
+    __tablename__ = "extras"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    price = Column(Float, nullable=False)
+    stock = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class ABTest(Base):
+    __tablename__ = "ab_tests"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    variant_a_name = Column(String(100))
+    variant_b_name = Column(String(100))
+    variant_a_url = Column(String(500))
+    variant_b_url = Column(String(500))
+    active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class Extra(Base):
+    __tablename__ = "extras"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    price = Column(Integer, default=0)
+    stock = Column(Integer, default=0)
+    image_url = Column(String(500))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Bundle(Base):
+    __tablename__ = "bundles"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    price = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class BundleExtra(Base):
+    __tablename__ = "bundle_extras"
+    
+    id = Column(String(36), primary_key=True)
+    bundle_id = Column(String(36), nullable=False, index=True)
+    extra_id = Column(String(36), nullable=False, index=True)
+    quantity = Column(Integer, default=1)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 def get_database_url():
