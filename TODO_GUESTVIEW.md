@@ -96,12 +96,18 @@
 4. Booking Form - Gast-Buchungsformular
 
 ## Phase 5: Guestview Guest Pages (Medium Priority) - **27.02.2026**
-- [ ] Passwortlose URL /guestview/{token} - TODO
-- [ ] properties/{id} Seite für Gäste - TODO
+- [x] Passwortlose URL /guestview/{token} - ✅ implemented
+- [x] properties/{id} Seite für Gäste - ✅ implemented
 - [ ] Info-Szenen (Drag-and-Drop sortierbar) - TODO
 - [ ] Amenity Anzeige - TODO
-- [ ] QR Code Download - TODO
-- [ ] Booking Formular für Gäste - TODO
+- [x] QR Code Download - ✅ implemented
+- [x] Booking Formular für Gäste - ✅ implemented
+
+## Phase 6: Info-Szenen & Amenity (Medium Priority) - **27.02.2026**
+- [ ] Info-Szenen Editor (Drag-and-Drop sortierbar)
+- [ ] Amenity/Details Anzeige für Properties
+- [ ] KI-Inhalts-Generator für Szenen
+- [ ] Szenen-Management im Dashboard
 
 ## Design (gemäß MVP-Liste) ✅
 - Kartenbasiertes Layout
