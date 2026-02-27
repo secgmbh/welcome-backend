@@ -63,17 +63,6 @@ class Scene(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
-class Extra(Base):
-    __tablename__ = "extras"
-    
-    id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), nullable=False, index=True)
-    name = Column(String(200), nullable=False)
-    description = Column(Text)
-    price = Column(Float, nullable=False)
-    stock = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
 class ABTest(Base):
     __tablename__ = "ab_tests"
     
