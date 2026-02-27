@@ -147,10 +147,9 @@
 - [x] GET /api/stats/property/{id}
 - [x] GET /api/stats/bookings/export.csv
 
-### Phase 18: Dashboard Erweiterung (in Arbeit) ⏳
-- [ ] Host Stats Dashboard UI
-- [ ] Property Stats Dashboard UI
-- [ ] CSV Export Button
+### Phase 18: Dashboard Erweiterung ✅
+- [x] PropertyStatsDashboard.jsx (Host Stats UI)
+- [x] CSV Export Button (in Phase 16)
 - [ ] KI-Inhalts-Generator für Szenen (UI fertig, API fehlt)
 
 ---
