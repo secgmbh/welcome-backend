@@ -2097,6 +2097,65 @@ def get_global_stats(db: Session = Depends(get_db), user: User = Depends(get_cur
 
 # ============== END GLOBAL STATS & MONITORING API ENDPOINTS ==============
 
+# ============== BRANDING & AI API ENDPOINTS ==============
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+
+class BrandingResponse(BaseModel):
+    brand_color: str
+    logo_url: Optional[str]
+    updated_at: str
+
+@api_router.get("/branding", response_model=BrandingResponse, dependencies=[Depends(get_current_user)])
+def get_branding(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole Branding-Konfiguration für den aktuellen User"""
+    return BrandingResponse(
+        brand_color=user.brand_color or '#F27C2C',
+        logo_url=user.logo_url,
+        updated_at=user.created_at.isoformat()
+    )
+
+class BrandingUpdate(BaseModel):
+    brand_color: Optional[str] = '#F27C2C'
+    logo_url: Optional[str] = None
+
+@api_router.put("/branding", response_model=BrandingResponse, dependencies=[Depends(get_current_user)])
+def update_branding(branding: BrandingUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Aktualisiere Branding-Konfiguration"""
+    user.brand_color = branding.brand_color
+    user.logo_url = branding.logo_url
+    db.commit()
+    db.refresh(user)
+    return BrandingResponse(
+        brand_color=user.brand_color,
+        logo_url=user.logo_url,
+        updated_at=user.created_at.isoformat()
+    )
+
+
+class AICopyRequest(BaseModel):
+    prompt: str
+    language: Optional[str] = "de"
+
+class AICopyResponse(BaseModel):
+    text: str
+    model: str
+    tokens_used: int
+
+@api_router.post("/ai/copywriter", response_model=AICopyResponse, dependencies=[Depends(get_current_user)])
+def ai_copywriter(request: AICopyRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Generiere Text mit AI (Mock für MVP)"""
+    # Hier würde der echte AI Call hin (z.B. mit Anthropic/LLaMA)
+    # Für MVP return dummy response
+    return AICopyResponse(
+        text=f"[AI Generated Text]\nPrompt: {request.prompt}\nLanguage: {request.language}\n\nDies ist ein Mock-Antwort für den MVP.",
+        model="mock-ai-v1",
+        tokens_used=150
+    )
+
+
+# ============== END BRANDING & AI API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""

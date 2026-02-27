@@ -18,6 +18,9 @@ class User(Base):
     name = Column(String(100))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_demo = Column(Boolean, default=False)
+    # Branding
+    brand_color = Column(String(7), default='#F27C2C')  # Hex Farbe
+    logo_url = Column(String(500))
     # Invoice / Rechnungsdaten
     invoice_name = Column(String(200))
     invoice_address = Column(String(500))
