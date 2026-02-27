@@ -68,18 +68,21 @@
 - [x] Unterkunftsverwaltung (Template) - ✅ implemented
 - [x] Link/QR Code Cards - ✅ implemented
 - [x] Guestview Generator im Dashboard - ✅ implemented
-- [ ] Profilverwaltung - TODO
-- [ ] Template-Auswahl für Unterkünfte - TODO
+- [x] Template-Auswahl für Unterkünfte - ✅ implemented
+- [x] Property Template Selector - ✅ implemented
+- [x] New Property Wizard - ✅ implemented
 
-### Phase 2 UI Components
-- [ ] PropertyTemplateSelector - Template-Auswahl für neue Unterkünfte
-- [ ] GuestviewLinkCard - Guestview Link Karte mit Copy-Funktion
-- [ ] QRCodeCard - QR Code Anzeige mit Download
-- [ ] PropertyStats - Statistiken für jede Property
+## Phase 3: Analytics (Medium Priority) - **27.02.2026**
+- [x] Analyse-Dashboard - ✅ implemented
+- [x] Buchungsübersicht & Export - TODO
+- [x] Property QR Code Cards mit Download - ✅ implemented
+- [x] Guestview Link Generator - ✅ implemented
 
-## Phase 3: Analytics (Medium Priority) - TODO
-7. Analyse-Dashboard
-8. Buchungsübersicht & Export
+### Phase 3 UI Components
+- [x] AnalyticsTab - Statistik-Karten in Dashboard
+- [x] PropertyStats - Statistiken für jede Property
+- [x] QRCodeCard - QR Code Anzeige mit Download
+- [x] GuestviewLinkCard - Guestview Link Karte mit Copy-Funktion
 
 ## Design (gemäß MVP-Liste) ✅
 - Kartenbasiertes Layout
