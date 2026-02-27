@@ -42,7 +42,7 @@
 
 ---
 
-## 📊 Phase-Status (aktuell bis Phase 7)
+## 📊 Phase-Status (aktuell bis Phase 14)
 
 ### Phase 1: Core Auth + Guestview ✅
 - [x] Guestview Token API
@@ -70,7 +70,7 @@
 - [x] Profilverwaltung
 - [x] Buchungsübersicht & Export
 - [x] Booking Formular für Gäste
-- [ ] Booking API Integration (GET/POST /api/bookings)
+- [x] Booking API Integration (GET/POST /api/bookings)
 
 ### Phase 5: Guestview Guest Pages ✅
 - [x] Passwortlose URL /guestview/{token}
@@ -87,6 +87,47 @@
 ### Phase 7: Frontend Szenen Editor ✅
 - [x] SceneEditor.jsx (Drag-and-Drop Editor)
 - [x] PropertyManagementPage.jsx mit Scenes Tab
+
+### Phase 8: A/B Testing & Store-Konfigurator ✅
+- [x] A/B Test API Endpoints
+- [x] ABTestList.jsx UI
+- [x] ExtrasManager.jsx (Upsells)
+- [x] BundleManager.jsx (Bundles)
+- [x] PropertyManagementPage.jsx mit Tabs
+
+### Phase 9: Partner-Modul & Smart Rules ✅
+- [x] Partner DB Model mit commission_rate
+- [x] Partner API Endpoints (GET, POST, PUT, DELETE)
+- [x] SmartRule DB Model mit trigger_type, condition, action
+- [x] Smart Rules API Endpoints
+- [x] PartnerManager.jsx UI
+
+### Phase 10: Advanced Guest Features ✅
+- [x] Cart.jsx (Warenkorb mit Mengenwahl)
+- [x] Walkthrough.jsx (Schritt-für-Schritt Navigation)
+- [x] Feedback.jsx (Daumen-hoch/runter pro Seite)
+- [x] TippingConfig.jsx (Prozentsätze für Trinkgeld)
+
+### Phase 11: Checkout & Rechnungen ✅
+- [x] Booking DB Model mit status, payment_method, invoice_generated
+- [x] Checkout API: POST /api/bookings, POST /api/checkout/validate
+- [x] Invoice API: GET /api/bookings/{id}/invoice
+- [x] Booking Confirm: POST /api/bookings/{id}/confirm
+
+### Phase 12: Cleaner & Task-Management ✅
+- [x] Task DB Model mit due_date, completed, priority
+- [x] Cleaner API: POST /api/cleaner/login, GET /api/cleaner/profile
+- [x] Task API: GET, POST, PUT, POST /tasks/{id}/complete
+- [x] ICS Export: GET /tasks/export/ics
+
+### Phase 13: Global Statistics & Monitoring ✅
+- [x] GlobalStatsResponse model
+- [x] GET /api/stats/global endpoint (total_hosts, total_properties, total_bookings, total_revenue)
+
+### Phase 14: Branding & AI Enhancement (in Arbeit) ⏳
+- [ ] Branding-Engine (brandColor dynamisch)
+- [ ] AI Copywriter (automatische Generierung)
+- [ ] KI-Inhalts-Generator für Szenen (UI fertig, API fehlt)
 
 ---
 
