@@ -84,13 +84,13 @@
 - [x] GuestviewLinkCard - Guestview Link Karte mit Copy-Funktion
 
 ## Phase 4: Profilverwaltung & Buchungen (Medium Priority) - **27.02.2026**
-- [ ] Profilverwaltung - TODO
+- [x] Profilverwaltung - ✅ implemented
 - [ ] Buchungsübersicht & Export - TODO
 - [ ] Booking API Integration - TODO
 - [ ] Booking Formular für Gäste - TODO
 
-### Phase 4 Tasks
-1. ProfilePage - Rechnungsdaten bearbeiten (Frontend)
+### Phase 4 Tasks (Status)
+1. ✅ ProfilePage - Rechnungsdaten bearbeiten (Frontend)
 2. BookingDashboard - Buchungsübersicht im Dashboard
 3. Booking API - GET/POST /api/bookings
 4. Booking Form - Gast-Buchungsformular
