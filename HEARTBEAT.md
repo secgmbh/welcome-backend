@@ -13,7 +13,7 @@
 
 **Root Cause:** Es gab ZWEI verschiedene `database.py` Dateien (Hauptverzeichnis vs. welcome-backend/backend). Der Server nutzt die Datei im welcome-backend Ordner.
 
-**Status:** Demo-Anmeldung funktioniert immernoch nicht. Oleg antwortet noch nicht. Ich werde in 30 Minuten erneut prüfen.
+**Status:** Noch keine Antwort von Oleg. Prüfe in 30 Minuten erneut.
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
