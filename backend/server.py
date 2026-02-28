@@ -2135,6 +2135,51 @@ def get_user_by_id(user_id: str, db: Session = Depends(get_db), user: User = Dep
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
     return db_user
 
+# ============== END USER MANAGEMENT API ENDPOINTS ==============
+
+# ============== LIVE FEED BUCHUNGEN API ENDPOINTS ==============
+
+class BookingFeedResponse(BaseModel):
+    id: str
+    property_name: str
+    guest_name: str
+    check_in: str
+    check_out: str
+    total_price: float
+    status: str
+    created_at: str
+
+@api_router.get("/admin/bookings/feed", response_model=List[BookingFeedResponse], dependencies=[Depends(get_current_user)])
+def get_booking_feed(limit: int = 20, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Live-Feed aller Buchungen (Admin-Funktion)"""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    bookings = db.query(Booking).order_by(Booking.created_at.desc()).limit(limit).all()
+    
+    result = []
+    for booking in bookings:
+        property_name = "Unbekannt"
+        if booking.property_id:
+            prop = db.query(Property).filter(Property.id == booking.property_id).first()
+            if prop:
+                property_name = prop.name
+        
+        result.append(BookingFeedResponse(
+            id=booking.id,
+            property_name=property_name,
+            guest_name=booking.guest_name or "Unbekannt",
+            check_in=booking.check_in.isoformat() if booking.check_in else "",
+            check_out=booking.check_out.isoformat() if booking.check_out else "",
+            total_price=float(booking.total_price) if booking.total_price else 0,
+            status=booking.status or "new",
+            created_at=booking.created_at.isoformat() if booking.created_at else ""
+        ))
+    
+    return result
+
+# ============== END LIVE FEED BUCHUNGEN API ENDPOINTS ==============
+
 # ============== END APPLE PAY / GOOGLE PAY API ENDPOINTS ==============
     
     return {
