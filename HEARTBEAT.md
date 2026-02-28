@@ -46,10 +46,11 @@
 - Live-Feed Buchungen - abgeschlossen ✅
 - Auto-focus API Fix - abgeschlossen ✅
 
-## Phase 22: Admin Features (nächste Phase)
+## Phase 22: Admin Features (Status: IN BEARBEITUNG)
 - Nutzerverwaltung (alle registrierte Firmen) - Backend API ✅
 - Live-Feed Buchungen - Backend API ✅
 - Auto-focus API Fix - in Planung
+- Auto-focus UI Fix - in Planung
 
 ## Weekly Checks (rotate through)
 - [x] Git Status: Changes pushen? ✅
