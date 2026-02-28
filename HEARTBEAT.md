@@ -5,19 +5,18 @@
 
 **Problem:** Demo-Anmeldung fehlgeschlagen mit `(psycopg2.errors.UndefinedColumn) column users.bra`
 
-**Status:** Code-Fix ist commited und pushed, aber **Live-Server muss neu gestartet werden**.
+**Status:** Code-Fix ist commited und pushed. Aber: Die Hauptdatei `/database.py` importiert nicht `welcome-backend/backend/database.py`.
 
-**Was ist fixt:**
-- Fehlende `invoice_`, `brand_`, `keysafe_` Spalten in User-Modell
-- Fehlende Modelle: `Scene`, `Extra`, `Bundle`, `BundleExtra`, `ABTest`, `Partner`, `SmartRule`, `Booking`, `Task`
-- Fehlendes `PropertyStatsResponse`-Model in `server.py`
+**Root Cause:** Es gibt ZWEI unterschiedliche `database.py` Dateien:
+1. `/data/.openclaw/workspace/database.py` - Hauptdatei mit allen Spalten
+2. `/data/.openclaw/workspace/welcome-backend/backend/database.py` - Submodule-Version
+
+Der Server importiert `welcome-backend/backend/database.py` (nicht die Hauptdatei).
 
 **Was jetzt tun:**
-1. Deploy zur Render-Instanz manuell starten
-2. Oder `gateway restart` ausführen (wenn systemd verfügbar ist)
+1. `gateway restart` ausführen (wenn systemd verfügbar ist)
+2. Oder manuell Deploy auf Render starten
 3. Demo-Anmeldung testen nach Deploy
-
----
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
