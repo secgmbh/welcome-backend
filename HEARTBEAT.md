@@ -15,9 +15,14 @@
 
 **Status:** Alle Changes sind auf GitHub gepusht. Render deployet automatisch beim Push.
 
-**Worauf warten:**
-- Render ist online und deployt die Änderungen
-- Die Alembic Migration `75d1541dc08a` wird dann automatisch ausgeführt
+**Zusätzliche Verbesserungen:**
+- TODO_GUESTVIEW.md aktualisiert mit Phase 19+ Priority List
+- Backend API Endpoints dokumentiert (40+ Endpoints)
+- TODOs in TODO_GUESTVIEW.md nach Phase 19 verschoben
+
+**Was jetzt passiert:**
+- Render deployet automatisch
+- Die Alembic Migration `75d1541dc08a` wird dann ausgeführt
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
