@@ -9,7 +9,7 @@
 - Phase 20: PDF Rechnung mit Download abgeschlossen ✅
 - Phase 20: Apple Pay / Google Pay Integration Backend API abgeschlossen ✅
 - Phase 20: E-Mail Rechnungsversand API abgeschlossen ✅
-- Phase 20: Checkout-Seite für Gäste starten
+- Phase 20: Checkout-Seite für Gäste (frontend) abgeschlossen ✅
 - TODO_GUESTVIEW.md aktualisiert mit Phase 20 Features
 
 **Phase 20 Features (Fortschritt):**
@@ -20,8 +20,10 @@
 - Apple Pay Backend API: create-order, capture-payment ✅
 - Google Pay: Apple Pay Endpoints nutzbar ✅
 - E-Mail Rechnungsversand API ✅
-- Checkout-Seite für Gäste - in Planung
-- Rechnungsdetails im Dashboard - in Planung
+- Checkout-Seite für Gäste: Route `/checkout/:bookingId` ✅
+
+**Changelog (Phase 20):**
+- 2026-02-28: PayPal Integration + PDF Rechnung + Apple Pay + Email + Checkout Seite
 
 **Backend API Summary (Phase 20):**
 - `/api/paypal/create-order`
