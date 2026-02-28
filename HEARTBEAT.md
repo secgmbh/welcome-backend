@@ -13,9 +13,11 @@
 
 **Root Cause:** Es gab ZWEI verschiedene `database.py` Dateien (Hauptverzeichnis vs. welcome-backend/backend). Der Server nutzt die Datei im welcome-backend Ordner.
 
-**Status:** Changes sind auf GitHub gepusht. **Render deployet automatisch bei push**. Demo-Anmeldung sollte nach ~2min wieder funktionieren.
+**Status:** Demo-Anmeldung funktioniert immernoch nicht. Render hat die Änderungen nicht deployt. Oleg muss manuell deployen.
 
-**Reminder:** Cron-Job für 12:00 Uhr eingerichtet, um zu prüfen, ob die Demo-Anmeldung funktioniert.
+**Nächste Schritte:**
+- Oleg: Manueller Deploy auf Render notwendig
+- Oder: `gateway restart` wenn live-Server verfügbar ist
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
