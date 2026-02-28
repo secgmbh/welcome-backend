@@ -14,8 +14,9 @@
 - Phase 22: Live-Feed UI abgeschlossen ✅
 - Phase 23: Analytics & Reports 100% Complete ✅
 - Phase 24: Export & Reports 100% Complete ✅
-- Phase 25: Filter UI + AnalyticsPage abgeschlossen ✅
-- TODO_GUESTVIEW.md aktualisiert mit Phase 25 Features
+- Phase 25: Filter API + UI + Dashboard Integration ✅
+- Phase 26: Finishing & Polish Start
+- TODO_GUESTVIEW.md aktualisiert mit Phase 26 Features
 
 **Phase 20 Features (100% Complete):**
 - PayPal Backend API: create-order, capture-order ✅
@@ -66,11 +67,17 @@
 - PDF Berichte - abgeschlossen ✅
 - Umsatzberichte - abgeschlossen ✅
 
-## Phase 25: Dashboard Features (Status: 50% COMPLETE)
+## Phase 25: Dashboard Features (Status: 75% COMPLETE)
 - Export UI im Dashboard - in Planung
 - Umsatzberichte mit Filter - Backend API abgeschlossen ✅
 - Dashboard mit weiteren Features - in Planung
 - Booking Filter UI - abgeschlossen ✅
+- Dashboard Navigations-Menu - abgeschlossen ✅
+
+## Phase 26: Finishing & Polish (Status: IN BEARBEITUNG)
+- Auto-focus UI Fix - in Planung
+- Final Testing - in Planung
+- Documentation - in Planung
 
 ## Weekly Checks (rotate through)
 - [ ] Review `memory/` files and update `MEMORY.md` with insights
