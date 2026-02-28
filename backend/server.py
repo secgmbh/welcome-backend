@@ -2212,6 +2212,54 @@ def update_autofocus_config(config: AutoFocusConfig, user: User = Depends(get_cu
 
 # ============== END AUTO-FOCUS API ENDPOINTS ==============
 
+# ============== ANALYTICS & REPORTS API ENDPOINTS ==============
+
+class BookingStats(BaseModel):
+    total_bookings: int
+    confirmed_bookings: int
+    completed_bookings: int
+    cancelled_bookings: int
+    total_revenue: float
+    avg_booking_value: float
+
+class BookingStatsResponse(BaseModel):
+    stats: BookingStats
+    period: str
+
+@api_router.get("/api/stats/booking", response_model=BookingStatsResponse, dependencies=[Depends(get_current_user)])
+def get_booking_stats(user: User = Depends(get_current_user)):
+    """Hole Buchungs-Statistiken"""
+    db = SessionLocal()
+    try:
+        total = db.query(Booking).filter(Booking.user_id == user.id).count()
+        confirmed = db.query(Booking).filter(Booking.user_id == user.id, Booking.status == 'confirmed').count()
+        completed = db.query(Booking).filter(Booking.user_id == user.id, Booking.status == 'completed').count()
+        cancelled = db.query(Booking).filter(Booking.user_id == user.id, Booking.status == 'cancelled').count()
+        
+        total_revenue_result = db.query(func.sum(Booking.total_price)).filter(
+            Booking.user_id == user.id,
+            Booking.status == 'confirmed'
+        ).scalar()
+        total_revenue = float(total_revenue_result or 0)
+        
+        avg_booking_value = total_revenue / confirmed if confirmed > 0 else 0
+        
+        return BookingStatsResponse(
+            stats=BookingStats(
+                total_bookings=total,
+                confirmed_bookings=confirmed,
+                completed_bookings=completed,
+                cancelled_bookings=cancelled,
+                total_revenue=total_revenue,
+                avg_booking_value=round(avg_booking_value, 2)
+            ),
+            period="all_time"
+        )
+    finally:
+        db.close()
+
+# ============== END ANALYTICS & REPORTS API ENDPOINTS ==============
+
 # ============== END APPLE PAY / GOOGLE PAY API ENDPOINTS ==============
     
     return {
