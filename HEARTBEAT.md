@@ -13,7 +13,17 @@
 
 **Root Cause:** Es gab ZWEI verschiedene `database.py` Dateien (Hauptverzeichnis vs. welcome-backend/backend). Der Server nutzt die Datei im welcome-backend Ordner.
 
-**Status:** Noch keine Antwort von Oleg. Prüfe in 30 Minuten erneut.
+**Status:** Alembic Migration `75d1541dc08a` hinzugefügt, die fehlenden Spalten auf der Datenbank hinzufügt. Changes commited und pushed.
+
+**Was die Migration tut:**
+- `is_email_verified` (Boolean)
+- `email_verification_token` (String 64)
+- `email_verification_token_expires` (DateTime)
+- `brand_color` (String 7)
+- `logo_url` (String 500)
+- `keysafe_location` (String 500)
+- `keysafe_code` (String 50)
+- `keysafe_instructions` (Text)
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
