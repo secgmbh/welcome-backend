@@ -6,18 +6,22 @@
 **Aktueller Status:**
 - Phase 19 A/B Testing UI abgeschlossen ✅
 - Phase 20: PayPal Integration Backend + Frontend abgeschlossen ✅
-- Phase 20: PDF Rechnung sofort nach Buchung starten
+- Phase 20: PDF Rechnung mit Download abgeschlossen ✅
 - TODO_GUESTVIEW.md aktualisiert mit Phase 20 Features
 
 **Phase 20 Features (Fortschritt):**
 - PayPal Backend API: create-order, capture-order ✅
 - PayPal Button Component: PayPalButton.jsx ✅
 - Checkout Page: CheckoutPage.jsx ✅
-- PDF Rechnung sofort nach Buchung - in Planung
+- PDF Rechnung: HTML-basierte Generierung mit Download ✅
 - Apple Pay / Google Pay Integration - in Planung
 - E-Mail Rechnungsversand - in Planung
 - Checkout-Seite für Gäste - in Planung
 - Rechnungsdetails im Dashboard - in Planung
+
+**Changelog:**
+- PDF Rechnung mit base64-HTML-Integration für Druck
+- Download-Endpoint `/api/bookings/{id}/invoice/download`
 
 ## Weekly Checks (rotate through)
 - [x] Git Status: Changes pushen? ✅
