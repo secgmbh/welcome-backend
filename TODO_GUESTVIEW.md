@@ -230,7 +230,7 @@ Alle 18 Phasen erfolgreich implementiert:
 
 ### Phase 21: Dashboard & Admin Features 🚀 START
 - [x] Nutzerverwaltung Backend API ✅
-- [ ] Nutzerverwaltung Frontend UI
+- [x] Nutzerverwaltung Frontend UI ✅
 - [ ] Live-Feed Buchungen
 - [ ] Auto-focus API Fix
 
