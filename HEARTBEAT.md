@@ -5,21 +5,26 @@
 
 **Problem:** Demo-Anmeldung fehlgeschlagen mit `(psycopg2.errors.UndefinedColumn) column users.bra`
 
-**Status:** Code-Fix ist commited und pushed. Aber: Die Hauptdatei `/database.py` importiert nicht `welcome-backend/backend/database.py`.
+**Status:** Code-Fix ist commited und pushed auf `nightly-improvements` Branch.
 
 **Root Cause:** Es gibt ZWEI unterschiedliche `database.py` Dateien:
-1. `/data/.openclaw/workspace/database.py` - Hauptdatei mit allen Spalten
-2. `/data/.openclaw/workspace/welcome-backend/backend/database.py` - Submodule-Version
+1. `/data/.openclaw/workspace/database.py` - Hauptdatei
+2. `/data/.openclaw/workspace/welcome-backend/backend/database.py` - Backend-Version
 
-Der Server importiert `welcome-backend/backend/database.py` (nicht die Hauptdatei).
+Der Server importiert `welcome-backend/backend/database.py`.
+
+**Lösung:**
+- Alle fehlenden Spalten (`invoice_name`, `invoice_address`, `brand_color`, `is_email_verified`, etc.) zu `User` model hinzugefügt
+- Alle fehlenden Modelle (`Scene`, `Extra`, `Bundle`, `BundleExtra`, `ABTest`, `Partner`, `SmartRule`, `Booking`, `Task`) hinzugefügt
+- `PropertyStatsResponse` Model in `server.py` hinzugefügt
 
 **Was jetzt tun:**
-1. `gateway restart` ausführen (wenn systemd verfügbar ist)
-2. Oder manuell Deploy auf Render starten
+1. Deploy zur Render-Instanz manuell starten (nightly-improvements Branch)
+2. Oder `gateway restart` ausführen (wenn systemd verfügbar ist)
 3. Demo-Anmeldung testen nach Deploy
 
 ## Weekly Checks (rotate through)
-- [ ] Git Status: Changes pushen?
+- [x] Git Status: Changes pushen? (nightly-improvements)
 - [ ] TODOs prüfen und aufräumen
 - [ ] Logs checken für Fehler
 
