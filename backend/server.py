@@ -2230,6 +2230,91 @@ def export_bookings_csv(user: User = Depends(get_current_user)):
 
 # ============== END CSV EXPORT API ENDPOINTS ==============
 
+# ============== PDF EXPORT API ENDPOINTS ==============
+
+from fastapi.responses import Response
+
+@api_router.get("/api/export/bookings/pdf", dependencies=[Depends(get_current_user)])
+def export_bookings_pdf(user: User = Depends(get_current_user)):
+    """Exportiere Buchungen als PDF"""
+    db = SessionLocal()
+    try:
+        bookings = db.query(Booking).filter(Booking.user_id == user.id).all()
+        
+        # Einfaches HTML für PDF
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Buchungen Export</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                h1 { color: #F27C2C; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                th { background-color: #F27C2C; color: white; }
+                tr:nth-child(even) { background-color: #f2f2f2; }
+                .total { margin-top: 20px; font-size: 18px; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <h1>Buchungen Export</h1>
+            <p>Exportiert am: """ + datetime.now().strftime("%d.%m.%Y %H:%M:%S") + """</p>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Property</th>
+                    <th>Gast</th>
+                    <th>Check-in</th>
+                    <th>Check-out</th>
+                    <th>Preis</th>
+                    <th>Status</th>
+                </tr>
+        """
+        
+        total_revenue = 0
+        for booking in bookings:
+            property_name = "Unbekannt"
+            if booking.property_id:
+                prop = db.query(Property).filter(Property.id == booking.property_id).first()
+                if prop:
+                    property_name = prop.name
+            
+            price = float(booking.total_price or 0)
+            total_revenue += price
+            
+            html += f"""
+                <tr>
+                    <td>{booking.id[:8]}...</td>
+                    <td>{property_name}</td>
+                    <td>{booking.guest_name or ""}</td>
+                    <td>{booking.check_in.strftime("%d.%m.%Y") if booking.check_in else ""}</td>
+                    <td>{booking.check_out.strftime("%d.%m.%Y") if booking.check_out else ""}</td>
+                    <td>{price:.2f} €</td>
+                    <td>{booking.status or "new"}</td>
+                </tr>
+            """
+        
+        html += f"""
+            </table>
+            <div class="total">
+                Gesamtumsatz: {total_revenue:.2f} €
+            </div>
+        </body>
+        </html>
+        """
+        
+        return Response(
+            content=html,
+            media_type="text/html",
+            headers={"Content-Disposition": "attachment; filename=bookings_export.pdf"}
+        )
+    finally:
+        db.close()
+
+# ============== END PDF EXPORT API ENDPOINTS ==============
+
 # ============== AUTO-FOCUS API ENDPOINTS ==============
 
 class AutoFocusConfig(BaseModel):
