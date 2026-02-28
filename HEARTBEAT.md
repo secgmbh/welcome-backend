@@ -13,11 +13,7 @@
 
 **Root Cause:** Es gab ZWEI verschiedene `database.py` Dateien (Hauptverzeichnis vs. welcome-backend/backend). Der Server nutzt die Datei im welcome-backend Ordner.
 
-**Status:** Demo-Anmeldung funktioniert immernoch nicht. Render hat die Änderungen nicht deployt. Oleg muss manuell deployen.
-
-**Nächste Schritte:**
-- Oleg: Manueller Deploy auf Render notwendig
-- Oder: `gateway restart` wenn live-Server verfügbar ist
+**Status:** Demo-Anmeldung funktioniert immernoch nicht. Oleg wurde gefragt, ob manueller Deploy nötig ist.
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
