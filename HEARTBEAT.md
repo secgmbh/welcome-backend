@@ -13,7 +13,7 @@
 
 **Root Cause:** Es gab ZWEI verschiedene `database.py` Dateien (Hauptverzeichnis vs. welcome-backend/backend). Der Server nutzt die Datei im welcome-backend Ordner.
 
-**Status:** Changes sind auf GitHub gepusht. Render deploy wurde ausgelöst. Warte auf Feedback von Oleg.
+**Status:** Changes sind auf GitHub gepusht. **Render deployet automatisch bei push**. Demo-Anmeldung sollte nach ~2min wieder funktionieren.
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
