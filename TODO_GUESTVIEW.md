@@ -192,16 +192,14 @@ Alle 18 Phasen erfolgreich implementiert:
 - Ausführungszeit: alle 30 Minuten zwischen 22:30 - 04:00
 - Zweck: Verhindert überlappende Ausführungen
 
-### 28.02.2026 - Phase 19 Start
+### 28.02.2026 - Phase 19 & 20 Start
 - MVP Complete (18 Phasen) ✅
 - Demo-Anmeldung Datenbank-Fix: Alembic Migration 75d1541dc08a ✅
-- Phase 19: Quality & Polish gestartet
-- A/B Testing UI (Variante A/B Anzeige) - in Planung
-- Store-Konfigurator für Upsells - in Planung
-- Bundling UI - in Planung
-- Partner-Empfehlungen - in Planung
-- Smart Rules UI - in Planung
-- PayPal/Apple/Google Pay - in Planung
+- Phase 19: A/B Testing UI abgeschlossen ✅
+- Phase 20: Checkout & Rechnungen gestartet
+- PayPal/Apple/Google Pay Integration - in Planung
+- PDF Rechnung sofort nach Buchung - in Planung
+- E-Mail Rechnungsversand - in Planung
 
 ---
 
@@ -227,6 +225,17 @@ Alle 18 Phasen erfolgreich implementiert:
 - [ ] Nutzerverwaltung (alle registrierte Firmen)
 - [ ] Live-Feed Buchungen
 - [ ] Auto-focus API Fix
+
+---
+
+### Phase 20: Checkout & Rechnungen 🚀 START
+- [ ] PayPal Integration
+- [ ] Apple Pay Integration
+- [ ] Google Pay Integration
+- [ ] PDF Rechnung sofort nach Buchung
+- [ ] E-Mail Rechnungsversand
+- [ ] Checkout-Seite für Gäste
+- [ ] Rechnungsdetails im Dashboard
 
 ---
 
