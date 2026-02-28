@@ -1,13 +1,21 @@
 # Heartbeat Task List
 # Check these periodically (every 30 min or so)
 
-## Phase 19: Quality & Polish (Status: IN BEARBEITUNG)
+## Phase 20: Checkout & Rechnungen (Status: IN BEARBEITUNG)
 
-**A/B Testing UI Update:**
-- `ABTestForm.jsx` erstellt - Modal zum Erstellen/Bearbeiten von A/B Tests
-- `ABTestList.jsx` aktualisiert - "Neuer A/B Test" Button hinzugefügt
+**Aktueller Status:**
+- Phase 19 A/B Testing UI abgeschlossen ✅
+- Phase 20 Checkout & Rechnungen gestartet
+- TODO_GUESTVIEW.md aktualisiert mit Phase 20 Features
 
-**Status:** UI-Features commited, auf GitHub gepusht. Warte auf Render Deploy.
+**Phase 20 Features:**
+- PayPal Integration
+- Apple Pay Integration
+- Google Pay Integration
+- PDF Rechnung sofort nach Buchung
+- E-Mail Rechnungsversand
+- Checkout-Seite für Gäste
+- Rechnungsdetails im Dashboard
 
 ## Weekly Checks (rotate through)
 - [x] Git Status: Changes pushen? ✅
