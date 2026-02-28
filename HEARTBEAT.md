@@ -15,6 +15,8 @@
 
 **Status:** Changes sind auf GitHub gepusht. **Render deployet automatisch bei push**. Demo-Anmeldung sollte nach ~2min wieder funktionieren.
 
+**Reminder:** Cron-Job für 12:00 Uhr eingerichtet, um zu prüfen, ob die Demo-Anmeldung funktioniert.
+
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
 - [ ] TODOs prüfen und aufräumen
