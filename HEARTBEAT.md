@@ -20,7 +20,7 @@
 - TODOs in TODO_GUESTVIEW.md nach Phase 19 verschoben
 
 ## Weekly Checks (rotate through)
-- [ ] Git Status: Changes pushen?
+- [x] Git Status: Changes pushen? ✅
 - [ ] TODOs prüfen und aufräumen
 - [ ] Logs checken für Fehler
 
