@@ -41,12 +41,12 @@
 
 ## Phase 21: Dashboard Erweiterungen (Status: IN BEARBEITUNG)
 - Rechnungsdetails im Dashboard - abgeschlossen ✅
-- Nutzerverwaltung - in Planung
+- Nutzerverwaltung - Backend API abgeschlossen ✅
 - Live-Feed Buchungen - in Planung
 - Auto-focus API Fix - in Planung
 
 ## Phase 22: Admin Features (nächste Phase)
-- Nutzerverwaltung (alle registrierte Firmen) - in Planung
+- Nutzerverwaltung (alle registrierte Firmen) - Backend API ✅
 - Live-Feed Buchungen - in Planung
 - Auto-focus API Fix - in Planung
 
