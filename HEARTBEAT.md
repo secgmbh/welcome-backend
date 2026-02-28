@@ -13,7 +13,7 @@
 
 **Root Cause:** Es gab ZWEI verschiedene `database.py` Dateien (Hauptverzeichnis vs. welcome-backend/backend). Der Server nutzt die Datei im welcome-backend Ordner.
 
-**Status:** Gateway restart wurde versucht. Wenn das nicht hilft, manueller Deploy auf Render nötig.
+**Status:** Changes sind auf GitHub gepusht. Render deploy wurde ausgelöst. Warte auf Feedback von Oleg.
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
