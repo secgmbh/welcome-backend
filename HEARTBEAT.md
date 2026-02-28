@@ -40,9 +40,10 @@
 - Download-Endpoint `/api/bookings/{id}/invoice/download`
 
 ## Phase 21: Dashboard Erweiterungen (Status: IN BEARBEITUNG)
-- Rechnungsdetails im Dashboard - in Planung
+- Rechnungsdetails im Dashboard - abgeschlossen ✅
 - Nutzerverwaltung - in Planung
 - Live-Feed Buchungen - in Planung
+- Auto-focus API Fix - in Planung
 
 ## Weekly Checks (rotate through)
 - [x] Git Status: Changes pushen? ✅
