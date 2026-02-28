@@ -6,6 +6,7 @@
 **Aktueller Status:**
 - Phase 19 A/B Testing UI abgeschlossen ✅
 - Phase 20: PayPal Integration Backend + Frontend abgeschlossen ✅
+- Phase 20: PDF Rechnung sofort nach Buchung starten
 - TODO_GUESTVIEW.md aktualisiert mit Phase 20 Features
 
 **Phase 20 Features (Fortschritt):**
