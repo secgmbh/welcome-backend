@@ -14,7 +14,7 @@
 - Phase 22: Live-Feed UI abgeschlossen ✅
 - Phase 23: Analytics & Reports 100% Complete ✅
 - Phase 24: Export & Reports 100% Complete ✅
-- Phase 25: Nächste Phase starten?
+- Phase 25: Nächste Phase starten? (Dashboard Features)
 - TODO_GUESTVIEW.md aktualisiert mit Phase 24 Features
 
 **Phase 20 Features (100% Complete):**
@@ -69,4 +69,7 @@
 ## Phase 25: Nächste Phase (nächste Phase)
 - Export UI im Dashboard - in Planung
 - Umsatzberichte mit Filter - in Planung
+- Dashboard mit weiteren Features - in Planung
+
+## Weekly Checks (rotate through)
 - [ ] Review `memory/` files and update `MEMORY.md` with insights
