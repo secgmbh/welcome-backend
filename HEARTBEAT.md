@@ -9,6 +9,7 @@
 - Phase 20: PDF Rechnung mit Download abgeschlossen ✅
 - Phase 20: Apple Pay / Google Pay Integration Backend API abgeschlossen ✅
 - Phase 20: E-Mail Rechnungsversand API abgeschlossen ✅
+- Phase 20: Checkout-Seite für Gäste starten
 - TODO_GUESTVIEW.md aktualisiert mit Phase 20 Features
 
 **Phase 20 Features (Fortschritt):**
