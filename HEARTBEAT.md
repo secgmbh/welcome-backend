@@ -25,6 +25,8 @@
 - `keysafe_code` (String 50)
 - `keysafe_instructions` (Text)
 
+**Nächster Schritt:** Oleg muss einen manuellen Deploy auf Render ausführen, damit die Migration ausgeführt wird.
+
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
 - [ ] TODOs prüfen und aufräumen
