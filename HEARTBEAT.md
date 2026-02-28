@@ -13,11 +13,11 @@
 
 **Root Cause:** Es gab ZWEI verschiedene `database.py` Dateien (Hauptverzeichnis vs. welcome-backend/backend). Der Server nutzt die Datei im welcome-backend Ordner.
 
-**Status:** Alembic Migration `75d1541dc08a` hinzugefügt, die fehlenden Spalten auf der Datenbank hinzufügt. Changes commited und pushed.
+**Status:** Alle Changes sind auf GitHub gepusht. Render deployet automatisch beim Push.
 
-**Erneute Prüfung (15:00 Uhr):** Demo-Anmeldung funktioniert immernoch nicht. Migration wurde noch nicht ausgeführt.
-
-**Nächster Schritt:** Oleg muss einen manuellen Deploy auf Render ausführen, damit die Migration ausgeführt wird. Ich habe Oleg eine Nachricht gesendet.
+**Worauf warten:**
+- Render ist online und deployt die Änderungen
+- Die Alembic Migration `75d1541dc08a` wird dann automatisch ausgeführt
 
 ## Weekly Checks (rotate through)
 - [ ] Git Status: Changes pushen?
