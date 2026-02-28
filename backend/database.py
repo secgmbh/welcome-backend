@@ -19,6 +19,7 @@ class User(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_demo = Column(Boolean, default=False)
     is_email_verified = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)  # Admin-Rechte für Nutzerverwaltung
     email_verification_token = Column(String(64), unique=True, index=True)
     email_verification_token_expires = Column(DateTime)
     # Branding
