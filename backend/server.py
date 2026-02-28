@@ -1820,6 +1820,89 @@ def validate_checkout(booking: BookingCreate, db: Session = Depends(get_db), use
         "final_total": booking.total_price + (booking.tipping_amount or 0)
     }
 
+# ============== PDF GENERATION HELPER ==============
+def generate_invoice_pdf(booking, property_data, user_data):
+    """Generiere PDF-Rechnung als base64-encoded string"""
+    import base64
+    from datetime import datetime
+    
+    # Erstelle HTML-Inhalt
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; padding: 40px; }}
+            .header {{ text-align: center; margin-bottom: 40px; }}
+            .company {{ color: #F27C2C; font-size: 24px; font-weight: bold; }}
+            .title {{ font-size: 20px; margin-top: 20px; color: #333; }}
+            .info {{ margin: 20px 0; }}
+            .info-row {{ display: flex; justify-content: space-between; margin: 10px 0; }}
+            .amount {{ font-weight: bold; font-size: 18px; }}
+            .footer {{ margin-top: 60px; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="company">Welcome Link</div>
+            <div>Rechnung</div>
+        </div>
+        
+        <div class="info">
+            <div><strong>Rechnungs-Nr:</strong> INV-{booking.id[:8].upper()}</div>
+            <div><strong>Datum:</strong> {datetime.now().strftime('%d.%m.%Y')}</div>
+            <div><strong>Zahlungsstatus:</strong> {booking.status.upper()}</div>
+        </div>
+        
+        <div class="info">
+            <div><strong> Gast:</strong> {booking.guest_name} ({booking.guest_email})</div>
+            <div><strong>Unterkunft:</strong> {property_data.get('name', 'Unbekannt')}</div>
+        </div>
+        
+        <div class="info">
+            <div class="info-row"><span>Check-in:</span> <span>{booking.check_in.strftime('%d.%m.%Y') if hasattr(booking.check_in, 'strftime') else booking.check_in[:10]}</span></div>
+            <div class="info-row"><span>Check-out:</span> <span>{booking.check_out.strftime('%d.%m.%Y') if hasattr(booking.check_out, 'strftime') else booking.check_out[:10]}</span></div>
+            <div class="info-row"><span>Gäste:</span> <span>{booking.guests}</span></div>
+        </div>
+        
+        <div style="margin: 30px 0; border: 1px solid #ddd; padding: 15px;">
+            <div class="info-row" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                <span>Beschreibung</span>
+                <span>Betrag</span>
+            </div>
+            <div class="info-row">
+                <span>Übernachtung</span>
+                <span>{booking.total_price:.2f} €</span>
+            </div>
+            <div class="info-row">
+                <span>Trinkgeld ({booking.tipping_percentage}%)</span>
+                <span>{booking.tipping_amount:.2f} €</span>
+            </div>
+            <div class="info-row amount" style="margin-top: 20px;">
+                <span>Gesamtsumme</span>
+                <span>{booking.total_price + booking.tipping_amount:.2f} €</span>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Welcome Link GmbH |info@welcome-link.de | www.welcome-link.de</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # HTML als base64 encode (für base64-URL)
+    html_bytes = html_content.encode('utf-8')
+    html_base64 = base64.b64encode(html_bytes).decode('utf-8')
+    
+    return {
+        "html_base64": html_base64,
+        "content_type": "text/html",
+        "filename": f"rechnung_{booking.id[:8]}.html"
+    }
+
+
 @api_router.get("/bookings/{booking_id}/invoice", dependencies=[Depends(get_current_user)])
 def get_booking_invoice(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Hole Rechnung als PDF für eine Buchung"""
@@ -1831,15 +1914,64 @@ def get_booking_invoice(booking_id: str, db: Session = Depends(get_db), user: Us
     if not booking:
         raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
     
+    # Hole Property Daten
+    property_data = db.query(Property).filter(Property.id == booking.property_id).first()
+    prop_dict = {"name": property_data.name} if property_data else {"name": "Unbekannt"}
+    
+    # Hole User Daten
+    user_data = {"name": user.name, "invoice_name": user.invoice_name, "invoice_address": user.invoice_address} if user else {}
+    
     # Generiere PDF-Rechnung
-    # Hier würde der eigentliche PDF-Generierungs-Code stehen
-    # Für MVP return dummy PDF response
+    pdf_data = generate_invoice_pdf(booking, prop_dict, user_data)
+    
     return {
         "booking_id": booking.id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "download_url": f"/api/bookings/{booking_id}/invoice/download",
+        "pdf_html_base64": pdf_data["html_base64"],
         "status": "ready"
     }
+
+@api_router.get("/bookings/{booking_id}/invoice/download", dependencies=[Depends(get_current_user)])
+def download_booking_invoice(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Download Rechnung als HTML-PDF (für Browser-Druck)"""
+    from database import Booking, Property
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    property_data = db.query(Property).filter(Property.id == booking.property_id).first()
+    prop_dict = {"name": property_data.name} if property_data else {"name": "Unbekannt"}
+    
+    user_data = {"name": user.name, "invoice_name": user.invoice_name, "invoice_address": user.invoice_address} if user else {}
+    
+    pdf_data = generate_invoice_pdf(booking, prop_dict, user_data)
+    
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Rechnung #{booking_id[:8].upper()}</title>
+        <style>
+            @media print {{
+                body {{ padding: 0; }}
+            }}
+        </style>
+    </head>
+    <body>
+        <iframe src="data:text/html;base64,{pdf_data['html_base64']}" width="100%" height="1000px" style="border: none;"></iframe>
+        <script>
+            window.onload = function() {{ window.print(); }}
+        </script>
+    </body>
+    </html>
+    """)
+
 
 @api_router.post("/bookings/{booking_id}/confirm", response_model=BookingResponse, dependencies=[Depends(get_current_user)])
 def confirm_booking(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
