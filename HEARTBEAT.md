@@ -10,7 +10,7 @@
 - Phase 20: Apple Pay / Google Pay Integration Backend API abgeschlossen ✅
 - Phase 20: E-Mail Rechnungsversand API abgeschlossen ✅
 - Phase 20: Checkout-Seite für Gäste (frontend) abgeschlossen ✅
-- Phase 21: Rechnungsdetails im Dashboard starten
+- Phase 21: Rechnungsdetails im Dashboard + Nutzerverwaltung Backend + Frontend ✅
 - TODO_GUESTVIEW.md aktualisiert mit Phase 21 Features
 
 **Phase 20 Features (100% Complete):**
@@ -39,10 +39,10 @@
 - PDF Rechnung mit base64-HTML-Integration für Druck
 - Download-Endpoint `/api/bookings/{id}/invoice/download`
 
-## Phase 21: Dashboard Erweiterungen (Status: IN BEARBEITUNG)
+## Phase 21: Dashboard Erweiterungen (Status: 75% COMPLETE)
 - Rechnungsdetails im Dashboard - abgeschlossen ✅
 - Nutzerverwaltung Backend API - abgeschlossen ✅
-- Nutzerverwaltung Frontend UI - in Planung
+- Nutzerverwaltung Frontend UI - abgeschlossen ✅
 - Live-Feed Buchungen - in Planung
 - Auto-focus API Fix - in Planung
 
