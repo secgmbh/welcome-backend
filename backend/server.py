@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -16,10 +17,16 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, Bundle as DBBundle, BundleExtra as DBBundleExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule, Scene as DBScene, Extra as DBExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, Bundle as DBBundle, BundleExtra as DBBundleExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule, Booking as DBBooking
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# ============ PAYPAL CONFIG ============
+PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
+PAYPAL_CLIENT_SECRET = os.environ.get('PAYPAL_CLIENT_SECRET')
+PAYPAL_ENV = os.environ.get('PAYPAL_ENV', 'sandbox')
+PAYPAL_WEBHOOK_ID = os.environ.get('PAYPAL_WEBHOOK_ID')
 
 # ============ SECURITY: Validierung der Umgebungsvariablen ============
 JWT_SECRET = os.environ.get('SECRET_KEY')
@@ -2450,6 +2457,124 @@ def export_bookings_csv(db: Session = Depends(get_db), user: User = Depends(get_
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=bookings.csv"}
     )
+
+
+# ============== PAYPAL CHECKOUT API ENDPOINTS ==============
+class PayPalOrderCreate(BaseModel):
+    booking_id: str
+    amount: float
+    currency: str = "EUR"
+    description: str
+
+class PayPalOrderResponse(BaseModel):
+    order_id: str
+    links: List[dict]
+
+class PayPalCaptureResponse(BaseModel):
+    status: str
+    id: str
+    purchase_units: List[dict]
+    payer: Optional[dict]
+
+@api_router.post("/paypal/create-order", response_model=PayPalOrderResponse, dependencies=[Depends(get_current_user)])
+async def create_paypal_order(order: PayPalOrderCreate, user: User = Depends(get_current_user)):
+    """Erstelle einen PayPal Checkout Order"""
+    import httpx
+    
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="PayPal nicht konfiguriert")
+    
+    try:
+        # PayPal Auth Token holen
+        auth_url = f"https://{'api-m.sandbox' if PAYPAL_ENV == 'sandbox' else 'api-m.paypal'}.com/v1/oauth2/token"
+        async with httpx.AsyncClient() as client:
+            auth_response = await client.post(
+                auth_url,
+                data={"grant_type": "client_credentials"},
+                auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET)
+            )
+            auth_response.raise_for_status()
+            access_token = auth_response.json()["access_token"]
+        
+        # Order erstellen
+        order_url = f"https://{'api-m.sandbox' if PAYPAL_ENV == 'sandbox' else 'api-m.paypal'}.com/v2/checkout/orders"
+        async with httpx.AsyncClient() as client:
+            order_response = await client.post(
+                order_url,
+                json={
+                    "intent": "CAPTURE",
+                    "purchase_units": [{
+                        "amount": {
+                            "currency_code": order.currency,
+                            "value": f"{order.amount:.2f}"
+                        },
+                        "description": order.description
+                    }],
+                    "application_context": {
+                        "return_url": f"{os.environ.get('FRONTEND_URL', 'https://welcome-link.de')}/checkout/success",
+                        "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://welcome-link.de')}/checkout/cancel"
+                    }
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {access_token}"
+                }
+            )
+            order_response.raise_for_status()
+            data = order_response.json()
+            
+            return PayPalOrderResponse(
+                order_id=data["id"],
+                links=data.get("links", [])
+            )
+    except httpx.HTTPStatusError as e:
+        logger.error(f"PayPal API Error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=500, detail=f"PayPal Fehler: {e.response.text}")
+    except Exception as e:
+        logger.error(f"PayPal Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"PayPal Fehler: {str(e)}")
+
+
+@api_router.post("/paypal/capture-order", response_model=PayPalCaptureResponse, dependencies=[Depends(get_current_user)])
+async def capture_paypal_order(payload: dict, user: User = Depends(get_current_user)):
+    """Capture einer PayPal Order"""
+    import httpx
+    
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="PayPal nicht konfiguriert")
+    
+    order_id = payload.get("orderID")
+    if not order_id:
+        raise HTTPException(status_code=400, detail="Keine orderID angegeben")
+    
+    try:
+        auth_url = f"https://{'api-m.sandbox' if PAYPAL_ENV == 'sandbox' else 'api-m.paypal'}.com/v1/oauth2/token"
+        async with httpx.AsyncClient() as client:
+            auth_response = await client.post(
+                auth_url,
+                data={"grant_type": "client_credentials"},
+                auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET)
+            )
+            auth_response.raise_for_status()
+            access_token = auth_response.json()["access_token"]
+        
+        capture_url = f"https://{'api-m.sandbox' if PAYPAL_ENV == 'sandbox' else 'api-m.paypal'}.com/v2/checkout/orders/{order_id}/capture"
+        async with httpx.AsyncClient() as client:
+            capture_response = await client.post(
+                capture_url,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {access_token}"
+                }
+            )
+            capture_response.raise_for_status()
+            return PayPalCaptureResponse(**capture_response.json())
+    except httpx.HTTPStatusError as e:
+        logger.error(f"PayPal Capture Error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=500, detail=f"PayPal Capture Fehler: {e.response.text}")
+    except Exception as e:
+        logger.error(f"PayPal Capture Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"PayPal Capture Fehler: {str(e)}")
 
 
 # ============== END HOST STATS API ENDPOINTS ==============
