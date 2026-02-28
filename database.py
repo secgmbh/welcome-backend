@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, inspect
+from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, Integer, Float, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timezone
@@ -22,6 +22,20 @@ class User(Base):
     is_email_verified = Column(Boolean, default=False)
     email_verification_token = Column(String(64), unique=True, index=True)
     email_verification_token_expires = Column(DateTime)
+    # Invoice details for hosting
+    invoice_name = Column(String(200))
+    invoice_address = Column(String(500))
+    invoice_zip = Column(String(20))
+    invoice_city = Column(String(100))
+    invoice_country = Column(String(100))
+    invoice_vat_id = Column(String(50))
+    # Branding
+    brand_color = Column(String(20))
+    logo_url = Column(String(500))
+    # Key safe
+    keysafe_location = Column(String(500))
+    keysafe_code = Column(String(100))
+    keysafe_instructions = Column(Text)
 
 class Property(Base):
     __tablename__ = "properties"
@@ -46,6 +60,129 @@ class GuestView(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False, index=True)
     token = Column(String(36), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Scene(Base):
+    __tablename__ = "scenes"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    title = Column(String(200))
+    content = Column(Text)
+    image_url = Column(String(500))
+    order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Extra(Base):
+    __tablename__ = "extras"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200))
+    description = Column(Text)
+    price = Column(Integer, default=0)
+    stock = Column(Integer, default=0)
+    image_url = Column(String(500))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Bundle(Base):
+    __tablename__ = "bundles"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200))
+    description = Column(Text)
+    price = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class BundleExtra(Base):
+    __tablename__ = "bundle_extras"
+    
+    id = Column(String(36), primary_key=True)
+    bundle_id = Column(String(36), nullable=False, index=True)
+    extra_id = Column(String(36), nullable=False, index=True)
+    quantity = Column(Integer, default=1)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class ABTest(Base):
+    __tablename__ = "ab_tests"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200))
+    variant_a_name = Column(String(100))
+    variant_b_name = Column(String(100))
+    variant_a_url = Column(String(500))
+    variant_b_url = Column(String(500))
+    active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Partner(Base):
+    __tablename__ = "partners"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200))
+    description = Column(Text)
+    category = Column(String(100))
+    address = Column(String(500))
+    phone = Column(String(50))
+    email = Column(String(255))
+    website = Column(String(500))
+    image_url = Column(String(500))
+    commission_rate = Column(Float, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class SmartRule(Base):
+    __tablename__ = "smart_rules"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200))
+    description = Column(Text)
+    trigger_type = Column(String(100))
+    condition = Column(Text)
+    action = Column(Text)
+    priority = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Booking(Base):
+    __tablename__ = "bookings"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    guest_name = Column(String(200))
+    guest_email = Column(String(255))
+    guest_phone = Column(String(50))
+    check_in = Column(DateTime)
+    check_out = Column(DateTime)
+    guests = Column(Integer, default=1)
+    message = Column(Text)
+    total_price = Column(Float, default=0)
+    tipping_percentage = Column(Integer, default=0)
+    tipping_amount = Column(Float, default=0)
+    status = Column(String(50), default='pending')
+    payment_method = Column(String(100))
+    invoice_generated = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Task(Base):
+    __tablename__ = "tasks"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    cleaner_id = Column(String(36))
+    title = Column(String(200))
+    description = Column(Text)
+    due_date = Column(DateTime)
+    completed = Column(Boolean, default=False)
+    priority = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 def get_database_url():
