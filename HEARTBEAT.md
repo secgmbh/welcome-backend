@@ -5,17 +5,16 @@
 
 **Aktueller Status:**
 - Phase 19 A/B Testing UI abgeschlossen ✅
-- Phase 20 Checkout & Rechnungen gestartet
+- Phase 20: PayPal Integration starten
 - TODO_GUESTVIEW.md aktualisiert mit Phase 20 Features
 
-**Phase 20 Features:**
-- PayPal Integration
-- Apple Pay Integration
-- Google Pay Integration
-- PDF Rechnung sofort nach Buchung
-- E-Mail Rechnungsversand
-- Checkout-Seite für Gäste
-- Rechnungsdetails im Dashboard
+**Phase 20 Features (Priorität):**
+1. PayPal Integration (Backend + Frontend)
+2. PDF Rechnung sofort nach Buchung
+3. Apple Pay / Google Pay Integration
+4. E-Mail Rechnungsversand
+5. Checkout-Seite für Gäste
+6. Rechnungsdetails im Dashboard
 
 ## Weekly Checks (rotate through)
 - [x] Git Status: Changes pushen? ✅
