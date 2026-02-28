@@ -189,6 +189,7 @@ Alle 18 Phasen erfolgreich implementiert:
 - Deploy auf GitHub gepusht
 - Nightly-lock.sh ausgeführt um: 22:30, 23:00, 23:30, 00:00, 00:30, 01:00, 01:30, 02:30, 03:00, 03:30
 - Letzte Aktualisierung: 03:53
+- [x] Demo-Anmeldung Datenbank-Fix: Alle Spalten hinzugefügt via Alembic Migration
 - [ ] KI-Inhalts-Generator für Szenen (UI fertig, API fehlt)
 
 ---
@@ -235,9 +236,13 @@ Alle 18 Phasen erfolgreich implementiert:
 
 ---
 
-## 🛠️ Backend API (vollständig)
+## 🚧 Backend Anmerkungen
 
-### Bestehende Endpoints
+### Backend TODOs (niedrige Priorität)
+- `server.py:373` - E-Mail-Versand in Production (SendGrid etc.)
+- `server.py:424` - E-Mail-Versand mit SendGrid implementieren
+
+### Backend API Endpoints (bereits implementiert)
 ```
 POST /auth/register          # Registrierung (mit Rechnungsdaten)
 POST /auth/login             # Anmeldung (Email + Passwort)
@@ -256,18 +261,62 @@ POST /api/scenes             # Neue Scene erstellen
 PUT  /api/scenes/{id}        # Scene aktualisieren
 DELETE /api/scenes/{id}      # Scene löschen
 
-GET  /api/bookings           # Buchungen (vorgesehen)
-POST /api/bookings           # Neue Buchung (vorgesehen)
+GET  /api/bookings           # Buchungen
+POST /api/bookings           # Neue Buchung
+
+GET  /api/stats/global       # Globale Statistiken
+GET  /api/stats/host/{id}    # Host-spezifische Statistiken
+GET  /api/stats/property/{id} # Property-spezifische Statistiken
+
+GET  /api/branding           # Branding Daten
+PUT  /api/branding           # Branding aktualisieren
+
+POST /api/ai/copywriter      # AI Copywriter
+
+GET  /api/cleaner/login      # Cleaner Login
+GET  /api/cleaner/profile    # Cleaner Profil
+
+GET  /api/tasks              # Task Liste
+POST /api/tasks              # Neue Task
+PUT  /api/tasks/{id}         # Task aktualisieren
+POST /api/tasks/{id}/complete # Task abschließen
+GET  /api/tasks/export/ics   # ICS Export
+
+GET  /api/properties/{id}/keysafe  # Key-Safe Info
+PUT  /api/properties/{id}/keysafe  # Key-Safe Info aktualisieren
+
+GET  /api/scenes/export/ics                     # Scene ICS Export
+GET  /api/properties/{id}/scenes/export/ics     # Property Scenes ICS Export
+
+GET  /api/bookings/{id}/invoice # Rechnung downloaden
+POST /api/checkout/validate     # Checkout Validierung
+POST /api/bookings/{id}/confirm # Buchung bestätigen
 ```
 
 ---
 
-## 🎯 Nächste Schritte (Priorität)
+## 🎯 Nächste Schritte (Priorität nach MVP)
 
-1. **Phase 8**: A/B Testing UI + Store-Konfigurator (höchste Priorität für MVP)
-2. **Phase 9**: Partner-Modul + Smart Rules
-3. **Phase 10**: Advanced Guest Features (Feedback, Shopping)
-4. **Phase 11**: Checkout-Simulation (PayPal/Apple Pay)
+Da MVP abgeschlossen ist, hier die wichtigsten Verbesserungen für Phase 19+:
+
+### Phase 19: Quality & Polish
+- [ ] A/B Testing UI mit Variante A/B Anzeige
+- [ ] Store-Konfigurator für Upsells
+- [ ] Bundling UI (Extras zu Paketen)
+- [ ] Partner-Empfehlungen (Taxi, Spa, Restaurants)
+- [ ] Smart Rules UI (zeitgesteuerte Regeln)
+
+### Phase 20: Checkout & Rechnungen
+- [ ] PayPal/Apple/Google Pay Integration
+- [ ] PDF Rechnung sofort nach Buchung
+- [ ] E-Mail Rechnungsversand
+
+### Phase 21: Monitoring & Admin
+- [ ] Nutzerverwaltung (alle registrierte Firmen)
+- [ ] Live-Feed Buchungen
+- [ ] Auto-focus API Fix
+- [ ] Backend Build Test
+- [ ] Frontend Build Test
 
 ---
 
