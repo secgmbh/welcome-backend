@@ -192,36 +192,25 @@ Alle 18 Phasen erfolgreich implementiert:
 - Ausführungszeit: alle 30 Minuten zwischen 22:30 - 04:00
 - Zweck: Verhindert überlappende Ausführungen
 
-### 28.02.2026 - Phase 19 & 20 Start
+### 28.02.2026 - Phase 19, 20 & 21 Start
 - MVP Complete (18 Phasen) ✅
 - Demo-Anmeldung Datenbank-Fix: Alembic Migration 75d1541dc08a ✅
 - Phase 19: A/B Testing UI abgeschlossen ✅
-- Phase 20: Checkout & Rechnungen gestartet
-- PayPal/Apple/Google Pay Integration - in Planung
-- PDF Rechnung sofort nach Buchung - in Planung
-- E-Mail Rechnungsversand - in Planung
+- Phase 20: Checkout & Rechnungen 100% abgeschlossen ✅
+- Phase 21: Rechnungsdetails & Nutzerverwaltung Backend ✅
+- Phase 21: Nutzerverwaltung Frontend UI starten
 
 ---
 
-## 🚧 Phase 19: Quality & Polish (nächste Phase nach MVP)
+## 🚧 Phase 21: Dashboard & Admin Features (IN BEARBEITUNG)
 
-### A/B Testing & Store-Konfigurator
-- [ ] A/B-Test-Links UI ( Variante A/B Anzeige)
-- [ ] Store-Konfigurator für Upsells
-- [ ] Bundling (Extras zu Paketen)
-- [ ] AI Pricing Vorschläge
+### Nutzerverwaltung & Admin
+- [x] Nutzerverwaltung Backend API (GET /admin/users)
+- [ ] Nutzerverwaltung Frontend UI (Admin-Dashboard)
+- [ ] Live-Feed Buchungen
+- [ ] Auto-focus API Fix
 
-### Partner-Modul & Smart Rules
-- [ ] Partner-Empfehlungen (Taxi, Spa, Restaurants)
-- [ ] Smart Rules (zeitgesteuerte Regeln UI)
-- [ ] Provisions-Links
-
-### Checkout & Rechnungen
-- [ ] PayPal/Apple/Google Pay Integration
-- [ ] PDF Rechnung sofort nach Buchung
-- [ ] E-Mail Rechnungsversand
-
-### Monitoring & Admin
+### Phase 22: Monitoring & Admin
 - [ ] Nutzerverwaltung (alle registrierte Firmen)
 - [ ] Live-Feed Buchungen
 - [ ] Auto-focus API Fix
@@ -229,13 +218,21 @@ Alle 18 Phasen erfolgreich implementiert:
 ---
 
 ### Phase 20: Checkout & Rechnungen 🚀 START
-- [ ] PayPal Integration
-- [ ] Apple Pay Integration
-- [ ] Google Pay Integration
-- [ ] PDF Rechnung sofort nach Buchung
-- [ ] E-Mail Rechnungsversand
-- [ ] Checkout-Seite für Gäste
-- [ ] Rechnungsdetails im Dashboard
+- [x] PayPal Integration ✅
+- [x] Apple Pay Integration ✅
+- [x] Google Pay Integration ✅
+- [x] PDF Rechnung sofort nach Buchung ✅
+- [x] E-Mail Rechnungsversand ✅
+- [x] Checkout-Seite für Gäste ✅
+- [x] Rechnungsdetails im Dashboard ✅
+
+---
+
+### Phase 21: Dashboard & Admin Features 🚀 START
+- [x] Nutzerverwaltung Backend API ✅
+- [ ] Nutzerverwaltung Frontend UI
+- [ ] Live-Feed Buchungen
+- [ ] Auto-focus API Fix
 
 ---
 
