@@ -1859,6 +1859,81 @@ def confirm_booking(booking_id: str, db: Session = Depends(get_db), user: User =
     return booking
 
 
+# ============== PAYPAL CHECKOUT API ENDPOINTS ==============
+
+class PayPalOrderRequest(BaseModel):
+    booking_id: str
+    amount: float
+    currency: str = "EUR"
+    description: str
+
+class PayPalOrderResponse(BaseModel):
+    order_id: str
+    approval_url: str
+    status: str
+
+class PayPalCaptureRequest(BaseModel):
+    order_id: str
+    booking_id: str
+
+class PayPalCaptureResponse(BaseModel):
+    status: str
+    payment_status: str
+    amount: float
+
+@api_router.post("/paypal/create-order", response_model=PayPalOrderResponse, dependencies=[Depends(get_current_user)])
+def create_paypal_order(order: PayPalOrderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle einen PayPal Checkout Order"""
+    from database import Booking
+    
+    # Prüfe ob Buchung existiert und dem User gehört
+    booking = db.query(Booking).filter(
+        Booking.id == order.booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    # PayPal Order erstellen (simuliert für MVP)
+    # In Production: PayPal API calls hier
+    order_id = f"PAY-{uuid.uuid4().hex[:16].upper()}"
+    
+    return {
+        "order_id": order_id,
+        "approval_url": f"https://www.sandbox.paypal.com/checkoutnow?token={order_id}",
+        "status": "created"
+    }
+
+@api_router.post("/paypal/capture-order", response_model=PayPalCaptureResponse, dependencies=[Depends(get_current_user)])
+def capture_paypal_order(capture: PayPalCaptureRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erschließe PayPal Zahlung und aktualisiere Buchung"""
+    from database import Booking
+    
+    # Prüfe ob Buchung existiert und dem User gehört
+    booking = db.query(Booking).filter(
+        Booking.id == capture.booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    # PayPal Zahlung validieren (simuliert für MVP)
+    # In Production: PayPal API call zum Validate Captured Order
+    
+    # Buchung aktualisieren
+    booking.status = 'paid'
+    booking.payment_method = 'paypal'
+    booking.invoice_generated = True
+    db.commit()
+    db.refresh(booking)
+    
+    return {
+        "status": "completed",
+        "payment_status": "COMPLETED",
+        "amount": booking.total_price + booking.tipping_amount
+    }
+
+
 # ============== END CHECKOUT & BOOKING API ENDPOINTS ==============
 
 # ============== CLEANER & TASK API ENDPOINTS ==============
