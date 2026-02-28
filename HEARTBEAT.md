@@ -14,7 +14,7 @@
 - Phase 22: Live-Feed UI abgeschlossen ✅
 - Phase 23: Analytics & Reports 100% Complete ✅
 - Phase 24: Export & Reports 100% Complete ✅
-- Phase 25: Filter Stats API abgeschlossen ✅
+- Phase 25: Filter UI + AnalyticsPage abgeschlossen ✅
 - TODO_GUESTVIEW.md aktualisiert mit Phase 25 Features
 
 **Phase 20 Features (100% Complete):**
@@ -66,10 +66,11 @@
 - PDF Berichte - abgeschlossen ✅
 - Umsatzberichte - abgeschlossen ✅
 
-## Phase 25: Dashboard Features (Status: IN BEARBEITUNG)
+## Phase 25: Dashboard Features (Status: 50% COMPLETE)
 - Export UI im Dashboard - in Planung
 - Umsatzberichte mit Filter - Backend API abgeschlossen ✅
 - Dashboard mit weiteren Features - in Planung
+- Booking Filter UI - abgeschlossen ✅
 
 ## Weekly Checks (rotate through)
 - [ ] Review `memory/` files and update `MEMORY.md` with insights
