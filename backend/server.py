@@ -2101,6 +2101,51 @@ def send_invoice_email(request: InvoiceEmailRequest, db: Session = Depends(get_d
     }
 
 
+# ============== USER MANAGEMENT API ENDPOINTS ==============
+
+class UserAdminResponse(BaseModel):
+    id: str
+    email: str
+    name: Optional[str]
+    created_at: str
+    is_demo: bool
+    is_email_verified: bool
+    invoice_name: Optional[str]
+    invoice_city: Optional[str]
+    invoice_country: Optional[str]
+
+@api_router.get("/admin/users", response_model=List[UserAdminResponse], dependencies=[Depends(get_current_user)])
+def get_all_users(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole alle Benutzer (Admin-Funktion)"""
+    # Prüfe ob User Admin ist
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    users = db.query(DBUser).all()
+    return users
+
+@api_router.get("/admin/users/{user_id}", response_model=UserAdminResponse, dependencies=[Depends(get_current_user)])
+def get_user_by_id(user_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Hole Benutzerdetails (Admin-Funktion)"""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    db_user = db.query(DBUser).filter(DBUser.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    return db_user
+
+# ============== END APPLE PAY / GOOGLE PAY API ENDPOINTS ==============
+    
+    return {
+        "success": True,
+        "message": "Rechnung wurde versendet",
+        "booking_id": booking.id,
+        "to_email": request.to_email,
+        "sent_at": datetime.now(timezone.utc).isoformat()
+    }
+
+
 # ============== CLEANER & TASK API ENDPOINTS ==============
 
 class PayPalOrderRequest(BaseModel):
