@@ -1,7 +1,7 @@
 # Heartbeat Task List
 # Check these periodically (every 30 min or so)
 
-## Phase 20: Checkout & Rechnungen (Status: IN BEARBEITUNG)
+## Phase 20: Checkout & Rechnungen (Status: 100% COMPLETE ✅)
 
 **Aktueller Status:**
 - Phase 19 A/B Testing UI abgeschlossen ✅
@@ -10,9 +10,10 @@
 - Phase 20: Apple Pay / Google Pay Integration Backend API abgeschlossen ✅
 - Phase 20: E-Mail Rechnungsversand API abgeschlossen ✅
 - Phase 20: Checkout-Seite für Gäste (frontend) abgeschlossen ✅
-- TODO_GUESTVIEW.md aktualisiert mit Phase 20 Features
+- Phase 21: Rechnungsdetails im Dashboard starten
+- TODO_GUESTVIEW.md aktualisiert mit Phase 21 Features
 
-**Phase 20 Features (Fortschritt):**
+**Phase 20 Features (100% Complete):**
 - PayPal Backend API: create-order, capture-order ✅
 - PayPal Button Component: PayPalButton.jsx ✅
 - Checkout Page: CheckoutPage.jsx ✅
@@ -37,6 +38,11 @@
 **Changelog:**
 - PDF Rechnung mit base64-HTML-Integration für Druck
 - Download-Endpoint `/api/bookings/{id}/invoice/download`
+
+## Phase 21: Dashboard Erweiterungen (Status: IN BEARBEITUNG)
+- Rechnungsdetails im Dashboard - in Planung
+- Nutzerverwaltung - in Planung
+- Live-Feed Buchungen - in Planung
 
 ## Weekly Checks (rotate through)
 - [x] Git Status: Changes pushen? ✅
