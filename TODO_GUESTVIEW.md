@@ -167,6 +167,16 @@ Alle 18 Phasen erfolgreich implementiert:
 - Key-Safe Info
 - Kalender Export (.ics)
 - Dashboard UI
+
+### Nach MVP - Next Steps (optional)
+
+- [ ] Host Dashboard Integration (Sidebar/Navigation)
+- [ ] Full CSV Export mit Daten
+- [ ] Host-specific analytics charts
+- [ ] Auto-focus API (funktioniert noch nicht)
+- [ ] Backend Build Test
+- [ ] Frontend Build Test
+- [ ] Nightly lock Script
 - [ ] KI-Inhalts-Generator für Szenen (UI fertig, API fehlt)
 
 ---
