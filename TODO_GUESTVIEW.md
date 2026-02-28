@@ -177,6 +177,11 @@ Alle 18 Phasen erfolgreich implementiert:
 - [ ] Backend Build Test
 - [ ] Frontend Build Test
 - [ ] Nightly lock Script
+
+### Nightly Lock Script
+- Script: `./nightly-lock.sh`
+- Ausführungszeit: alle 30 Minuten zwischen 22:30 - 04:00
+- Zweck: Verhindert überlappende Ausführungen
 - [ ] KI-Inhalts-Generator für Szenen (UI fertig, API fehlt)
 
 ---
