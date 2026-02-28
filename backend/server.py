@@ -2309,6 +2309,17 @@ END:VEVENT
 from fastapi.responses import Response, StreamingResponse
 import io
 import csv
+from pydantic import BaseModel
+from typing import Optional, List
+
+class PropertyStatsResponse(BaseModel):
+    property_id: str
+    property_name: str
+    total_bookings: int
+    total_revenue: float
+    total_guests: int
+    avg_rating: Optional[float]
+    last_booking: Optional[str]
 
 @api_router.get("/stats/host/{host_id}", response_model=List[PropertyStatsResponse], dependencies=[Depends(get_current_user)])
 def get_host_stats(host_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
