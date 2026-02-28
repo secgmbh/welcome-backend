@@ -197,8 +197,7 @@ Alle 18 Phasen erfolgreich implementiert:
 - Demo-Anmeldung Datenbank-Fix: Alembic Migration 75d1541dc08a ✅
 - Phase 19: A/B Testing UI abgeschlossen ✅
 - Phase 20: Checkout & Rechnungen 100% abgeschlossen ✅
-- Phase 21: Rechnungsdetails & Nutzerverwaltung Backend + Frontend + Live-Feed ✅
-- Phase 21: Nutzerverwaltung Frontend UI abgeschlossen ✅
+- Phase 21: Rechnungsdetails & Nutzerverwaltung Backend + Frontend + Live-Feed + Auto-focus ✅
 
 ---
 
@@ -207,8 +206,8 @@ Alle 18 Phasen erfolgreich implementiert:
 ### Nutzerverwaltung & Admin
 - [x] Nutzerverwaltung Backend API (GET /admin/users) ✅
 - [x] Live-Feed Buchungen Backend API (GET /admin/bookings/feed) ✅
-- [ ] Nutzerverwaltung Frontend UI (Admin-Dashboard)
-- [ ] Auto-focus API Fix
+- [x] Nutzerverwaltung Frontend UI (Admin-Dashboard) ✅
+- [x] Auto-focus API Fix ✅
 
 ### Phase 22: Monitoring & Admin
 - [ ] Nutzerverwaltung (alle registrierte Firmen)
