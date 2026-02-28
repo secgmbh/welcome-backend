@@ -236,6 +236,10 @@ Alle 18 Phasen erfolgreich implementiert:
 
 ---
 
+## 🚧 Phase 22: Admin Features (nächste Phase)
+
+---
+
 ## 🚧 Backend Anmerkungen
 
 ### Backend TODOs (niedrige Priorität)
