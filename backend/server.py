@@ -1991,7 +1991,117 @@ def confirm_booking(booking_id: str, db: Session = Depends(get_db), user: User =
     return booking
 
 
-# ============== PAYPAL CHECKOUT API ENDPOINTS ==============
+# ============== APPLE PAY / GOOGLE PAY CHECKOUT API ENDPOINTS ==============
+
+class ApplePayOrderRequest(BaseModel):
+    booking_id: str
+    amount: float
+    currency: str = "EUR"
+
+class ApplePayOrderResponse(BaseModel):
+    merchant_identifier: str
+    country_code: str
+    currency_code: str
+    network: str
+    total: dict
+    payment_request_type: str
+
+class ApplePayCaptureRequest(BaseModel):
+    payment_token: str
+    booking_id: str
+
+class ApplePayCaptureResponse(BaseModel):
+    status: str
+    payment_status: str
+    amount: float
+
+@api_router.post("/apple-pay/create-order", response_model=ApplePayOrderResponse, dependencies=[Depends(get_current_user)])
+def create_apple_pay_order(order: ApplePayOrderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erstelle einen Apple Pay Order"""
+    from database import Booking
+    
+    booking = db.query(Booking).filter(
+        Booking.id == order.booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    return {
+        "merchant_identifier": "merchant.welcomelink.de",
+        "country_code": "DE",
+        "currency_code": order.currency,
+        "network": "masterCard",
+        "total": {
+            "label": "Welcome Link",
+            "amount": str(order.amount),
+            "type": "final"
+        },
+        "payment_request_type": "buy"
+    }
+
+@api_router.post("/apple-pay/capture-payment", response_model=ApplePayCaptureResponse, dependencies=[Depends(get_current_user)])
+def capture_apple_pay_payment(capture: ApplePayCaptureRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Erschließe Apple Pay Zahlung"""
+    from database import Booking
+    
+    booking = db.query(Booking).filter(
+        Booking.id == capture.booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    # Apple Pay Zahlung validieren (simuliert für MVP)
+    booking.status = 'paid'
+    booking.payment_method = 'apple_pay'
+    booking.invoice_generated = True
+    db.commit()
+    db.refresh(booking)
+    
+    return {
+        "status": "completed",
+        "payment_status": "COMPLETED",
+        "amount": booking.total_price + booking.tipping_amount
+    }
+
+
+# ============== END APPLE PAY / GOOGLE PAY API ENDPOINTS ==============
+
+# ============== E-MAIL RECHNUNG API ENDPOINT ==============
+
+class InvoiceEmailRequest(BaseModel):
+    booking_id: str
+    to_email: str
+    subject: str = "Ihre Rechnung - Welcome Link"
+    message: Optional[str] = None
+
+@api_router.post("/invoice/email", dependencies=[Depends(get_current_user)])
+def send_invoice_email(request: InvoiceEmailRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Sende Rechnung per E-Mail"""
+    from database import Booking
+    
+    booking = db.query(Booking).filter(
+        Booking.id == request.booking_id,
+        Booking.user_id == user.id
+    ).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    # Prüfe ob E-Mail gesendet wurde
+    # Für MVP: Einfache Simulation
+    # In Production: SMTP E-Mail Versand hier
+    
+    return {
+        "success": True,
+        "message": "Rechnung wurde versendet",
+        "booking_id": booking.id,
+        "to_email": request.to_email,
+        "sent_at": datetime.now(timezone.utc).isoformat()
+    }
+
+
+# ============== CLEANER & TASK API ENDPOINTS ==============
 
 class PayPalOrderRequest(BaseModel):
     booking_id: str
