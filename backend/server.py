@@ -2097,6 +2097,77 @@ def get_global_stats(db: Session = Depends(get_db), user: User = Depends(get_cur
 
 # ============== END GLOBAL STATS & MONITORING API ENDPOINTS ==============
 
+# ============== BOOKING STATS WITH FILTER API ENDPOINTS ==============
+
+class BookingStatsFilter(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    status: Optional[str] = None
+    property_id: Optional[str] = None
+
+class FilteredBookingStats(BaseModel):
+    total_bookings: int
+    confirmed_bookings: int
+    completed_bookings: int
+    cancelled_bookings: int
+    total_revenue: float
+    avg_booking_value: float
+    period_start: str
+    period_end: str
+    filters_applied: Dict[str, str]
+
+@api_router.post("/api/stats/booking/filter", response_model=FilteredBookingStats, dependencies=[Depends(get_current_user)])
+def get_filtered_booking_stats(
+    filter_data: BookingStatsFilter,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Hole gefilterte Buchungs-Statistiken"""
+    query = db.query(Booking).filter(Booking.user_id == user.id)
+    
+    # Filter anwenden
+    filters_applied = {}
+    
+    if filter_data.start_date:
+        query = query.filter(Booking.created_at >= filter_data.start_date)
+        filters_applied['start_date'] = filter_data.start_date
+    
+    if filter_data.end_date:
+        query = query.filter(Booking.created_at <= filter_data.end_date)
+        filters_applied['end_date'] = filter_data.end_date
+    
+    if filter_data.status:
+        query = query.filter(Booking.status == filter_data.status)
+        filters_applied['status'] = filter_data.status
+    
+    if filter_data.property_id:
+        query = query.filter(Booking.property_id == filter_data.property_id)
+        filters_applied['property_id'] = filter_data.property_id
+    
+    bookings = query.all()
+    
+    total = len(bookings)
+    confirmed = len([b for b in bookings if b.status == 'confirmed'])
+    completed = len([b for b in bookings if b.status == 'completed'])
+    cancelled = len([b for b in bookings if b.status == 'cancelled'])
+    
+    total_revenue = sum(float(b.total_price or 0) for b in bookings)
+    avg_booking_value = total_revenue / confirmed if confirmed > 0 else 0
+    
+    return FilteredBookingStats(
+        total_bookings=total,
+        confirmed_bookings=confirmed,
+        completed_bookings=completed,
+        cancelled_bookings=cancelled,
+        total_revenue=round(total_revenue, 2),
+        avg_booking_value=round(avg_booking_value, 2),
+        period_start=filter_data.start_date or "all_time",
+        period_end=filter_data.end_date or "now",
+        filters_applied=filters_applied
+    )
+
+# ============== END BOOKING STATS WITH FILTER API ENDPOINTS ==============
+
 # ============== BRANDING & AI API ENDPOINTS ==============
 from pydantic import BaseModel
 from typing import List, Optional, Dict
