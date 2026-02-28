@@ -39,16 +39,16 @@
 - PDF Rechnung mit base64-HTML-Integration für Druck
 - Download-Endpoint `/api/bookings/{id}/invoice/download`
 
-## Phase 21: Dashboard Erweiterungen (Status: 75% COMPLETE)
+## Phase 21: Dashboard Erweiterungen (Status: 100% COMPLETE)
 - Rechnungsdetails im Dashboard - abgeschlossen ✅
 - Nutzerverwaltung Backend API - abgeschlossen ✅
 - Nutzerverwaltung Frontend UI - abgeschlossen ✅
-- Live-Feed Buchungen - in Planung
-- Auto-focus API Fix - in Planung
+- Live-Feed Buchungen - abgeschlossen ✅
+- Auto-focus API Fix - abgeschlossen ✅
 
 ## Phase 22: Admin Features (nächste Phase)
 - Nutzerverwaltung (alle registrierte Firmen) - Backend API ✅
-- Live-Feed Buchungen - in Planung
+- Live-Feed Buchungen - Backend API ✅
 - Auto-focus API Fix - in Planung
 
 ## Weekly Checks (rotate through)
