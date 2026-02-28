@@ -2180,6 +2180,56 @@ def get_booking_feed(limit: int = 20, db: Session = Depends(get_db), user: User 
 
 # ============== END LIVE FEED BUCHUNGEN API ENDPOINTS ==============
 
+# ============== CSV EXPORT API ENDPOINTS ==============
+
+from io import StringIO
+import csv
+
+@api_router.get("/api/export/bookings/csv", dependencies=[Depends(get_current_user)])
+def export_bookings_csv(user: User = Depends(get_current_user)):
+    """Exportiere Buchungen als CSV"""
+    db = SessionLocal()
+    try:
+        bookings = db.query(Booking).filter(Booking.user_id == user.id).all()
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow(['ID', 'Property', 'Gast', 'Check-in', 'Check-out', 'Preis', 'Status', 'Erstellt'])
+        
+        # Daten
+        for booking in bookings:
+            property_name = "Unbekannt"
+            if booking.property_id:
+                prop = db.query(Property).filter(Property.id == booking.property_id).first()
+                if prop:
+                    property_name = prop.name
+            
+            writer.writerow([
+                booking.id,
+                property_name,
+                booking.guest_name or "",
+                booking.check_in.isoformat() if booking.check_in else "",
+                booking.check_out.isoformat() if booking.check_out else "",
+                booking.total_price or 0,
+                booking.status or "new",
+                booking.created_at.isoformat() if booking.created_at else ""
+            ])
+        
+        output.seek(0)
+        content = output.read()
+        
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=bookings_export.csv"}
+        )
+    finally:
+        db.close()
+
+# ============== END CSV EXPORT API ENDPOINTS ==============
+
 # ============== AUTO-FOCUS API ENDPOINTS ==============
 
 class AutoFocusConfig(BaseModel):
