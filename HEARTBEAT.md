@@ -13,6 +13,7 @@
 - Phase 21: Rechnungsdetails im Dashboard + Nutzerverwaltung Backend + Frontend + Live-Feed + AutoFocus ✅
 - Phase 22: Live-Feed UI abgeschlossen ✅
 - Phase 23: Analytics & Reports 100% Complete ✅
+- Phase 24: Export & Reports Start
 - TODO_GUESTVIEW.md aktualisiert mit Phase 22 Features
 
 **Phase 20 Features (100% Complete):**
@@ -59,7 +60,10 @@
 - Analytics API - abgeschlossen ✅
 - Analytics UI - abgeschlossen ✅
 
-## Weekly Checks (rotate through)
+## Phase 24: Export & Reports (Status: IN BEARBEITUNG)
+- CSV Export Funktionen - in Planung
+- PDF Berichte - in Planung
+- Umsatzberichte - in Planung
 - [x] Git Status: Changes pushen? ✅
 - [ ] TODOs prüfen und aufräumen
 - [ ] Logs checken für Fehler
