@@ -10,7 +10,8 @@
 - Phase 20: Apple Pay / Google Pay Integration Backend API abgeschlossen ✅
 - Phase 20: E-Mail Rechnungsversand API abgeschlossen ✅
 - Phase 20: Checkout-Seite für Gäste (frontend) abgeschlossen ✅
-- Phase 21: Rechnungsdetails im Dashboard + Nutzerverwaltung Backend + Frontend + Live-Feed + AutoFocus + TODO_GUESTVIEW.md ✅
+- Phase 21: Rechnungsdetails im Dashboard + Nutzerverwaltung Backend + Frontend + Live-Feed + AutoFocus ✅
+- Phase 22: Live-Feed UI abgeschlossen ✅
 - TODO_GUESTVIEW.md aktualisiert mit Phase 21 Features
 
 **Phase 20 Features (100% Complete):**
@@ -46,10 +47,11 @@
 - Live-Feed Buchungen - abgeschlossen ✅
 - AutoFocus API Fix - abgeschlossen ✅
 
-## Phase 22: Admin Features (nächste Phase)
+## Phase 22: Admin Features (Status: IN BEARBEITUNG)
 - Nutzerverwaltung (alle registrierte Firmen) - Backend API ✅
 - Live-Feed Buchungen - Backend API ✅
 - AutoFocus API Fix - abgeschlossen ✅
+- Live-Feed UI - abgeschlossen ✅
 
 ## Weekly Checks (rotate through)
 - [x] Git Status: Changes pushen? ✅
