@@ -248,12 +248,21 @@ Alle 18 Phasen erfolgreich implementiert:
 
 ---
 
-### Phase 25: Dashboard Features 🚀 START
+### Phase 25: Dashboard Features ✅ COMPLETE
 - [x] Filter API (POST /api/stats/booking/filter) ✅
 - [x] Filter UI in AnalyticsPage ✅
 - [x] AnalyticsPage in Dashboard integriert ✅
-- [ ] Export UI im Dashboard
-- [ ] Dashboard mit weiteren Features
+- [x] Export UI im Dashboard ✅
+- [x] Dashboard mit weiteren Features ✅
+
+---
+
+## 🚧 Phase 26: Finishing & Polish (50% COMPLETE)
+
+- [x] Auto-focus UI Fix - Backend API wiederhergestellt ✅
+- [x] Export UI im Dashboard ✅
+- [ ] Final Testing
+- [ ] Documentation
 
 ---
 
