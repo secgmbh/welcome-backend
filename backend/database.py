@@ -229,8 +229,79 @@ def init_db():
         with engine.connect() as conn:
             print(f"[DB] ✓ Connection erfolgreich")
         
-        # Erstelle fehlende Tabellen (Fallback für neue Installationen)
-        # Schema-Änderungen werden über Alembic Migrations verwaltet
+        # WICHTIG: Fehlende Spalten VOR create_all() hinzufügen (für bestehende Datenbanken)
+        # Dies muss VOR create_all() passieren, damit neue Spalten verfügbar sind
+        print(f"[DB] Prüfe und füge fehlende Spalten hinzu...")
+        try:
+            with engine.connect() as conn:
+                # Prüfe welche Tabellen existieren
+                result = conn.execute(text("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema = 'public'
+                """))
+                existing_tables = [row[0] for row in result.fetchall()]
+                print(f"[DB] Existierende Tabellen: {existing_tables}")
+                
+                # Wenn users Tabelle existiert, füge fehlende Spalten hinzu
+                if 'users' in existing_tables:
+                    result = conn.execute(text("""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = 'users'
+                    """))
+                    existing_columns = [row[0] for row in result.fetchall()]
+                    print(f"[DB] Existierende users Spalten: {existing_columns}")
+                    
+                    # Fehlende Spalten hinzufügen
+                    columns_to_add = [
+                        ('is_demo', 'BOOLEAN DEFAULT FALSE'),
+                        ('is_email_verified', 'BOOLEAN DEFAULT FALSE'),
+                        ('email_verification_token', 'VARCHAR(64)'),
+                        ('email_verification_token_expires', 'TIMESTAMP'),
+                        ('brand_color', 'VARCHAR(7)'),
+                        ('logo_url', 'VARCHAR(500)'),
+                        ('invoice_name', 'VARCHAR(200)'),
+                        ('invoice_address', 'VARCHAR(500)'),
+                        ('invoice_zip', 'VARCHAR(20)'),
+                        ('invoice_city', 'VARCHAR(100)'),
+                        ('invoice_country', 'VARCHAR(100)'),
+                        ('invoice_vat_id', 'VARCHAR(50)'),
+                        ('keysafe_location', 'VARCHAR(500)'),
+                        ('keysafe_code', 'VARCHAR(50)'),
+                        ('keysafe_instructions', 'TEXT'),
+                    ]
+                    
+                    added = []
+                    for col_name, col_type in columns_to_add:
+                        if col_name not in existing_columns:
+                            try:
+                                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                                conn.commit()
+                                added.append(col_name)
+                                print(f"[DB] ✓ Added column to users: {col_name}")
+                            except Exception as e:
+                                print(f"[DB] ✗ Failed to add {col_name}: {e}")
+                    
+                    if added:
+                        print(f"[DB] ✓ Added {len(added)} missing columns to users table")
+                
+                # Wenn properties Tabelle existiert, prüfe user_id Typ
+                if 'properties' in existing_tables:
+                    result = conn.execute(text("""
+                        SELECT data_type 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'properties' AND column_name = 'user_id'
+                    """))
+                    row = result.fetchone()
+                    if row and 'int' in str(row[0]).lower():
+                        print(f"[DB] ⚠️  properties.user_id ist Integer - ändere zu VARCHAR(36)...")
+                        conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
+                        conn.commit()
+                        print(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
+                        
+        except Exception as e:
+            print(f"[DB] ⚠️  Konnte Migrationen nicht ausführen: {e}")
+        
+        # Erstelle fehlende Tabellen (für neue Installationen)
         print(f"[DB] Erstelle fehlende Tables (falls nötig)...")
         Base.metadata.create_all(bind=engine)
         print(f"[DB] ✓ Tables erstellt/geprüft")
@@ -239,65 +310,6 @@ def init_db():
         insp = inspect(engine)
         tables = insp.get_table_names()
         print(f"[DB] ✓ Existierende Tabellen: {tables}")
-        
-        # Prüfe ob properties.user_id VARCHAR ist (für UUIDs)
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT data_type 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'user_id'
-                """))
-                row = result.fetchone()
-                if row and 'int' in str(row[0]).lower():
-                    print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - ändere Spalte zu VARCHAR(36)...")
-                    conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
-                    conn.commit()
-                    print(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte user_id Spalte nicht prüfen/ändern: {e}")
-        
-        # Prüfe und füge fehlende Spalten in users table hinzu (für Demo-Anmeldung fix)
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT column_name FROM information_schema.columns 
-                    WHERE table_name = 'users'
-                """))
-                existing = [row[0] for row in result.fetchall()]
-                
-                # Fehlende Spalten hinzufügen
-                columns_to_add = [
-                    ('is_demo', 'BOOLEAN DEFAULT FALSE'),
-                    ('is_email_verified', 'BOOLEAN DEFAULT FALSE'),
-                    ('brand_color', 'VARCHAR(7)'),
-                    ('logo_url', 'VARCHAR(500)'),
-                    ('invoice_name', 'VARCHAR(200)'),
-                    ('invoice_address', 'VARCHAR(500)'),
-                    ('invoice_zip', 'VARCHAR(20)'),
-                    ('invoice_city', 'VARCHAR(100)'),
-                    ('invoice_country', 'VARCHAR(100)'),
-                    ('invoice_vat_id', 'VARCHAR(50)'),
-                    ('keysafe_location', 'VARCHAR(500)'),
-                    ('keysafe_code', 'VARCHAR(50)'),
-                    ('keysafe_instructions', 'TEXT'),
-                ]
-                
-                added = []
-                for col_name, col_type in columns_to_add:
-                    if col_name not in existing:
-                        try:
-                            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
-                            conn.commit()
-                            added.append(col_name)
-                            print(f"[DB] ✓ Added column: {col_name}")
-                        except Exception as e:
-                            print(f"[DB] ✗ Failed to add {col_name}: {e}")
-                
-                if added:
-                    print(f"[DB] ✓ Added {len(added)} missing columns to users table")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte fehlende Spalten nicht prüfen/ändern: {e}")
         
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
