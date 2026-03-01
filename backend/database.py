@@ -247,8 +247,9 @@ def init_db():
                     SELECT data_type 
                     FROM information_schema.columns 
                     WHERE table_name = 'properties' AND column_name = 'user_id'
-                """)).fetchone()
-                if result and 'int' in result[0].lower():
+                """))
+                row = result.fetchone()
+                if row and 'int' in str(row[0]).lower():
                     print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - ändere Spalte zu VARCHAR(36)...")
                     conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
                     conn.commit()
@@ -285,6 +286,7 @@ def init_db():
                     if col_name not in existing:
                         try:
                             conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                            conn.commit()
                             added.append(col_name)
                             print(f"[DB] ✓ Added column: {col_name}")
                         except Exception as e:
