@@ -687,26 +687,33 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
 
 
 @api_router.get("/debug-db-schema")
-def debug_db_schema(db: Session = Depends(get_db)):
+def debug_db_schema():
     """Debug Endpoint für DB Schema"""
+    from sqlalchemy import text
     try:
-        # Prüfe user_id Type
-        result = db.execute("SELECT data_type FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'user_id'").fetchone()
-        user_id_type = result[0] if result else "N/A"
-        
-        # Prüfe description Spalte
-        result = db.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'").fetchone()
-        has_description = result is not None
-        
-        # Prüfe Tabellen
-        result = db.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'").fetchall()
-        tables = [r[0] for r in result]
-        
-        return {
-            "tables": tables,
-            "user_id_type": user_id_type,
-            "has_description": has_description
-        }
+        with engine.connect() as conn:
+            # Prüfe user_id Type
+            result = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'user_id'")).fetchone()
+            user_id_type = result[0] if result else "N/A"
+            
+            # Prüfe description Spalte
+            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'")).fetchone()
+            has_description = result is not None
+            
+            # Prüfe Tabellen
+            result = conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")).fetchall()
+            tables = [r[0] for r in result]
+            
+            # Prüfe Users Spalten
+            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'users' ORDER BY ordinal_position")).fetchall()
+            users_columns = [r[0] for r in result]
+            
+            return {
+                "tables": tables,
+                "users_columns": users_columns,
+                "user_id_type": user_id_type,
+                "has_description": has_description
+            }
     except Exception as e:
         return {"error": str(e)}
 
