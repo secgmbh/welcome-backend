@@ -191,67 +191,66 @@ def init_demo_user(db: Session):
     logger.info(f"Prüfe ob Demo-Benutzer existiert: {demo_email}")
     
     try:
-        existing = db.query(DBUser).filter(DBUser.email == demo_email).first()
+        # Verwende raw SQL um Schema-Probleme zu vermeiden
+        from sqlalchemy import text
+        result = db.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": demo_email})
+        existing = result.fetchone()
     except Exception as e:
         logger.error(f"❌ Fehler beim Abfragen Demo-Benutzer: {str(e)}")
         raise
     
     if not existing:
-        # Erstelle Demo-User nur mit Basis-Spalten (die garantiert existieren)
-        demo_user = DBUser(
-            id=str(uuid.uuid4()),
-            email=demo_email,
-            password_hash=hash_password("Demo123!"),
-            name="Demo Benutzer",
-        )
-        db.add(demo_user)
-        db.commit()
-        db.refresh(demo_user)
-        logger.info(f"✓ Demo-Benutzer erstellt: {demo_email}")
-        
-        # Erstelle Demo-Properties
-        demo_properties = [
-            DBProperty(
-                id=str(uuid.uuid4()),
-                user_id=demo_user.id,
-                name="Boutique Hotel Alpenblick",
-                description="Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.",
-                address="Zugspitzstraße 42, 82467 Garmisch-Partenkirchen",
-                created_at=datetime.now(timezone.utc)
-            ),
-            DBProperty(
-                id=str(uuid.uuid4()),
-                user_id=demo_user.id,
-                name="Ferienwohnung Seeblick",
-                description="Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.",
-                address="Seepromenade 15, 88131 Lindau",
-                created_at=datetime.now(timezone.utc)
-            ),
-            DBProperty(
-                id=str(uuid.uuid4()),
-                user_id=demo_user.id,
-                name="Stadtapartment München City",
-                description="Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.",
-                address="Maximilianstraße 28, 80539 München",
-                created_at=datetime.now(timezone.utc)
-            )
-        ]
-        
-        for prop in demo_properties:
-            db.add(prop)
-        
-        # Erstelle festen GuestView-Token für Demo
-        demo_guestview_token = "demo-guest-view-token"
-        guest_view = DBGuestView(
-            id=str(uuid.uuid4()),
-            user_id=demo_user.id,
-            token=demo_guestview_token,
-            created_at=datetime.now(timezone.utc)
-        )
-        db.add(guest_view)
-        
-        db.commit()
-        logger.info(f"✓ Demo-Benutzer, Properties und GuestView-Token erstellt: /guestview/{demo_guestview_token}")
+        try:
+            # Erstelle Demo-User mit raw SQL (nur Basis-Spalten)
+            demo_id = str(uuid.uuid4())
+            db.execute(text("""
+                INSERT INTO users (id, email, password_hash, name, created_at)
+                VALUES (:id, :email, :password_hash, :name, NOW())
+            """), {
+                "id": demo_id,
+                "email": demo_email,
+                "password_hash": hash_password("Demo123!"),
+                "name": "Demo Benutzer"
+            })
+            db.commit()
+            logger.info(f"✓ Demo-Benutzer erstellt: {demo_email}")
+            
+            # Erstelle Demo-Properties mit raw SQL
+            properties = [
+                ("Boutique Hotel Alpenblick", "Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.", "Zugspitzstraße 42, 82467 Garmisch-Partenkirchen"),
+                ("Ferienwohnung Seeblick", "Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.", "Seepromenade 15, 88131 Lindau"),
+                ("Stadtapartment München City", "Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.", "Maximilianstraße 28, 80539 München"),
+            ]
+            
+            for name, desc, addr in properties:
+                db.execute(text("""
+                    INSERT INTO properties (id, user_id, name, description, address, created_at)
+                    VALUES (:id, :user_id, :name, :description, :address, NOW())
+                """), {
+                    "id": str(uuid.uuid4()),
+                    "user_id": demo_id,
+                    "name": name,
+                    "description": desc,
+                    "address": addr
+                })
+            
+            # Erstelle GuestView-Token
+            db.execute(text("""
+                INSERT INTO guest_views (id, user_id, token, created_at)
+                VALUES (:id, :user_id, :token, NOW())
+            """), {
+                "id": str(uuid.uuid4()),
+                "user_id": demo_id,
+                "token": "demo-guest-view-token"
+            })
+            
+            db.commit()
+            logger.info(f"✓ Demo-Benutzer, Properties und GuestView-Token erstellt: /guestview/demo-guest-view-token")
+            
+        except Exception as e:
+            logger.error(f"❌ Fehler beim Erstellen Demo-Benutzer: {str(e)}")
+            db.rollback()
+            raise
 
 # ============ AUTH ROUTES ============
 
