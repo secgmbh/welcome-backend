@@ -84,10 +84,10 @@
 - Keyboard Shortcuts - abgeschlossen ✅
 - Branding Engine UI - abgeschlossen ✅
 
-## Phase 27: Quality Features (Status: 10% COMPLETE)
+## Phase 27: Quality Features (Status: 100% COMPLETE)
 - Branding Engine UI - abgeschlossen ✅
-- Smart Rules - in Planung
-- Kalender-Sync (.ics Export) - in Planung
+- Smart Rules UI - abgeschlossen ✅
+- Kalender-Sync (.ics Export) - abgeschlossen ✅
 - Nightly-Lock: Backend TODOs geprüft
 
 ## Weekly Checks (rotate through)
