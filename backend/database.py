@@ -268,6 +268,8 @@ def init_db():
                 
                 # Fehlende Spalten hinzufügen
                 columns_to_add = [
+                    ('is_demo', 'BOOLEAN DEFAULT FALSE'),
+                    ('is_email_verified', 'BOOLEAN DEFAULT FALSE'),
                     ('brand_color', 'VARCHAR(7)'),
                     ('logo_url', 'VARCHAR(500)'),
                     ('invoice_name', 'VARCHAR(200)'),
