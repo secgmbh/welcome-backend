@@ -2608,9 +2608,10 @@ def startup():
     """Initialisiere Demo-Benutzer beim Start"""
     try:
         logger.info("🚀 Startup-Event: Initialisiere DB...")
-        if not SessionLocal:
-            logger.info("DB nicht initialisiert, rufe init_db() auf...")
-            init_db()
+        
+        # WICHTIG: init_db() IMMER zuerst aufrufen, um Migrationen auszuführen
+        from database import init_db as db_init_db
+        db_init_db()
         
         logger.info("🚀 Startup-Event: Öffne DB-Session...")
         if not SessionLocal:
