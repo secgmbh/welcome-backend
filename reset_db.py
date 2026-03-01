@@ -59,6 +59,47 @@ def reset_database():
         tables = insp.get_table_names()
         print(f"\n✓ Erstellte Tabellen: {tables}")
         
+        # Falls columns fehlen (nach Schema-Updates), füge sie hinzu
+        if 'users' in tables:
+            print("[4b/4] Prüfe fehlende Spalten in users table...")
+            with engine.begin() as conn:
+                # Prüfe existierende Spalten
+                result = conn.execute(text("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name = 'users'
+                """))
+                existing = [row[0] for row in result.fetchall()]
+                
+                # Fehlende Spalten hinzufügen
+                columns_to_add = [
+                    ('brand_color', 'VARCHAR(7)'),
+                    ('logo_url', 'VARCHAR(500)'),
+                    ('invoice_name', 'VARCHAR(200)'),
+                    ('invoice_address', 'VARCHAR(500)'),
+                    ('invoice_zip', 'VARCHAR(20)'),
+                    ('invoice_city', 'VARCHAR(100)'),
+                    ('invoice_country', 'VARCHAR(100)'),
+                    ('invoice_vat_id', 'VARCHAR(50)'),
+                    ('keysafe_location', 'VARCHAR(500)'),
+                    ('keysafe_code', 'VARCHAR(50)'),
+                    ('keysafe_instructions', 'TEXT'),
+                ]
+                
+                added = []
+                for col_name, col_type in columns_to_add:
+                    if col_name not in existing:
+                        try:
+                            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                            added.append(col_name)
+                            print(f"      ✓ Added column: {col_name}")
+                        except Exception as e:
+                            print(f"      ✗ Failed to add {col_name}: {e}")
+                
+                if added:
+                    print(f"      ✓ Added {len(added)} missing columns")
+                else:
+                    print("      ℹ️  All columns present")
+        
         print("=" * 60)
         print("DATABASE RESET SUCCESSFUL")
         print("=" * 60)
