@@ -2603,6 +2603,75 @@ def submit_feedback(data: FeedbackRequest):
 
 # ============== END FEEDBACK API ENDPOINTS ==============
 
+# ============== CALENDAR EXPORT API ENDPOINTS ==============
+
+@api_router.get("/bookings/calendar.ics")
+def export_calendar_ics(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Exportiere alle Buchungen als iCal (.ics) Datei"""
+    from datetime import datetime, timedelta
+    
+    # Hole alle Buchungen des Users
+    bookings = db.query(DBBooking).join(DBProperty).filter(
+        DBProperty.user_id == user.id
+    ).all()
+    
+    if not bookings:
+        raise HTTPException(status_code=404, detail="Keine Buchungen gefunden")
+    
+    # iCal Header
+    ics_content = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Welcome Link//Booking Calendar//DE",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "X-WR-CALNAME:Welcome Link Buchungen",
+        "X-WR-TIMEZONE:Europe/Berlin",
+    ]
+    
+    # Füge jedes Booking als Event hinzu
+    for booking in bookings:
+        # Generate UID
+        event_uid = f"booking-{booking.id}@welcome-link.de"
+        
+        # Parse dates
+        check_in = booking.check_in if isinstance(booking.check_in, datetime) else datetime.strptime(str(booking.check_in), "%Y-%m-%d")
+        check_out = booking.check_out if isinstance(booking.check_out, datetime) else datetime.strptime(str(booking.check_out), "%Y-%m-%d")
+        
+        # Format dates for iCal (YYYYMMDD)
+        dtstart = check_in.strftime("%Y%m%d")
+        dtend = check_out.strftime("%Y%m%d")
+        dtstamp = datetime.now().strftime("%Y%m%dT%H%M%SZ")
+        
+        # Add event
+        ics_content.extend([
+            "BEGIN:VEVENT",
+            f"UID:{event_uid}",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;VALUE=DATE:{dtstart}",
+            f"DTEND;VALUE=DATE:{dtend}",
+            f"SUMMARY:{booking.guest_name}",
+            f"DESCRIPTION:Booking ID: {booking.id}\\nProperty: {booking.property.name if booking.property else 'N/A'}\\nEmail: {booking.guest_email or 'N/A'}",
+            f"LOCATION:{booking.property.address if booking.property and booking.property.address else ''}",
+            "STATUS:CONFIRMED",
+            "END:VEVENT",
+        ])
+    
+    # iCal Footer
+    ics_content.append("END:VCALENDAR")
+    
+    # Return as .ics file
+    from fastapi.responses import Response
+    return Response(
+        content="\r\n".join(ics_content),
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": "attachment; filename=bookings.ics"
+        }
+    )
+
+# ============== END CALENDAR EXPORT API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
