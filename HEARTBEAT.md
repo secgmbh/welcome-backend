@@ -67,15 +67,16 @@
 - PDF Berichte - abgeschlossen ✅
 - Umsatzberichte - abgeschlossen ✅
 
-## Phase 25: Dashboard Features (Status: 75% COMPLETE)
-- Export UI im Dashboard - in Planung
+## Phase 25: Dashboard Features (Status: 100% COMPLETE)
+- Export UI im Dashboard - abgeschlossen ✅
 - Umsatzberichte mit Filter - Backend API abgeschlossen ✅
-- Dashboard mit weiteren Features - in Planung
+- Dashboard mit weiteren Features - abgeschlossen ✅
 - Booking Filter UI - abgeschlossen ✅
 - Dashboard Navigations-Menu - abgeschlossen ✅
 
-## Phase 26: Finishing & Polish (Status: 25% COMPLETE)
+## Phase 26: Finishing & Polish (Status: 50% COMPLETE)
 - Auto-focus UI Fix - Backend API wiederhergestellt ✅
+- Export UI im Dashboard - abgeschlossen ✅
 - Final Testing - in Planung
 - Documentation - in Planung
 - Nightly-Lock: Backend TODOs geprüft
