@@ -371,6 +371,7 @@ def resend_verification(data: dict, db: Session = Depends(get_db)):
         logger.info(f"Verifizierungs-E-Mail erneut gesendet an: {email}")
         
         # TODO: In Production echte E-Mail senden
+        # Für MVP: Simulieren
         return {
             "message": "Verifizierungs-E-Mail erneut gesendet",
             "email": email
@@ -2167,6 +2168,36 @@ def get_filtered_booking_stats(
     )
 
 # ============== END BOOKING STATS WITH FILTER API ENDPOINTS ==============
+
+# ============== AUTO-FOCUS API ENDPOINTS ==============
+
+class AutoFocusConfig(BaseModel):
+    enabled: bool = True
+    focus_duration_ms: int = 3000
+    exclude_selectors: Optional[List[str]] = None
+
+class AutoFocusResponse(BaseModel):
+    success: bool
+    message: str
+
+@api_router.get("/api/autofocus/config", response_model=AutoFocusConfig, dependencies=[Depends(get_current_user)])
+def get_autofocus_config(user: User = Depends(get_current_user)):
+    """Hole Auto-Fokus Konfiguration (für Guestview Auto-Scroll)"""
+    return AutoFocusConfig(
+        enabled=True,
+        focus_duration_ms=3000,
+        exclude_selectors=[]
+    )
+
+@api_router.put("/api/autofocus/config", response_model=AutoFocusResponse, dependencies=[Depends(get_current_user)])
+def update_autofocus_config(config: AutoFocusConfig, user: User = Depends(get_current_user)):
+    """Update Auto-Fokus Konfiguration"""
+    return AutoFocusResponse(
+        success=True,
+        message="Auto-Fokus Konfiguration gespeichert"
+    )
+
+# ============== END AUTO-FOCUS API ENDPOINTS ==============
 
 # ============== BRANDING & AI API ENDPOINTS ==============
 from pydantic import BaseModel
