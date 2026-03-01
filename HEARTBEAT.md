@@ -15,7 +15,7 @@
 - Phase 23: Analytics & Reports 100% Complete ✅
 - Phase 24: Export & Reports 100% Complete ✅
 - Phase 25: Filter API + UI + Dashboard Integration ✅
-- Phase 26: Finishing & Polish Start
+- Phase 26: AutoFocus API restored + TODOs geprüft ✅
 - TODO_GUESTVIEW.md aktualisiert mit Phase 26 Features
 
 **Phase 20 Features (100% Complete):**
@@ -74,10 +74,11 @@
 - Booking Filter UI - abgeschlossen ✅
 - Dashboard Navigations-Menu - abgeschlossen ✅
 
-## Phase 26: Finishing & Polish (Status: IN BEARBEITUNG)
-- Auto-focus UI Fix - in Planung
+## Phase 26: Finishing & Polish (Status: 25% COMPLETE)
+- Auto-focus UI Fix - Backend API wiederhergestellt ✅
 - Final Testing - in Planung
 - Documentation - in Planung
+- Nightly-Lock: Backend TODOs geprüft
 
 ## Weekly Checks (rotate through)
 - [ ] Review `memory/` files and update `MEMORY.md` with insights
