@@ -2572,6 +2572,37 @@ def export_bookings_csv(db: Session = Depends(get_db), user: User = Depends(get_
 
 # ============== END HOST STATS API ENDPOINTS ==============
 
+# ============== FEEDBACK API ENDPOINTS ==============
+
+class FeedbackRequest(BaseModel):
+    rating: int
+    category: str
+    feedback: str
+    page: Optional[str] = None
+    userAgent: Optional[str] = None
+    timestamp: Optional[str] = None
+
+@api_router.post("/feedback")
+def submit_feedback(data: FeedbackRequest):
+    """User Feedback empfangen und speichern"""
+    try:
+        logger.info(f"Feedback erhalten: Rating={data.rating}, Category={data.category}")
+        
+        # In einer Production-Umgebung würde das Feedback in einer Datenbank gespeichert werden
+        # Für MVP: Loggen wir das Feedback
+        logger.info(f"Feedback Details: {data.feedback[:100]}...")
+        
+        return {
+            "message": "Feedback erfolgreich empfangen",
+            "rating": data.rating,
+            "category": data.category
+        }
+    except Exception as e:
+        logger.error(f"Fehler beim Speichern des Feedbacks: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Speichern des Feedbacks")
+
+# ============== END FEEDBACK API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
