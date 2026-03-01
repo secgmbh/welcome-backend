@@ -363,11 +363,19 @@ def resend_verification(data: dict, db: Session = Depends(get_db)):
         
         logger.info(f"Verifizierungs-E-Mail erneut gesendet an: {email}")
         
-        # TODO: In Production echte E-Mail senden
-        # Für MVP: Simulieren
+        # E-Mail-Versand (Production: SendGrid, AWS SES, etc.)
+        # Für MVP: Token in Response zurückgeben (für Testing)
+        try:
+            # In Production: Echte E-Mail senden
+            # send_verification_email(email, new_token)
+            logger.info(f"Verifizierungs-Token für {email}: {new_token}")
+        except Exception as email_error:
+            logger.warning(f"E-Mail konnte nicht gesendet werden: {email_error}")
+        
         return {
             "message": "Verifizierungs-E-Mail erneut gesendet",
-            "email": email
+            "email": email,
+            "verification_token": new_token if os.environ.get("ENVIRONMENT") == "development" else None
         }
     
     except HTTPException:
@@ -415,10 +423,21 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
 @api_router.post("/auth/magic-link")
 def request_magic_link(data: MagicLinkRequest):
     """Fordere einen Magic Link an (würde in Production E-Mail senden)"""
-    # TODO: Implementiere echten E-Mail-Versand mit SendGrid oder ähnlich
-    # Für Demo: Nur bestätigung
+    # Generiere Magic Link Token
+    magic_token = secrets.token_urlsafe(32)
+    
+    # In Production: E-Mail mit Magic Link senden
+    # magic_link = f"{FRONTEND_URL}/auth/magic?token={magic_token}"
+    # send_magic_link_email(data.email, magic_link)
+    
     logger.info(f"Magic Link angefordert für: {data.email}")
-    return {"message": "Magic Link wurde an Ihre E-Mail gesendet", "email": data.email}
+    
+    # Für Development: Token zurückgeben
+    return {
+        "message": "Magic Link wurde an Ihre E-Mail gesendet",
+        "email": data.email,
+        "magic_token": magic_token if os.environ.get("ENVIRONMENT") == "development" else None
+    }
 
 @api_router.get("/auth/me", response_model=User)
 def get_me(user: DBUser = Depends(get_current_user)):
