@@ -338,6 +338,30 @@ def init_db():
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print(f"[DB] ✓ SessionLocal initialisiert")
         
+        # Erstelle Demo-Benutzer wenn nicht vorhanden
+        try:
+            print(f"[DB] Prüfe Demo-Benutzer...")
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT id, email FROM users WHERE email = 'demo@welcome-link.de'"))
+                existing = result.fetchone()
+                
+                if not existing:
+                    import uuid
+                    from datetime import datetime
+                    demo_id = str(uuid.uuid4())
+                    # Einfacher Password Hash für Demo (in Production sollte bcrypt verwendet werden)
+                    import hashlib
+                    password_hash = hashlib.sha256("Demo123!".encode()).hexdigest()
+                    
+                    conn.execute(text("""
+                        INSERT INTO users (id, email, password_hash, name, created_at)
+                        VALUES (:id, 'demo@welcome-link.de', :hash, 'Demo Benutzer', NOW())
+                    """), {"id": demo_id, "hash": password_hash})
+                    conn.commit()
+                    print(f"[DB] ✓ Demo-Benutzer erstellt")
+        except Exception as e:
+            print(f"[DB] ⚠️  Konnte Demo-Benutzer nicht erstellen: {e}")
+        
         return engine, SessionLocal
     except Exception as e:
         print(f"[DB] ❌ ERROR: {str(e)}")
