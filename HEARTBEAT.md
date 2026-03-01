@@ -74,11 +74,11 @@
 - Booking Filter UI - abgeschlossen ✅
 - Dashboard Navigations-Menu - abgeschlossen ✅
 
-## Phase 26: Finishing & Polish (Status: 50% COMPLETE)
+## Phase 26: Finishing & Polish (Status: 75% COMPLETE)
 - Auto-focus UI Fix - Backend API wiederhergestellt ✅
 - Export UI im Dashboard - abgeschlossen ✅
-- Final Testing - in Planung
-- Documentation - in Planung
+- Final Testing - wartet auf Render Deploy
+- Documentation - abgeschlossen ✅
 - Nightly-Lock: Backend TODOs geprüft
 
 ## Weekly Checks (rotate through)
