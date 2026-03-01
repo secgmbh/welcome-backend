@@ -767,8 +767,34 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
 @api_router.post("/demo/init")
 def init_demo_user_endpoint(db: Session = Depends(get_db)):
     """Initialisiere Demo User manuell"""
-    init_demo_user(db)
-    return {"message": "Demo User initialisiert"}
+    from sqlalchemy import text
+    
+    try:
+        # Prüfe ob Demo-User existiert
+        result = db.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": "demo@welcome-link.de"})
+        existing = result.fetchone()
+        
+        if existing:
+            return {"message": "Demo User bereits vorhanden", "email": "demo@welcome-link.de"}
+        
+        # Erstelle Demo-User mit raw SQL
+        demo_id = str(uuid.uuid4())
+        db.execute(text("""
+            INSERT INTO users (id, email, password_hash, name, created_at)
+            VALUES (:id, :email, :password_hash, :name, NOW())
+        """), {
+            "id": demo_id,
+            "email": "demo@welcome-link.de",
+            "password_hash": hash_password("Demo123!"),
+            "name": "Demo Benutzer"
+        })
+        db.commit()
+        
+        return {"message": "Demo User erstellt", "email": "demo@welcome-link.de", "id": demo_id}
+        
+    except Exception as e:
+        logger.error(f"❌ Fehler beim Demo-User Init: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)}")
 
 
 @api_router.get("/guestview-qr-simple")
