@@ -692,30 +692,20 @@ def debug_db_schema():
     from sqlalchemy import text
     try:
         with engine.connect() as conn:
-            # Prüfe user_id Type
-            result = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'user_id'")).fetchone()
-            user_id_type = result[0] if result else "N/A"
-            
-            # Prüfe description Spalte
-            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'")).fetchone()
-            has_description = result is not None
-            
-            # Prüfe Tabellen
-            result = conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")).fetchall()
-            tables = [r[0] for r in result]
+            # Einfacher Test
+            conn.execute(text("SELECT 1")).fetchone()
             
             # Prüfe Users Spalten
             result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'users' ORDER BY ordinal_position")).fetchall()
             users_columns = [r[0] for r in result]
             
             return {
-                "tables": tables,
-                "users_columns": users_columns,
-                "user_id_type": user_id_type,
-                "has_description": has_description
+                "status": "ok",
+                "users_columns": users_columns
             }
     except Exception as e:
-        return {"error": str(e)}
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 @api_router.get("/guestview-public-qr-data")
