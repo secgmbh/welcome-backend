@@ -251,23 +251,16 @@ def init_db():
                     existing_columns = [row[0] for row in result.fetchall()]
                     print(f"[DB] Existierende users Spalten: {existing_columns}")
                     
-                    # BEREINIGUNG: Lösche unvollständige Spalten (z.B. 'is_' ohne vollständigen Namen)
-                    incomplete_columns = [col for col in existing_columns if col.endswith('_') or len(col) < 3]
-                    for col_name in incomplete_columns:
+                    # BEREINIGUNG: Lösche die problematische 'is_' Spalte falls vorhanden
+                    if 'is_' in existing_columns:
                         try:
-                            conn.execute(text(f"ALTER TABLE users DROP COLUMN IF EXISTS {col_name}"))
+                            conn.execute(text("ALTER TABLE users DROP COLUMN is_"))
                             conn.commit()
-                            print(f"[DB] ✓ Removed incomplete column: {col_name}")
+                            print(f"[DB] ✓ Removed problematic column: is_")
+                            existing_columns.remove('is_')
                         except Exception as e:
-                            print(f"[DB] ⚠️ Could not remove column {col_name}: {e}")
+                            print(f"[DB] ⚠️ Could not remove column is_: {e}")
                             conn.rollback()
-                    
-                    # Aktualisiere existing_columns nach Bereinigung
-                    result = conn.execute(text("""
-                        SELECT column_name FROM information_schema.columns 
-                        WHERE table_name = 'users'
-                    """))
-                    existing_columns = [row[0] for row in result.fetchall()]
                     
                     # Fehlende Spalten hinzufügen
                     columns_to_add = [
