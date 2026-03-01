@@ -197,21 +197,40 @@ def init_demo_user(db: Session):
         raise
     
     if not existing:
-        demo_user = DBUser(
-            id=str(uuid.uuid4()),
-            email=demo_email,
-            password_hash=hash_password("Demo123!"),
-            name="Demo Benutzer",
-            created_at=datetime.now(timezone.utc),
-            is_demo=True,
-            # Dummy Rechnungsdaten
-            invoice_name="Alpenblick Hospitality GmbH",
-            invoice_address="Bergstraße 12",
-            invoice_zip="82467",
-            invoice_city="Garmisch-Partenkirchen",
-            invoice_country="Deutschland",
-            invoice_vat_id="DE123456789"
-        )
+        # Basis-User-Daten (ohne optionale Spalten)
+        demo_user_data = {
+            "id": str(uuid.uuid4()),
+            "email": demo_email,
+            "password_hash": hash_password("Demo123!"),
+            "name": "Demo Benutzer",
+            "created_at": datetime.now(timezone.utc),
+            "is_demo": True,
+        }
+        
+        # Optionale Rechnungsdaten nur setzen, wenn Spalten existieren
+        try:
+            from sqlalchemy import inspect as sqla_inspect
+            from database import engine
+            if engine:
+                inspector = sqla_inspect(engine)
+                columns = [col['name'] for col in inspector.get_columns('users')]
+                
+                optional_fields = {
+                    "invoice_name": "Alpenblick Hospitality GmbH",
+                    "invoice_address": "Bergstraße 12",
+                    "invoice_zip": "82467",
+                    "invoice_city": "Garmisch-Partenkirchen",
+                    "invoice_country": "Deutschland",
+                    "invoice_vat_id": "DE123456789",
+                }
+                
+                for field, value in optional_fields.items():
+                    if field in columns:
+                        demo_user_data[field] = value
+        except Exception as e:
+            logger.warning(f"Konnte optionale Spalten nicht prüfen: {e}")
+        
+        demo_user = DBUser(**demo_user_data)
         db.add(demo_user)
         db.commit()
         
