@@ -280,12 +280,35 @@ def init_db():
                                 print(f"[DB] ✓ Added column to users: {col_name}")
                             except Exception as e:
                                 print(f"[DB] ✗ Failed to add {col_name}: {e}")
+                                conn.rollback()
                     
                     if added:
                         print(f"[DB] ✓ Added {len(added)} missing columns to users table")
                 
-                # Wenn properties Tabelle existiert, prüfe user_id Typ
+                # Wenn properties Tabelle existiert, prüfe user_id Typ und füge fehlende Spalten hinzu
                 if 'properties' in existing_tables:
+                    result = conn.execute(text("""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = 'properties'
+                    """))
+                    existing_prop_columns = [row[0] for row in result.fetchall()]
+                    
+                    # Fehlende Spalten für properties
+                    prop_columns_to_add = [
+                        ('is_active', 'BOOLEAN DEFAULT TRUE'),
+                    ]
+                    
+                    for col_name, col_type in prop_columns_to_add:
+                        if col_name not in existing_prop_columns:
+                            try:
+                                conn.execute(text(f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}"))
+                                conn.commit()
+                                print(f"[DB] ✓ Added column to properties: {col_name}")
+                            except Exception as e:
+                                print(f"[DB] ✗ Failed to add {col_name} to properties: {e}")
+                                conn.rollback()
+                    
+                    # Prüfe user_id Typ
                     result = conn.execute(text("""
                         SELECT data_type 
                         FROM information_schema.columns 
