@@ -2608,3 +2608,4 @@ def shutdown_db_client():
         logger.info("✓ Datenbankverbindung geschlossen")
     except Exception as e:
         logger.error(f"Fehler beim Shutdown: {str(e)}")
+# Deploy trigger
