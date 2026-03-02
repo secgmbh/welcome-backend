@@ -643,6 +643,13 @@ def migrate_properties_table(db: Session = Depends(get_db)):
             except Exception as e:
                 results.append(f"✗ {col_name}: {str(e)}")
         
+        # Fix: id Spalte zu VARCHAR(36) ändern (für UUIDs)
+        try:
+            db.execute(text("ALTER TABLE properties ALTER COLUMN id TYPE VARCHAR(36)"))
+            results.append("✓ id zu VARCHAR(36) geändert")
+        except Exception as e:
+            results.append(f"✗ id migration: {str(e)}")
+        
         db.commit()
         
         # Zeige aktuelles Schema
