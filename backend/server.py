@@ -56,8 +56,16 @@ if not SMTP_PASSWORD and ENVIRONMENT == 'development':
     import sys
     print(f"⚠️  WARNING: SMTP_PASSWORD ist leer! E-Mails funktionieren nicht.", file=sys.stderr)
 
-# Database connection
+# Database connection - logger wird für fix_is_column benötigt
 logger = logging.getLogger(__name__)
+
+# Fix is_ column before database initialization (für Render Production)
+try:
+    from fix_is_column import fix_is_column
+    fix_is_column()
+except Exception as e:
+    logger.warning(f"is_ column fix failed (non-critical): {e}")
+
 try:
     engine, SessionLocal = init_db()
     logger.info("✓ Datenbank initialisiert")
