@@ -652,25 +652,20 @@ def migrate_properties_table(db: Session = Depends(get_db)):
         for col_name, col_type in migrations:
             try:
                 db.execute(text(f"ALTER TABLE properties ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                db.commit()
                 results.append(f"✓ {col_name} hinzugefügt")
             except Exception as e:
-                results.append(f"✗ {col_name}: {str(e)}")
-        
-        # Fix: id Spalte zu VARCHAR(36) ändern (für UUIDs)
-        try:
-            db.execute(text("ALTER TABLE properties ALTER COLUMN id TYPE VARCHAR(36)"))
-            results.append("✓ id zu VARCHAR(36) geändert")
-        except Exception as e:
-            results.append(f"✗ id migration: {str(e)}")
+                db.rollback()
+                results.append(f"✗ {col_name}: {str(e)[:50]}")
         
         # Index für public_id erstellen
         try:
             db.execute(text("CREATE INDEX IF NOT EXISTS ix_properties_public_id ON properties(public_id)"))
+            db.commit()
             results.append("✓ public_id Index erstellt")
         except Exception as e:
-            results.append(f"✗ index: {str(e)}")
-        
-        db.commit()
+            db.rollback()
+            results.append(f"✗ index: {str(e)[:50]}")
         
         # Zeige aktuelles Schema
         result = db.execute(text("""
