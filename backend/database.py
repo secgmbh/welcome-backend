@@ -323,6 +323,8 @@ def init_db():
                     # Fehlende Spalten für properties
                     prop_columns_to_add = [
                         ('is_active', 'BOOLEAN DEFAULT TRUE'),
+                        ('description', 'TEXT'),
+                        ('address', 'VARCHAR(500)'),
                         ('keysafe_location', 'VARCHAR(500)'),
                         ('keysafe_code', 'VARCHAR(50)'),
                         ('keysafe_instructions', 'TEXT'),
