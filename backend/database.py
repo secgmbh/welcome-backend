@@ -53,23 +53,12 @@ class User(Base):
 
 class Property(Base):
     __tablename__ = "properties"
-    # Ignoriere fehlende Spalten falls sie nicht existieren
-    __mapper_args__ = {
-        'include_properties': [
-            'id', 'user_id', 'name', 'description', 'address', 'created_at',
-            'keysafe_location', 'keysafe_code', 'keysafe_instructions'
-        ]
-    }
     
     id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False, index=True)
     name = Column(String(200), nullable=False)
-    description = Column(Text)
-    address = Column(String(500))
-    # Key-Safe Info
-    keysafe_location = Column(String(500))
-    keysafe_code = Column(String(50))
-    keysafe_instructions = Column(Text)
+    description = Column(Text, nullable=True)
+    address = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class StatusCheck(Base):
