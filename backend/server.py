@@ -690,9 +690,8 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
 def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Erstelle eine neue Property"""
     try:
-        prop_id = str(uuid.uuid4())
+        # Verwende auto-increment ID (die DB generiert die ID automatisch)
         db_property = DBProperty(
-            id=prop_id,
             user_id=user.id,
             name=data.name.strip(),
             description=data.description.strip() if data.description else None,
@@ -704,10 +703,10 @@ def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_use
         db.commit()
         db.refresh(db_property)
         
-        logger.info(f"Property erstellt: {prop_id} für Benutzer {user.id}")
+        logger.info(f"Property erstellt: {db_property.id} für Benutzer {user.id}")
         
         return Property(
-            id=db_property.id,
+            id=str(db_property.id),  # Konvertiere zu String für API
             user_id=db_property.user_id,
             name=db_property.name,
             description=db_property.description,

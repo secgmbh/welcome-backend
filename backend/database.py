@@ -54,7 +54,7 @@ class User(Base):
 class Property(Base):
     __tablename__ = "properties"
     
-    id = Column(String(36), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)  # Integer ID (kompatibel mit existierender DB)
     user_id = Column(String(36), nullable=False, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
