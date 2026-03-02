@@ -256,15 +256,20 @@ def init_db():
                     logger.info(f"[DB] Existierende users Spalten: {existing_columns}")
                     
                     # BEREINIGUNG: Lösche die problematische 'is_' Spalte falls vorhanden
+                    # Diese Spalte wurde versehentlich erstellt und verursacht Fehler
                     if 'is_' in existing_columns:
                         try:
-                            conn.execute(text("ALTER TABLE users DROP COLUMN is_"))
-                            conn.commit()
-                            logger.info(f"[DB] ✓ Removed problematic column: is_")
-                            existing_columns.remove('is_')
+                            # DROP COLUMN benötigt explizites Commit in PostgreSQL
+                            conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_"))
+                            logger.info(f"[DB] ✓ Executed DROP COLUMN is_")
                         except Exception as e:
-                            logger.info(f"[DB] ⚠️ Could not remove column is_: {e}")
-                            conn.rollback()
+                            logger.warning(f"[DB] ⚠️ Could not drop column is_: {e}")
+                    # Commit außerhalb des try blocks um sicherzustellen dass es ausgeführt wird
+                    try:
+                        conn.commit()
+                        logger.info(f"[DB] ✓ Schema changes committed")
+                    except Exception as e:
+                        logger.warning(f"[DB] ⚠️ Commit failed: {e}")
                     
                     # Fehlende Spalten hinzufügen
                     columns_to_add = [
