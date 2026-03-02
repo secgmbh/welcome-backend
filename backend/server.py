@@ -677,6 +677,27 @@ def debug_properties_raw(user: DBUser = Depends(get_current_user), db: Session =
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
 
+
+@api_router.post("/debug/set-public-id/{property_id}")
+def set_public_id(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Setze public_id für eine Property"""
+    try:
+        from sqlalchemy import text
+        import random
+        import string
+        
+        # Generiere 10-stellige public_id
+        public_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+        
+        db.execute(text("UPDATE properties SET public_id = :pid WHERE id = :id AND user_id = :uid"), 
+                   {"pid": public_id, "id": property_id, "uid": user.id})
+        db.commit()
+        
+        return {"success": True, "property_id": property_id, "public_id": public_id}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
 @api_router.get("/properties", response_model=List[Property])
 def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole alle Properties des Benutzers"""
