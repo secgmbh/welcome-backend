@@ -708,6 +708,68 @@ def migrate_extras_table(db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 
+@api_router.post("/debug/migrate-qr-scans")
+def migrate_qr_scans_table(db: Session = Depends(get_db)):
+    """Erstelle QR-Scans Tabelle für Analytics"""
+    try:
+        from sqlalchemy import text
+        
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS qr_scans (
+                id SERIAL PRIMARY KEY,
+                property_id INTEGER REFERENCES properties(id),
+                scanned_at TIMESTAMP DEFAULT NOW(),
+                user_agent TEXT,
+                ip_hash VARCHAR(64)
+            )
+        """))
+        
+        # Index für schnellere Abfragen
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_qr_scans_property ON qr_scans(property_id)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_qr_scans_date ON qr_scans(scanned_at)"))
+        
+        db.commit()
+        
+        return {"success": True, "message": "QR-Scans Tabelle erstellt"}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+
+
+@api_router.get("/properties/{property_id}/analytics")
+def get_property_analytics(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Analytics für eine Property (QR-Scans)"""
+    try:
+        from sqlalchemy import text
+        
+        # Prüfe Ownership
+        prop = db.query(DBProperty).filter(DBProperty.id == property_id, DBProperty.user_id == user.id).first()
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property nicht gefunden")
+        
+        # Total Scans
+        total = db.execute(text("SELECT COUNT(*) FROM qr_scans WHERE property_id = :pid"), {"pid": property_id}).scalar()
+        
+        # Scans letzte 7 Tage
+        daily = db.execute(text("""
+            SELECT DATE(scanned_at) as date, COUNT(*) as count
+            FROM qr_scans
+            WHERE property_id = :pid AND scanned_at > NOW() - INTERVAL '7 days'
+            GROUP BY DATE(scanned_at)
+            ORDER BY date DESC
+        """), {"pid": property_id}).fetchall()
+        
+        return {
+            "total_scans": total,
+            "daily_scans": [{"date": str(r[0]), "count": r[1]} for r in daily]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Analytics Fehler: {str(e)}")
+        return {"total_scans": 0, "daily_scans": []}
+
+
 @api_router.post("/debug/migrate-checkouts")
 def migrate_checkouts_table(db: Session = Depends(get_db)):
     """Erstelle Checkouts-Tabelle falls nicht vorhanden"""
@@ -905,6 +967,18 @@ def get_public_property(request: Request, public_id: str, db: Session = Depends(
     """Öffentlicher Endpoint für Gästeseite mit public_id"""
     try:
         from sqlalchemy import text
+        
+        # Track QR-Code scan
+        try:
+            user_agent = request.headers.get("user-agent", "")
+            db.execute(text("""
+                INSERT INTO qr_scans (property_id, scanned_at, user_agent, ip_hash)
+                SELECT id, NOW(), :ua, :ip
+                FROM properties WHERE public_id = :pid
+            """), {"pid": public_id, "ua": user_agent, "ip": "anonymous"})
+            db.commit()
+        except Exception as e:
+            logger.warning(f"QR scan tracking failed: {str(e)}")
         
         # Suche nach public_id - alle Felder für Gästeseite
         result = db.execute(text("""
