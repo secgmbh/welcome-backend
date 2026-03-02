@@ -1,21 +1,25 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import os
 import logging
+import json
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, EmailStr, validator
-from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, validator, ValidationError
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import secrets
 import jwt
 from passlib.context import CryptContext
-from slowapi import Limiter
+from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, Bundle as DBBundle, BundleExtra as DBBundleExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule, Scene as DBScene, Extra as DBExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule
 
 ROOT_DIR = Path(__file__).parent
@@ -71,6 +75,55 @@ limiter = Limiter(key_func=get_remote_address)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+# ============ SECURITY HEADERS MIDDLEWARE ============
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Fügt Security Headers zu allen Responses hinzu"""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Security Headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        
+        # HSTS nur in Production
+        if ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+        # Content-Security-Policy
+        if ENVIRONMENT == "production":
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.paypal.com; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "frame-src https://js.stripe.com https://www.paypal.com; "
+                "connect-src 'self' https://api.welcome-link.de https://api.stripe.com;"
+            )
+        
+        return response
+
+# ============ GLOBAL EXCEPTION HANDLER ============
+class AppException(Exception):
+    """Custom Exception für strukturierte Error Responses"""
+    def __init__(self, status_code: int, detail: str, error_code: str = None):
+        self.status_code = status_code
+        self.detail = detail
+        self.error_code = error_code or f"ERR_{status_code}"
+
+def create_error_response(status_code: int, detail: str, error_code: str = None, request_id: str = None) -> Dict[str, Any]:
+    """Erstellt strukturierte Error Response"""
+    return {
+        "error": {
+            "code": error_code or f"ERR_{status_code}",
+            "message": detail,
+            "request_id": request_id,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    }
+
 # Create the main app without a prefix
 app = FastAPI(
     title="Welcome Link API",
@@ -80,6 +133,48 @@ app = FastAPI(
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
 app.state.limiter = limiter
+
+# Add Security Headers Middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Rate Limit Exception Handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Global Exception Handler
+@app.exception_handler(AppException)
+async def app_exception_handler(request: Request, exc: AppException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(exc.status_code, exc.detail, exc.error_code)
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(exc.status_code, str(exc.detail))
+    )
+
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=create_error_response(422, "Validierungsfehler", "VALIDATION_ERROR")
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # In Production keine Stack Traces preisgeben
+    if ENVIRONMENT == "production":
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response(500, "Interner Server-Fehler", "INTERNAL_ERROR")
+        )
+    else:
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response(500, str(exc), "INTERNAL_ERROR")
+        )
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -255,14 +350,19 @@ def init_demo_user(db: Session):
 # ============ AUTH ROUTES ============
 
 @api_router.post("/auth/register", response_model=AuthResponse)
-def register(data: UserRegister, db: Session = Depends(get_db)):
-    """Registriere einen neuen Benutzer"""
+@limiter.limit("5/minute")
+def register(request: Request, data: UserRegister, db: Session = Depends(get_db)):
+    """Registriere einen neuen Benutzer (Rate Limited: 5/Min)"""
     try:
         # Überprüfe ob E-Mail bereits existiert
         existing = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
         if existing:
             logger.warning(f"Registrierungsversuch mit existierender E-Mail: {data.email}")
             raise HTTPException(status_code=400, detail="E-Mail bereits registriert")
+        
+        # Erstelle Verification Token
+        verification_token = secrets.token_urlsafe(32)
+        verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         
         # Erstelle Benutzer
         user_id = str(uuid.uuid4())
@@ -272,16 +372,27 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
             password_hash=hash_password(data.password),
             name=data.name or data.email.split("@")[0],
             created_at=datetime.now(timezone.utc),
-            is_demo=False
+            is_demo=False,
+            is_email_verified=False,
+            email_verification_token=verification_token,
+            email_verification_token_expires=verification_expires
         )
         
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
         
+        # In Production: Sende Verification Email
+        # verification_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
+        # send_verification_email(data.email, verification_link)
+        
+        # Für Development: Log verification link
+        logger.info(f"✓ Neuer Benutzer registriert: {data.email}")
+        if ENVIRONMENT == "development":
+            logger.info(f"   Verification Token: {verification_token}")
+        
         # Erstelle Token
         token = create_token(user_id, db_user.email)
-        logger.info(f"Neuer Benutzer registriert: {data.email}")
         
         return AuthResponse(
             token=token,
@@ -302,9 +413,43 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
 
 # ============ EMAIL VERIFICATION ROUTES ============
 
+@api_router.get("/auth/verify-email")
+@limiter.limit("10/minute")
+def verify_email_get(request: Request, token: str, db: Session = Depends(get_db)):
+    """Verifiziere E-Mail mit Token via GET (für E-Mail Links) (Rate Limited: 10/Min)"""
+    if not token:
+        raise HTTPException(status_code=400, detail="Token fehlt")
+    
+    try:
+        user = db.query(DBUser).filter(DBUser.email_verification_token == token).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Ungültiger Token")
+        
+        # Prüfe ob Token abgelaufen ist
+        if user.email_verification_token_expires and datetime.now(timezone.utc) > user.email_verification_token_expires:
+            raise HTTPException(status_code=400, detail="Token ist abgelaufen")
+        
+        # Verifiziere E-Mail
+        user.is_email_verified = True
+        user.email_verification_token = None  # Token zurücksetzen
+        db.commit()
+        
+        logger.info(f"✓ E-Mail verifiziert: {user.email}")
+        
+        return {"message": "E-Mail erfolgreich verifiziert", "email": user.email}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler bei Email-Verifizierung: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Verifizierung fehlgeschaltet")
+
 @api_router.post("/auth/verify-email")
-def verify_email(data: dict, db: Session = Depends(get_db)):
-    """Verifiziere E-Mail mit Token"""
+@limiter.limit("10/minute")
+def verify_email_post(request: Request, data: dict, db: Session = Depends(get_db)):
+    """Verifiziere E-Mail mit Token via POST (für API Calls) (Rate Limited: 10/Min)"""
     token = data.get("token")
     if not token:
         raise HTTPException(status_code=400, detail="Token fehlt")
@@ -337,8 +482,9 @@ def verify_email(data: dict, db: Session = Depends(get_db)):
 
 
 @api_router.post("/auth/resend-verification")
-def resend_verification(data: dict, db: Session = Depends(get_db)):
-    """Sende Verifizierungs-E-Mail erneut"""
+@limiter.limit("3/minute")
+def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
+    """Sende Verifizierungs-E-Mail erneut (Rate Limited: 3/Min)"""
     email = data.get("email")
     if not email:
         raise HTTPException(status_code=400, detail="E-Mail fehlt")
@@ -386,7 +532,8 @@ def resend_verification(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Fehler beim Resenden")
 
 @api_router.post("/auth/login", response_model=AuthResponse)
-def login(data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     """Benutzer Login mit E-Mail und Passwort"""
     try:
         # Finde Benutzer (normalisiere E-Mail)
@@ -421,8 +568,9 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)[:50]}")
 
 @api_router.post("/auth/magic-link")
-def request_magic_link(data: MagicLinkRequest):
-    """Fordere einen Magic Link an (würde in Production E-Mail senden)"""
+@limiter.limit("3/minute")
+def request_magic_link(request: Request, data: MagicLinkRequest):
+    """Fordere einen Magic Link an (würde in Production E-Mail senden) (Rate Limited: 3/Min)"""
     # Generiere Magic Link Token
     magic_token = secrets.token_urlsafe(32)
     
@@ -960,12 +1108,54 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+# ============ ENHANCED LOGGING ============
+class JSONFormatter(logging.Formatter):
+    """JSON Formatter für Production Logging"""
+    def format(self, record):
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "environment": ENVIRONMENT
+        }
+        if record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_entry)
+
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    force=True
-)
+if ENVIRONMENT == "production":
+    # JSON Logging für Production
+    handler = logging.StreamHandler()
+    handler.setFormatter(JSONFormatter())
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=[handler],
+        force=True
+    )
+else:
+    # Human-readable Logging für Development
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        force=True
+    )
+
+# Request Logging Middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = datetime.now(timezone.utc)
+    
+    # Request loggen
+    logger.info(f"Request: {request.method} {request.url.path}")
+    
+    response = await call_next(request)
+    
+    # Response loggen mit Duration
+    duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+    logger.info(f"Response: {request.method} {request.url.path} - Status: {response.status_code} - {duration_ms:.2f}ms")
+    
+    return response
 
 # ============== SCENE API ENDPOINTS ==============
 class SceneCreate(BaseModel):
@@ -1903,8 +2093,9 @@ class CleanerResponse(BaseModel):
     created_at: str
 
 @api_router.post("/cleaner/login")
-def cleaner_login(request: CleanerLoginRequest, db: Session = Depends(get_db)):
-    """Cleaner anmelden (passwortloser Login via cleanerId)"""
+@limiter.limit("10/minute")
+def cleaner_login(http_request: Request, request: CleanerLoginRequest, db: Session = Depends(get_db)):
+    """Cleaner anmelden (passwortloser Login via cleanerId) (Rate Limited: 10/Min)"""
     # Hier würde die Validierung der cleanerId stattfinden
     # Für MVP return dummy response
     return {
@@ -2602,8 +2793,9 @@ class FeedbackRequest(BaseModel):
     timestamp: Optional[str] = None
 
 @api_router.post("/feedback")
-def submit_feedback(data: FeedbackRequest):
-    """User Feedback empfangen und speichern"""
+@limiter.limit("5/minute")
+def submit_feedback(request: Request, data: FeedbackRequest):
+    """User Feedback empfangen und speichern (Rate Limited: 5/Min)"""
     try:
         logger.info(f"Feedback erhalten: Rating={data.rating}, Category={data.category}")
         

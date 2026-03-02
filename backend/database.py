@@ -2,6 +2,10 @@ from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, I
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timezone
 import os
+import logging
+
+# Logger für database module
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
