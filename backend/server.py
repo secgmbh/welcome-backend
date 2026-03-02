@@ -673,7 +673,7 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
         properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
         logger.info(f"Found {len(properties)} properties")
         return [Property(
-            id=p.id,
+            id=str(p.id),  # Konvertiere Integer zu String
             user_id=p.user_id,
             name=p.name,
             description=p.description,
@@ -733,7 +733,7 @@ def get_property(property_id: str, user: DBUser = Depends(get_current_user), db:
             raise HTTPException(status_code=404, detail="Property nicht gefunden")
         
         return Property(
-            id=prop.id,
+            id=str(prop.id),  # Konvertiere Integer zu String
             user_id=prop.user_id,
             name=prop.name,
             description=prop.description,
@@ -785,7 +785,7 @@ def update_property(property_id: str, data: PropertyUpdate, user: DBUser = Depen
         logger.info(f"Property aktualisiert: {property_id}")
         
         return Property(
-            id=prop.id,
+            id=str(prop.id),  # Konvertiere Integer zu String
             user_id=prop.user_id,
             name=prop.name,
             description=prop.description,
