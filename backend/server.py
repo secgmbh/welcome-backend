@@ -670,8 +670,8 @@ def debug_properties_raw(user: DBUser = Depends(get_current_user), db: Session =
     """Debug: Zeige rohe Properties"""
     try:
         from sqlalchemy import text
-        result = db.execute(text("SELECT id, user_id, name FROM properties WHERE user_id = :uid"), {"uid": user.id})
-        rows = [{"id": r[0], "user_id": r[1], "name": r[2]} for r in result.fetchall()]
+        result = db.execute(text("SELECT id, user_id, name, public_id FROM properties WHERE user_id = :uid"), {"uid": user.id})
+        rows = [{"id": r[0], "user_id": r[1], "name": r[2], "public_id": r[3]} for r in result.fetchall()]
         return {"user_id": user.id, "count": len(rows), "properties": rows}
     except Exception as e:
         import traceback
