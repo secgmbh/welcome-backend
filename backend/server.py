@@ -805,11 +805,11 @@ def get_public_property(public_id: str, db: Session = Depends(get_db)):
     try:
         from sqlalchemy import text
         
-        # Suche nach public_id oder id
+        # Suche nach public_id
         result = db.execute(text("""
             SELECT id, user_id, name, description, address, created_at, public_id
             FROM properties 
-            WHERE public_id = :pid OR id = :pid
+            WHERE public_id = :pid
         """), {"pid": public_id})
         row = result.fetchone()
         
