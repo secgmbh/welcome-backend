@@ -53,6 +53,13 @@ class User(Base):
 
 class Property(Base):
     __tablename__ = "properties"
+    # Ignoriere fehlende Spalten falls sie nicht existieren
+    __mapper_args__ = {
+        'include_properties': [
+            'id', 'user_id', 'name', 'description', 'address', 'created_at',
+            'keysafe_location', 'keysafe_code', 'keysafe_instructions'
+        ]
+    }
     
     id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False, index=True)
