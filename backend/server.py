@@ -634,6 +634,7 @@ def migrate_properties_table(db: Session = Depends(get_db)):
         migrations = [
             ("description", "TEXT"),
             ("address", "VARCHAR(500)"),
+            ("public_id", "VARCHAR(20)"),
         ]
         
         results = []
@@ -650,6 +651,13 @@ def migrate_properties_table(db: Session = Depends(get_db)):
             results.append("✓ id zu VARCHAR(36) geändert")
         except Exception as e:
             results.append(f"✗ id migration: {str(e)}")
+        
+        # Index für public_id erstellen
+        try:
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_properties_public_id ON properties(public_id)"))
+            results.append("✓ public_id Index erstellt")
+        except Exception as e:
+            results.append(f"✗ index: {str(e)}")
         
         db.commit()
         
