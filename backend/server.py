@@ -612,7 +612,9 @@ def get_me(user: DBUser = Depends(get_current_user)):
 def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole alle Properties des Benutzers"""
     try:
+        logger.info(f"Getting properties for user {user.id}")
         properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        logger.info(f"Found {len(properties)} properties")
         return [Property(
             id=p.id,
             user_id=p.user_id,
@@ -623,6 +625,8 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
         ) for p in properties]
     except Exception as e:
         logger.error(f"Fehler beim Abrufen von Properties: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen von Properties")
 
 @api_router.post("/properties", response_model=Property)
