@@ -900,7 +900,8 @@ def get_property(property_id: str, user: DBUser = Depends(get_current_user), db:
 
 
 @api_router.get("/public/properties/{public_id}")
-def get_public_property(public_id: str, db: Session = Depends(get_db)):
+@limiter.limit("60/minute")  # Rate limit für öffentliche Endpoints
+def get_public_property(request: Request, public_id: str, db: Session = Depends(get_db)):
     """Öffentlicher Endpoint für Gästeseite mit public_id"""
     try:
         from sqlalchemy import text
@@ -2921,7 +2922,8 @@ class ExtraCreate(BaseModel):
     category: Optional[str] = Field(None, max_length=50)  # breakfast, parking, spa, etc.
 
 @api_router.get("/properties/{property_id}/extras")
-def get_property_extras(property_id: int, db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+def get_property_extras(request: Request, property_id: int, db: Session = Depends(get_db)):
     """Öffentliche Extras für eine Property"""
     try:
         from sqlalchemy import text
@@ -2947,7 +2949,8 @@ def get_property_extras(property_id: int, db: Session = Depends(get_db)):
         return {"extras": []}
 
 @api_router.post("/properties/{property_id}/extras")
-def create_extra(property_id: int, data: ExtraCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def create_extra(request: Request, property_id: int, data: ExtraCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Erstelle ein neues Extra für eine Property"""
     try:
         # Prüfe ob Property dem User gehört
@@ -3001,19 +3004,32 @@ class CheckoutResponse(BaseModel):
     payment_url: Optional[str] = None
 
 @api_router.post("/checkout", response_model=CheckoutResponse)
-def create_checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def create_checkout(request: Request, data: CheckoutRequest, db: Session = Depends(get_db)):
     """Erstelle einen Checkout für Extras"""
     try:
         import uuid
         from sqlalchemy import text
         
+        # Validierung
+        if not data.items or len(data.items) == 0:
+            raise HTTPException(status_code=400, detail="Keine Items im Warenkorb")
+        
+        if not data.guest_name or len(data.guest_name.strip()) < 2:
+            raise HTTPException(status_code=400, detail="Gastname erforderlich")
+        
+        if not data.guest_email or "@" not in data.guest_email:
+            raise HTTPException(status_code=400, detail="Gültige Email erforderlich")
+        
         # Berechne Gesamtbetrag
         total = 0.0
         for item in data.items:
-            result = db.execute(text("SELECT price FROM extras WHERE id = :id"), {"id": item.extra_id})
+            result = db.execute(text("SELECT price, name FROM extras WHERE id = :id"), {"id": item.extra_id})
             row = result.fetchone()
             if row:
                 total += float(row[0]) * item.quantity
+            else:
+                raise HTTPException(status_code=400, detail=f"Extra {item.extra_id} nicht gefunden")
         
         checkout_id = str(uuid.uuid4())
         
@@ -3025,16 +3041,16 @@ def create_checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
             "id": checkout_id,
             "pid": data.property_id,
             "total": total,
-            "name": data.guest_name,
-            "email": data.guest_email,
+            "name": data.guest_name.strip(),
+            "email": data.guest_email.strip(),
             "method": data.payment_method
         })
         
         # Speichere Items
         for item in data.items:
             db.execute(text("""
-                INSERT INTO checkout_items (checkout_id, extra_id, quantity)
-                VALUES (:cid, :eid, :qty)
+                INSERT INTO checkout_items (id, checkout_id, extra_id, quantity)
+                VALUES (gen_random_uuid(), :cid, :eid, :qty)
             """), {"cid": checkout_id, "eid": item.extra_id, "qty": item.quantity})
         
         db.commit()
@@ -3057,20 +3073,24 @@ def create_checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Fehler beim Checkout")
 
 @api_router.get("/checkout/{checkout_id}/invoice")
-def get_invoice(checkout_id: str, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def get_invoice(request: Request, checkout_id: str, db: Session = Depends(get_db)):
     """Generiere PDF Rechnung für Checkout"""
     try:
         from sqlalchemy import text
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import cm
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from datetime import datetime
         import io
         
         # Lade Checkout
         result = db.execute(text("""
-            SELECT c.id, c.property_id, c.total, c.guest_name, c.guest_email, c.created_at, p.name as property_name
+            SELECT c.id, c.property_id, c.total, c.guest_name, c.guest_email, c.created_at, 
+                   p.name as property_name, p.address, c.payment_method
             FROM checkouts c
             JOIN properties p ON c.property_id = p.id
             WHERE c.id = :id
@@ -3091,44 +3111,79 @@ def get_invoice(checkout_id: str, db: Session = Depends(get_db)):
         
         # Generiere PDF
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm)
         styles = getSampleStyleSheet()
         story = []
         
-        # Header
-        story.append(Paragraph("RECHNUNG", styles['Title']))
-        story.append(Spacer(1, 1*cm))
-        story.append(Paragraph(f"Welcome Link - {checkout[6]}", styles['Normal']))
+        # Custom Styles
+        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=24, textColor=colors.HexColor('#F27C2C'))
+        heading_style = ParagraphStyle('Heading', parent=styles['Normal'], fontSize=14, textColor=colors.HexColor('#333333'))
+        right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=TA_RIGHT)
+        
+        # Header mit Logo-Bereich
+        story.append(Paragraph("🧾 Welcome Link", title_style))
+        story.append(Spacer(1, 0.5*cm))
+        
+        # Rechnungsnummer und Datum
+        invoice_number = f"INV-{checkout_id[:8].upper()}"
+        story.append(Paragraph(f"<b>Rechnung #{invoice_number}</b>", heading_style))
         story.append(Paragraph(f"Datum: {checkout[5].strftime('%d.%m.%Y')}", styles['Normal']))
+        story.append(Paragraph(f"Zahlungsart: {checkout[8].upper()}", styles['Normal']))
+        story.append(Spacer(1, 1*cm))
+        
+        # Von / An
+        story.append(Paragraph("<b>Von:</b>", styles['Normal']))
+        story.append(Paragraph(f"Welcome Link - {checkout[6]}", styles['Normal']))
+        if checkout[7]:
+            story.append(Paragraph(checkout[7], styles['Normal']))
+        story.append(Spacer(1, 0.5*cm))
+        
         if checkout[3]:
-            story.append(Paragraph(f"Gast: {checkout[3]}", styles['Normal']))
+            story.append(Paragraph("<b>An:</b>", styles['Normal']))
+            story.append(Paragraph(checkout[3], styles['Normal']))
+            if checkout[4]:
+                story.append(Paragraph(checkout[4], styles['Normal']))
         story.append(Spacer(1, 1*cm))
         
         # Tabelle
-        data = [["Beschreibung", "Menge", "Preis", "Summe"]]
+        data = [["Beschreibung", "Menge", "Einzelpreis", "Summe"]]
         for item in items:
             data.append([
-                item[0],
+                f"{item[0]}\n{item[1] or ''}",
                 str(item[3]),
-                f"€{item[2]:.2f}",
+                f"€{float(item[2]):.2f}",
                 f"€{float(item[2]) * item[3]:.2f}"
             ])
-        data.append(["", "", "", f"€{float(checkout[2]):.2f}"])
         
-        table = Table(data, colWidths=[8*cm, 2*cm, 3*cm, 3*cm])
+        # Gesamtzeile
+        data.append(["", "", "Gesamt:", f"€{float(checkout[2]):.2f}"])
+        
+        table = Table(data, colWidths=[7*cm, 2*cm, 3.5*cm, 3.5*cm])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F27C2C')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('TOPPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#F9F9F9')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#DDDDDD')),
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FFF5EE')),
+            ('FONTSIZE', (0, -1), (-1, -1), 12),
+            ('TOPPADDING', (0, -1), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, -1), (-1, -1), 12),
         ]))
         story.append(table)
+        
+        # Footer
+        story.append(Spacer(1, 2*cm))
+        story.append(Paragraph("Vielen Dank für Ihre Buchung!", ParagraphStyle('Center', parent=styles['Normal'], alignment=TA_CENTER)))
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph("Welcome Link - Ihr digitaler Gastgeber", ParagraphStyle('Center', parent=styles['Normal'], alignment=TA_CENTER, textColor=colors.grey)))
+        story.append(Paragraph("www.welcome-link.de", ParagraphStyle('Center', parent=styles['Normal'], alignment=TA_CENTER, textColor=colors.HexColor('#F27C2C'))))
         
         doc.build(story)
         buffer.seek(0)
