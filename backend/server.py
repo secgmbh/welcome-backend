@@ -680,6 +680,72 @@ def migrate_properties_table(db: Session = Depends(get_db)):
     except Exception as e:
         return {"error": str(e)}
 
+@api_router.post("/debug/migrate-extras")
+def migrate_extras_table(db: Session = Depends(get_db)):
+    """Erstelle Extras-Tabelle falls nicht vorhanden"""
+    try:
+        from sqlalchemy import text
+        
+        # Erstelle Tabelle
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS extras (
+                id VARCHAR(36) PRIMARY KEY,
+                property_id INTEGER REFERENCES properties(id),
+                name VARCHAR(200) NOT NULL,
+                description TEXT,
+                price DECIMAL(10,2) DEFAULT 0,
+                image_url VARCHAR(500),
+                category VARCHAR(50),
+                is_active BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        db.commit()
+        
+        return {"success": True, "message": "Extras-Tabelle erstellt"}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+
+
+@api_router.post("/debug/migrate-checkouts")
+def migrate_checkouts_table(db: Session = Depends(get_db)):
+    """Erstelle Checkouts-Tabelle falls nicht vorhanden"""
+    try:
+        from sqlalchemy import text
+        
+        # Erstelle checkouts Tabelle
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS checkouts (
+                id VARCHAR(36) PRIMARY KEY,
+                property_id INTEGER REFERENCES properties(id),
+                total DECIMAL(10,2) DEFAULT 0,
+                guest_name VARCHAR(200),
+                guest_email VARCHAR(200),
+                payment_method VARCHAR(50),
+                status VARCHAR(50) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        
+        # Erstelle checkout_items Tabelle
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS checkout_items (
+                id VARCHAR(36) PRIMARY KEY,
+                checkout_id VARCHAR(36) REFERENCES checkouts(id),
+                extra_id VARCHAR(36) REFERENCES extras(id),
+                quantity INTEGER DEFAULT 1
+            )
+        """))
+        
+        db.commit()
+        
+        return {"success": True, "message": "Checkout-Tabellen erstellt"}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+
+
 @api_router.post("/debug/set-demo-data/{property_id}")
 def set_demo_data(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Setze Demo-Daten für Gästeseite (WLAN, KeySafe, Host)"""
