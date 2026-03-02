@@ -60,6 +60,18 @@ class Property(Base):
     description = Column(Text, nullable=True)
     address = Column(String(500), nullable=True)
     public_id = Column(String(20), nullable=True, index=True)  # Öffentliche ID für QR-Codes
+    # Gästeseite Features
+    image_url = Column(String(500), nullable=True)  # Hauptbild
+    wifi_name = Column(String(100), nullable=True)  # WLAN Name
+    wifi_password = Column(String(100), nullable=True)  # WLAN Passwort
+    keysafe_location = Column(String(200), nullable=True)  # KeySafe Standort
+    keysafe_code = Column(String(50), nullable=True)  # KeySafe Code/PIN
+    keysafe_instructions = Column(Text, nullable=True)  # Anleitung
+    checkin_time = Column(String(10), default="15:00")  # Check-in Zeit
+    checkout_time = Column(String(10), default="11:00")  # Check-out Zeit
+    host_phone = Column(String(50), nullable=True)  # Gastgeber Telefon
+    host_email = Column(String(100), nullable=True)  # Gastgeber Email
+    host_whatsapp = Column(String(50), nullable=True)  # WhatsApp Nummer
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class StatusCheck(Base):

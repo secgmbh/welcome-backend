@@ -635,6 +635,17 @@ def migrate_properties_table(db: Session = Depends(get_db)):
             ("description", "TEXT"),
             ("address", "VARCHAR(500)"),
             ("public_id", "VARCHAR(20)"),
+            ("image_url", "VARCHAR(500)"),
+            ("wifi_name", "VARCHAR(100)"),
+            ("wifi_password", "VARCHAR(100)"),
+            ("keysafe_location", "VARCHAR(200)"),
+            ("keysafe_code", "VARCHAR(50)"),
+            ("keysafe_instructions", "TEXT"),
+            ("checkin_time", "VARCHAR(10)"),
+            ("checkout_time", "VARCHAR(10)"),
+            ("host_phone", "VARCHAR(50)"),
+            ("host_email", "VARCHAR(100)"),
+            ("host_whatsapp", "VARCHAR(50)"),
         ]
         
         results = []
@@ -805,9 +816,13 @@ def get_public_property(public_id: str, db: Session = Depends(get_db)):
     try:
         from sqlalchemy import text
         
-        # Suche nach public_id
+        # Suche nach public_id - alle Felder für Gästeseite
         result = db.execute(text("""
-            SELECT id, user_id, name, description, address, created_at, public_id
+            SELECT id, user_id, name, description, address, created_at, public_id,
+                   image_url, wifi_name, wifi_password, 
+                   keysafe_location, keysafe_code, keysafe_instructions,
+                   checkin_time, checkout_time,
+                   host_phone, host_email, host_whatsapp
             FROM properties 
             WHERE public_id = :pid
         """), {"pid": public_id})
@@ -823,7 +838,25 @@ def get_public_property(public_id: str, db: Session = Depends(get_db)):
             "description": row[3],
             "address": row[4],
             "created_at": row[5].isoformat() if row[5] else None,
-            "public_id": row[6]
+            "public_id": row[6],
+            # Neue Felder für Gästeseite
+            "image_url": row[7],
+            "wifi": {
+                "name": row[8],
+                "password": row[9]
+            } if row[8] else None,
+            "keysafe": {
+                "location": row[10],
+                "code": row[11],
+                "instructions": row[12]
+            } if row[10] else None,
+            "checkin_time": row[13] or "15:00",
+            "checkout_time": row[14] or "11:00",
+            "host": {
+                "phone": row[15],
+                "email": row[16],
+                "whatsapp": row[17]
+            } if row[15] or row[16] or row[17] else None
         }
     except HTTPException:
         raise
@@ -2788,6 +2821,241 @@ END:VEVENT
 
 
 # ============== END CALENDAR EXPORT API ENDPOINTS ==============
+
+# ============== EXTRAS API ENDPOINTS ==============
+
+class ExtraCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    price: float = Field(..., ge=0)
+    image_url: Optional[str] = Field(None, max_length=500)
+    category: Optional[str] = Field(None, max_length=50)  # breakfast, parking, spa, etc.
+
+@api_router.get("/properties/{property_id}/extras")
+def get_property_extras(property_id: int, db: Session = Depends(get_db)):
+    """Öffentliche Extras für eine Property"""
+    try:
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT id, name, description, price, image_url, category
+            FROM extras
+            WHERE property_id = :pid AND is_active = true
+            ORDER BY category, price
+        """), {"pid": property_id})
+        
+        extras = [{
+            "id": r[0],
+            "name": r[1],
+            "description": r[2],
+            "price": float(r[3]) if r[3] else 0,
+            "image_url": r[4],
+            "category": r[5]
+        } for r in result.fetchall()]
+        
+        return {"extras": extras}
+    except Exception as e:
+        logger.error(f"Fehler beim Laden der Extras: {str(e)}")
+        return {"extras": []}
+
+@api_router.post("/properties/{property_id}/extras")
+def create_extra(property_id: int, data: ExtraCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Erstelle ein neues Extra für eine Property"""
+    try:
+        # Prüfe ob Property dem User gehört
+        prop = db.query(DBProperty).filter(DBProperty.id == property_id, DBProperty.user_id == user.id).first()
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property nicht gefunden")
+        
+        from sqlalchemy import text
+        import uuid
+        extra_id = str(uuid.uuid4())
+        
+        db.execute(text("""
+            INSERT INTO extras (id, property_id, name, description, price, image_url, category, is_active, created_at)
+            VALUES (:id, :pid, :name, :desc, :price, :img, :cat, true, NOW())
+        """), {
+            "id": extra_id,
+            "pid": property_id,
+            "name": data.name,
+            "desc": data.description,
+            "price": data.price,
+            "img": data.image_url,
+            "cat": data.category
+        })
+        db.commit()
+        
+        return {"id": extra_id, "name": data.name, "price": data.price}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Erstellen des Extras: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Erstellen des Extras")
+
+# ============== CHECKOUT API ENDPOINTS ==============
+
+class CheckoutItem(BaseModel):
+    extra_id: str
+    quantity: int = Field(..., ge=1)
+
+class CheckoutRequest(BaseModel):
+    property_id: int
+    items: List[CheckoutItem]
+    guest_name: Optional[str] = None
+    guest_email: Optional[str] = None
+    payment_method: str = "stripe"  # stripe, paypal, cash
+
+class CheckoutResponse(BaseModel):
+    checkout_id: str
+    total: float
+    currency: str = "EUR"
+    payment_url: Optional[str] = None
+
+@api_router.post("/checkout", response_model=CheckoutResponse)
+def create_checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
+    """Erstelle einen Checkout für Extras"""
+    try:
+        import uuid
+        from sqlalchemy import text
+        
+        # Berechne Gesamtbetrag
+        total = 0.0
+        for item in data.items:
+            result = db.execute(text("SELECT price FROM extras WHERE id = :id"), {"id": item.extra_id})
+            row = result.fetchone()
+            if row:
+                total += float(row[0]) * item.quantity
+        
+        checkout_id = str(uuid.uuid4())
+        
+        # Speichere Checkout
+        db.execute(text("""
+            INSERT INTO checkouts (id, property_id, total, guest_name, guest_email, payment_method, status, created_at)
+            VALUES (:id, :pid, :total, :name, :email, :method, 'pending', NOW())
+        """), {
+            "id": checkout_id,
+            "pid": data.property_id,
+            "total": total,
+            "name": data.guest_name,
+            "email": data.guest_email,
+            "method": data.payment_method
+        })
+        
+        # Speichere Items
+        for item in data.items:
+            db.execute(text("""
+                INSERT INTO checkout_items (checkout_id, extra_id, quantity)
+                VALUES (:cid, :eid, :qty)
+            """), {"cid": checkout_id, "eid": item.extra_id, "qty": item.quantity})
+        
+        db.commit()
+        
+        # Für Stripe/PayPal würde hier die Payment URL generiert
+        payment_url = None
+        if data.payment_method == "stripe":
+            payment_url = f"/payment/stripe/{checkout_id}"
+        elif data.payment_method == "paypal":
+            payment_url = f"/payment/paypal/{checkout_id}"
+        
+        return CheckoutResponse(
+            checkout_id=checkout_id,
+            total=total,
+            payment_url=payment_url
+        )
+    except Exception as e:
+        logger.error(f"Fehler beim Checkout: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Checkout")
+
+@api_router.get("/checkout/{checkout_id}/invoice")
+def get_invoice(checkout_id: str, db: Session = Depends(get_db)):
+    """Generiere PDF Rechnung für Checkout"""
+    try:
+        from sqlalchemy import text
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        import io
+        
+        # Lade Checkout
+        result = db.execute(text("""
+            SELECT c.id, c.property_id, c.total, c.guest_name, c.guest_email, c.created_at, p.name as property_name
+            FROM checkouts c
+            JOIN properties p ON c.property_id = p.id
+            WHERE c.id = :id
+        """), {"id": checkout_id})
+        checkout = result.fetchone()
+        
+        if not checkout:
+            raise HTTPException(status_code=404, detail="Checkout nicht gefunden")
+        
+        # Lade Items
+        result = db.execute(text("""
+            SELECT e.name, e.description, e.price, ci.quantity
+            FROM checkout_items ci
+            JOIN extras e ON ci.extra_id = e.id
+            WHERE ci.checkout_id = :id
+        """), {"id": checkout_id})
+        items = result.fetchall()
+        
+        # Generiere PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        # Header
+        story.append(Paragraph("RECHNUNG", styles['Title']))
+        story.append(Spacer(1, 1*cm))
+        story.append(Paragraph(f"Welcome Link - {checkout[6]}", styles['Normal']))
+        story.append(Paragraph(f"Datum: {checkout[5].strftime('%d.%m.%Y')}", styles['Normal']))
+        if checkout[3]:
+            story.append(Paragraph(f"Gast: {checkout[3]}", styles['Normal']))
+        story.append(Spacer(1, 1*cm))
+        
+        # Tabelle
+        data = [["Beschreibung", "Menge", "Preis", "Summe"]]
+        for item in items:
+            data.append([
+                item[0],
+                str(item[3]),
+                f"€{item[2]:.2f}",
+                f"€{float(item[2]) * item[3]:.2f}"
+            ])
+        data.append(["", "", "", f"€{float(checkout[2]):.2f}"])
+        
+        table = Table(data, colWidths=[8*cm, 2*cm, 3*cm, 3*cm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ]))
+        story.append(table)
+        
+        doc.build(story)
+        buffer.seek(0)
+        
+        return Response(
+            content=buffer.read(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=rechnung-{checkout_id[:8]}.pdf"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Generieren der Rechnung: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Generieren der Rechnung")
+
+# ============== END EXTRAS API ENDPOINTS ==============
 
 # ============== HOST STATS API ENDPOINTS ==============
 from fastapi.responses import Response, StreamingResponse
