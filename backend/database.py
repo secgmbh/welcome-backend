@@ -2,6 +2,10 @@ from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, I
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timezone
 import os
+import logging
+
+# Logger für database module
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -11,6 +15,17 @@ engine = None
 
 class User(Base):
     __tablename__ = "users"
+    # Ignoriere die problematische is_ Spalte falls sie existiert
+    __mapper_args__ = {
+        'include_properties': [
+            'id', 'email', 'password_hash', 'name', 'created_at',
+            'is_demo', 'is_email_verified', 'email_verification_token', 
+            'email_verification_token_expires', 'brand_color', 'logo_url',
+            'invoice_name', 'invoice_address', 'invoice_zip', 'invoice_city',
+            'invoice_country', 'invoice_vat_id', 'keysafe_location', 
+            'keysafe_code', 'keysafe_instructions'
+        ]
+    }
     
     id = Column(String(36), primary_key=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
@@ -219,50 +234,168 @@ def init_db():
     global SessionLocal, engine
     
     database_url = get_database_url()
-    print(f"[DB] Verbinde zu: {database_url[:50]}...")
+    logger.info(f"[DB] Verbinde zu: {database_url[:50]}...")
     
     try:
         engine = create_engine(database_url, pool_pre_ping=True, echo=False)
-        print(f"[DB] Engine erstellt")
+        logger.info(f"[DB] Engine erstellt")
         
         # Teste Connection
         with engine.connect() as conn:
-            print(f"[DB] ✓ Connection erfolgreich")
+            logger.info(f"[DB] ✓ Connection erfolgreich")
         
-        # Erstelle fehlende Tabellen (Fallback für neue Installationen)
-        # Schema-Änderungen werden über Alembic Migrations verwaltet
-        print(f"[DB] Erstelle fehlende Tables (falls nötig)...")
+        # WICHTIG: Fehlende Spalten VOR create_all() hinzufügen (für bestehende Datenbanken)
+        # Dies muss VOR create_all() passieren, damit neue Spalten verfügbar sind
+        logger.info(f"[DB] Prüfe und füge fehlende Spalten hinzu...")
+        try:
+            with engine.connect() as conn:
+                # Prüfe welche Tabellen existieren
+                result = conn.execute(text("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema = 'public'
+                """))
+                existing_tables = [row[0] for row in result.fetchall()]
+                logger.info(f"[DB] Existierende Tabellen: {existing_tables}")
+                
+                # Wenn users Tabelle existiert, füge fehlende Spalten hinzu
+                if 'users' in existing_tables:
+                    result = conn.execute(text("""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = 'users'
+                    """))
+                    existing_columns = [row[0] for row in result.fetchall()]
+                    logger.info(f"[DB] Existierende users Spalten: {existing_columns}")
+                    
+                    # BEREINIGUNG: Lösche die problematische 'is_' Spalte falls vorhanden
+                    # Diese Spalte wurde versehentlich erstellt und verursacht Fehler
+                    if 'is_' in existing_columns:
+                        try:
+                            # DROP COLUMN benötigt explizites Commit in PostgreSQL
+                            conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_"))
+                            logger.info(f"[DB] ✓ Executed DROP COLUMN is_")
+                        except Exception as e:
+                            logger.warning(f"[DB] ⚠️ Could not drop column is_: {e}")
+                    # Commit außerhalb des try blocks um sicherzustellen dass es ausgeführt wird
+                    try:
+                        conn.commit()
+                        logger.info(f"[DB] ✓ Schema changes committed")
+                    except Exception as e:
+                        logger.warning(f"[DB] ⚠️ Commit failed: {e}")
+                    
+                    # Fehlende Spalten hinzufügen
+                    columns_to_add = [
+                        ('is_demo', 'BOOLEAN DEFAULT FALSE'),
+                        ('is_email_verified', 'BOOLEAN DEFAULT FALSE'),
+                        ('email_verification_token', 'VARCHAR(64)'),
+                        ('email_verification_token_expires', 'TIMESTAMP'),
+                        ('brand_color', 'VARCHAR(7)'),
+                        ('logo_url', 'VARCHAR(500)'),
+                        ('invoice_name', 'VARCHAR(200)'),
+                        ('invoice_address', 'VARCHAR(500)'),
+                        ('invoice_zip', 'VARCHAR(20)'),
+                        ('invoice_city', 'VARCHAR(100)'),
+                        ('invoice_country', 'VARCHAR(100)'),
+                        ('invoice_vat_id', 'VARCHAR(50)'),
+                        ('keysafe_location', 'VARCHAR(500)'),
+                        ('keysafe_code', 'VARCHAR(50)'),
+                        ('keysafe_instructions', 'TEXT'),
+                    ]
+                    
+                    added = []
+                    for col_name, col_type in columns_to_add:
+                        if col_name not in existing_columns:
+                            try:
+                                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                                conn.commit()
+                                added.append(col_name)
+                                logger.info(f"[DB] ✓ Added column to users: {col_name}")
+                            except Exception as e:
+                                logger.info(f"[DB] ✗ Failed to add {col_name}: {e}")
+                                conn.rollback()
+                    
+                    if added:
+                        logger.info(f"[DB] ✓ Added {len(added)} missing columns to users table")
+                
+                # Wenn properties Tabelle existiert, prüfe user_id Typ und füge fehlende Spalten hinzu
+                if 'properties' in existing_tables:
+                    result = conn.execute(text("""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = 'properties'
+                    """))
+                    existing_prop_columns = [row[0] for row in result.fetchall()]
+                    
+                    # Fehlende Spalten für properties
+                    prop_columns_to_add = [
+                        ('is_active', 'BOOLEAN DEFAULT TRUE'),
+                    ]
+                    
+                    for col_name, col_type in prop_columns_to_add:
+                        if col_name not in existing_prop_columns:
+                            try:
+                                conn.execute(text(f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}"))
+                                conn.commit()
+                                logger.info(f"[DB] ✓ Added column to properties: {col_name}")
+                            except Exception as e:
+                                logger.info(f"[DB] ✗ Failed to add {col_name} to properties: {e}")
+                                conn.rollback()
+                    
+                    # Prüfe user_id Typ
+                    result = conn.execute(text("""
+                        SELECT data_type 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'properties' AND column_name = 'user_id'
+                    """))
+                    row = result.fetchone()
+                    if row and 'int' in str(row[0]).lower():
+                        logger.info(f"[DB] ⚠️  properties.user_id ist Integer - ändere zu VARCHAR(36)...")
+                        conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
+                        conn.commit()
+                        logger.info(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
+                        
+        except Exception as e:
+            logger.info(f"[DB] ⚠️  Konnte Migrationen nicht ausführen: {e}")
+        
+        # Erstelle fehlende Tabellen (für neue Installationen)
+        logger.info(f"[DB] Erstelle fehlende Tables (falls nötig)...")
         Base.metadata.create_all(bind=engine)
-        print(f"[DB] ✓ Tables erstellt/geprüft")
+        logger.info(f"[DB] ✓ Tables erstellt/geprüft")
         
         # Überprüfe ob Tables existieren
         insp = inspect(engine)
         tables = insp.get_table_names()
-        print(f"[DB] ✓ Existierende Tabellen: {tables}")
-        
-        # Prüfe ob properties.user_id VARCHAR ist (für UUIDs)
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT data_type 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'user_id'
-                """)).fetchone()
-                if result and 'int' in result[0].lower():
-                    print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - ändere Spalte zu VARCHAR(36)...")
-                    conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
-                    conn.commit()
-                    print(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte user_id Spalte nicht prüfen/ändern: {e}")
+        logger.info(f"[DB] ✓ Existierende Tabellen: {tables}")
         
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        print(f"[DB] ✓ SessionLocal initialisiert")
+        logger.info(f"[DB] ✓ SessionLocal initialisiert")
+        
+        # Erstelle Demo-Benutzer wenn nicht vorhanden
+        try:
+            logger.info(f"[DB] Prüfe Demo-Benutzer...")
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT id, email FROM users WHERE email = 'demo@welcome-link.de'"))
+                existing = result.fetchone()
+                
+                if not existing:
+                    import uuid
+                    from datetime import datetime
+                    demo_id = str(uuid.uuid4())
+                    # Einfacher Password Hash für Demo (in Production sollte bcrypt verwendet werden)
+                    import hashlib
+                    password_hash = hashlib.sha256("Demo123!".encode()).hexdigest()
+                    
+                    conn.execute(text("""
+                        INSERT INTO users (id, email, password_hash, name, created_at)
+                        VALUES (:id, 'demo@welcome-link.de', :hash, 'Demo Benutzer', NOW())
+                    """), {"id": demo_id, "hash": password_hash})
+                    conn.commit()
+                    logger.info(f"[DB] ✓ Demo-Benutzer erstellt")
+        except Exception as e:
+            logger.info(f"[DB] ⚠️  Konnte Demo-Benutzer nicht erstellen: {e}")
         
         return engine, SessionLocal
     except Exception as e:
-        print(f"[DB] ❌ ERROR: {str(e)}")
+        logger.info(f"[DB] ❌ ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         raise
@@ -274,3 +407,5 @@ def get_db():
         yield db
     finally:
         db.close()
+
+

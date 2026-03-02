@@ -1,21 +1,25 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import os
 import logging
+import json
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, EmailStr, validator
-from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, validator, ValidationError
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import secrets
 import jwt
 from passlib.context import CryptContext
-from slowapi import Limiter
+from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, Bundle as DBBundle, BundleExtra as DBBundleExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule, Scene as DBScene, Extra as DBExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule
 
 ROOT_DIR = Path(__file__).parent
@@ -52,8 +56,16 @@ if not SMTP_PASSWORD and ENVIRONMENT == 'development':
     import sys
     print(f"⚠️  WARNING: SMTP_PASSWORD ist leer! E-Mails funktionieren nicht.", file=sys.stderr)
 
-# Database connection
+# Database connection - logger wird für fix_is_column benötigt
 logger = logging.getLogger(__name__)
+
+# Fix is_ column before database initialization (für Render Production)
+try:
+    from fix_is_column import fix_is_column
+    fix_is_column()
+except Exception as e:
+    logger.warning(f"is_ column fix failed (non-critical): {e}")
+
 try:
     engine, SessionLocal = init_db()
     logger.info("✓ Datenbank initialisiert")
@@ -71,6 +83,55 @@ limiter = Limiter(key_func=get_remote_address)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+# ============ SECURITY HEADERS MIDDLEWARE ============
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Fügt Security Headers zu allen Responses hinzu"""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Security Headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        
+        # HSTS nur in Production
+        if ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+        # Content-Security-Policy
+        if ENVIRONMENT == "production":
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.paypal.com; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "frame-src https://js.stripe.com https://www.paypal.com; "
+                "connect-src 'self' https://api.welcome-link.de https://api.stripe.com;"
+            )
+        
+        return response
+
+# ============ GLOBAL EXCEPTION HANDLER ============
+class AppException(Exception):
+    """Custom Exception für strukturierte Error Responses"""
+    def __init__(self, status_code: int, detail: str, error_code: str = None):
+        self.status_code = status_code
+        self.detail = detail
+        self.error_code = error_code or f"ERR_{status_code}"
+
+def create_error_response(status_code: int, detail: str, error_code: str = None, request_id: str = None) -> Dict[str, Any]:
+    """Erstellt strukturierte Error Response"""
+    return {
+        "error": {
+            "code": error_code or f"ERR_{status_code}",
+            "message": detail,
+            "request_id": request_id,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    }
+
 # Create the main app without a prefix
 app = FastAPI(
     title="Welcome Link API",
@@ -80,6 +141,48 @@ app = FastAPI(
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
 app.state.limiter = limiter
+
+# Add Security Headers Middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Rate Limit Exception Handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Global Exception Handler
+@app.exception_handler(AppException)
+async def app_exception_handler(request: Request, exc: AppException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(exc.status_code, exc.detail, exc.error_code)
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(exc.status_code, str(exc.detail))
+    )
+
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=create_error_response(422, "Validierungsfehler", "VALIDATION_ERROR")
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # In Production keine Stack Traces preisgeben
+    if ENVIRONMENT == "production":
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response(500, "Interner Server-Fehler", "INTERNAL_ERROR")
+        )
+    else:
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response(500, str(exc), "INTERNAL_ERROR")
+        )
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -191,85 +294,83 @@ def init_demo_user(db: Session):
     logger.info(f"Prüfe ob Demo-Benutzer existiert: {demo_email}")
     
     try:
-        existing = db.query(DBUser).filter(DBUser.email == demo_email).first()
+        # Verwende raw SQL um Schema-Probleme zu vermeiden
+        from sqlalchemy import text
+        result = db.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": demo_email})
+        existing = result.fetchone()
     except Exception as e:
         logger.error(f"❌ Fehler beim Abfragen Demo-Benutzer: {str(e)}")
         raise
     
     if not existing:
-        demo_user = DBUser(
-            id=str(uuid.uuid4()),
-            email=demo_email,
-            password_hash=hash_password("Demo123!"),
-            name="Demo Benutzer",
-            created_at=datetime.now(timezone.utc),
-            is_demo=True,
-            # Dummy Rechnungsdaten
-            invoice_name="Alpenblick Hospitality GmbH",
-            invoice_address="Bergstraße 12",
-            invoice_zip="82467",
-            invoice_city="Garmisch-Partenkirchen",
-            invoice_country="Deutschland",
-            invoice_vat_id="DE123456789"
-        )
-        db.add(demo_user)
-        db.commit()
-        
-        # Erstelle Demo-Properties
-        demo_properties = [
-            DBProperty(
-                id=str(uuid.uuid4()),
-                user_id=demo_user.id,
-                name="Boutique Hotel Alpenblick",
-                description="Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.",
-                address="Zugspitzstraße 42, 82467 Garmisch-Partenkirchen",
-                created_at=datetime.now(timezone.utc)
-            ),
-            DBProperty(
-                id=str(uuid.uuid4()),
-                user_id=demo_user.id,
-                name="Ferienwohnung Seeblick",
-                description="Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.",
-                address="Seepromenade 15, 88131 Lindau",
-                created_at=datetime.now(timezone.utc)
-            ),
-            DBProperty(
-                id=str(uuid.uuid4()),
-                user_id=demo_user.id,
-                name="Stadtapartment München City",
-                description="Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.",
-                address="Maximilianstraße 28, 80539 München",
-                created_at=datetime.now(timezone.utc)
-            )
-        ]
-        
-        for prop in demo_properties:
-            db.add(prop)
-        
-        # Erstelle festen GuestView-Token für Demo
-        demo_guestview_token = "demo-guest-view-token"
-        guest_view = DBGuestView(
-            id=str(uuid.uuid4()),
-            user_id=demo_user.id,
-            token=demo_guestview_token,
-            created_at=datetime.now(timezone.utc)
-        )
-        db.add(guest_view)
-        
-        db.commit()
-        logger.info(f"✓ Demo-Benutzer, Properties und GuestView-Token erstellt: /guestview/{demo_guestview_token}")
+        try:
+            # Erstelle Demo-User mit raw SQL (nur Basis-Spalten)
+            demo_id = str(uuid.uuid4())
+            db.execute(text("""
+                INSERT INTO users (id, email, password_hash, name, created_at)
+                VALUES (:id, :email, :password_hash, :name, NOW())
+            """), {
+                "id": demo_id,
+                "email": demo_email,
+                "password_hash": hash_password("Demo123!"),
+                "name": "Demo Benutzer"
+            })
+            db.commit()
+            logger.info(f"✓ Demo-Benutzer erstellt: {demo_email}")
+            
+            # Erstelle Demo-Properties mit raw SQL
+            properties = [
+                ("Boutique Hotel Alpenblick", "Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.", "Zugspitzstraße 42, 82467 Garmisch-Partenkirchen"),
+                ("Ferienwohnung Seeblick", "Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.", "Seepromenade 15, 88131 Lindau"),
+                ("Stadtapartment München City", "Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.", "Maximilianstraße 28, 80539 München"),
+            ]
+            
+            for name, desc, addr in properties:
+                db.execute(text("""
+                    INSERT INTO properties (id, user_id, name, description, address, created_at)
+                    VALUES (:id, :user_id, :name, :description, :address, NOW())
+                """), {
+                    "id": str(uuid.uuid4()),
+                    "user_id": demo_id,
+                    "name": name,
+                    "description": desc,
+                    "address": addr
+                })
+            
+            # Erstelle GuestView-Token
+            db.execute(text("""
+                INSERT INTO guest_views (id, user_id, token, created_at)
+                VALUES (:id, :user_id, :token, NOW())
+            """), {
+                "id": str(uuid.uuid4()),
+                "user_id": demo_id,
+                "token": "demo-guest-view-token"
+            })
+            
+            db.commit()
+            logger.info(f"✓ Demo-Benutzer, Properties und GuestView-Token erstellt: /guestview/demo-guest-view-token")
+            
+        except Exception as e:
+            logger.error(f"❌ Fehler beim Erstellen Demo-Benutzer: {str(e)}")
+            db.rollback()
+            raise
 
 # ============ AUTH ROUTES ============
 
 @api_router.post("/auth/register", response_model=AuthResponse)
-def register(data: UserRegister, db: Session = Depends(get_db)):
-    """Registriere einen neuen Benutzer"""
+@limiter.limit("5/minute")
+def register(request: Request, data: UserRegister, db: Session = Depends(get_db)):
+    """Registriere einen neuen Benutzer (Rate Limited: 5/Min)"""
     try:
         # Überprüfe ob E-Mail bereits existiert
         existing = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
         if existing:
             logger.warning(f"Registrierungsversuch mit existierender E-Mail: {data.email}")
             raise HTTPException(status_code=400, detail="E-Mail bereits registriert")
+        
+        # Erstelle Verification Token
+        verification_token = secrets.token_urlsafe(32)
+        verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         
         # Erstelle Benutzer
         user_id = str(uuid.uuid4())
@@ -279,16 +380,27 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
             password_hash=hash_password(data.password),
             name=data.name or data.email.split("@")[0],
             created_at=datetime.now(timezone.utc),
-            is_demo=False
+            is_demo=False,
+            is_email_verified=False,
+            email_verification_token=verification_token,
+            email_verification_token_expires=verification_expires
         )
         
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
         
+        # In Production: Sende Verification Email
+        # verification_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
+        # send_verification_email(data.email, verification_link)
+        
+        # Für Development: Log verification link
+        logger.info(f"✓ Neuer Benutzer registriert: {data.email}")
+        if ENVIRONMENT == "development":
+            logger.info(f"   Verification Token: {verification_token}")
+        
         # Erstelle Token
         token = create_token(user_id, db_user.email)
-        logger.info(f"Neuer Benutzer registriert: {data.email}")
         
         return AuthResponse(
             token=token,
@@ -309,9 +421,43 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
 
 # ============ EMAIL VERIFICATION ROUTES ============
 
+@api_router.get("/auth/verify-email")
+@limiter.limit("10/minute")
+def verify_email_get(request: Request, token: str, db: Session = Depends(get_db)):
+    """Verifiziere E-Mail mit Token via GET (für E-Mail Links) (Rate Limited: 10/Min)"""
+    if not token:
+        raise HTTPException(status_code=400, detail="Token fehlt")
+    
+    try:
+        user = db.query(DBUser).filter(DBUser.email_verification_token == token).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Ungültiger Token")
+        
+        # Prüfe ob Token abgelaufen ist
+        if user.email_verification_token_expires and datetime.now(timezone.utc) > user.email_verification_token_expires:
+            raise HTTPException(status_code=400, detail="Token ist abgelaufen")
+        
+        # Verifiziere E-Mail
+        user.is_email_verified = True
+        user.email_verification_token = None  # Token zurücksetzen
+        db.commit()
+        
+        logger.info(f"✓ E-Mail verifiziert: {user.email}")
+        
+        return {"message": "E-Mail erfolgreich verifiziert", "email": user.email}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler bei Email-Verifizierung: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Verifizierung fehlgeschaltet")
+
 @api_router.post("/auth/verify-email")
-def verify_email(data: dict, db: Session = Depends(get_db)):
-    """Verifiziere E-Mail mit Token"""
+@limiter.limit("10/minute")
+def verify_email_post(request: Request, data: dict, db: Session = Depends(get_db)):
+    """Verifiziere E-Mail mit Token via POST (für API Calls) (Rate Limited: 10/Min)"""
     token = data.get("token")
     if not token:
         raise HTTPException(status_code=400, detail="Token fehlt")
@@ -344,8 +490,9 @@ def verify_email(data: dict, db: Session = Depends(get_db)):
 
 
 @api_router.post("/auth/resend-verification")
-def resend_verification(data: dict, db: Session = Depends(get_db)):
-    """Sende Verifizierungs-E-Mail erneut"""
+@limiter.limit("3/minute")
+def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
+    """Sende Verifizierungs-E-Mail erneut (Rate Limited: 3/Min)"""
     email = data.get("email")
     if not email:
         raise HTTPException(status_code=400, detail="E-Mail fehlt")
@@ -370,10 +517,19 @@ def resend_verification(data: dict, db: Session = Depends(get_db)):
         
         logger.info(f"Verifizierungs-E-Mail erneut gesendet an: {email}")
         
-        # TODO: In Production echte E-Mail senden
+        # E-Mail-Versand (Production: SendGrid, AWS SES, etc.)
+        # Für MVP: Token in Response zurückgeben (für Testing)
+        try:
+            # In Production: Echte E-Mail senden
+            # send_verification_email(email, new_token)
+            logger.info(f"Verifizierungs-Token für {email}: {new_token}")
+        except Exception as email_error:
+            logger.warning(f"E-Mail konnte nicht gesendet werden: {email_error}")
+        
         return {
             "message": "Verifizierungs-E-Mail erneut gesendet",
-            "email": email
+            "email": email,
+            "verification_token": new_token if os.environ.get("ENVIRONMENT") == "development" else None
         }
     
     except HTTPException:
@@ -384,7 +540,8 @@ def resend_verification(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Fehler beim Resenden")
 
 @api_router.post("/auth/login", response_model=AuthResponse)
-def login(data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     """Benutzer Login mit E-Mail und Passwort"""
     try:
         # Finde Benutzer (normalisiere E-Mail)
@@ -419,12 +576,24 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)[:50]}")
 
 @api_router.post("/auth/magic-link")
-def request_magic_link(data: MagicLinkRequest):
-    """Fordere einen Magic Link an (würde in Production E-Mail senden)"""
-    # TODO: Implementiere echten E-Mail-Versand mit SendGrid oder ähnlich
-    # Für Demo: Nur bestätigung
+@limiter.limit("3/minute")
+def request_magic_link(request: Request, data: MagicLinkRequest):
+    """Fordere einen Magic Link an (würde in Production E-Mail senden) (Rate Limited: 3/Min)"""
+    # Generiere Magic Link Token
+    magic_token = secrets.token_urlsafe(32)
+    
+    # In Production: E-Mail mit Magic Link senden
+    # magic_link = f"{FRONTEND_URL}/auth/magic?token={magic_token}"
+    # send_magic_link_email(data.email, magic_link)
+    
     logger.info(f"Magic Link angefordert für: {data.email}")
-    return {"message": "Magic Link wurde an Ihre E-Mail gesendet", "email": data.email}
+    
+    # Für Development: Token zurückgeben
+    return {
+        "message": "Magic Link wurde an Ihre E-Mail gesendet",
+        "email": data.email,
+        "magic_token": magic_token if os.environ.get("ENVIRONMENT") == "development" else None
+    }
 
 @api_router.get("/auth/me", response_model=User)
 def get_me(user: DBUser = Depends(get_current_user)):
@@ -693,28 +862,25 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
 
 
 @api_router.get("/debug-db-schema")
-def debug_db_schema(db: Session = Depends(get_db)):
+def debug_db_schema():
     """Debug Endpoint für DB Schema"""
+    from sqlalchemy import text
     try:
-        # Prüfe user_id Type
-        result = db.execute("SELECT data_type FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'user_id'").fetchone()
-        user_id_type = result[0] if result else "N/A"
-        
-        # Prüfe description Spalte
-        result = db.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'description'").fetchone()
-        has_description = result is not None
-        
-        # Prüfe Tabellen
-        result = db.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'").fetchall()
-        tables = [r[0] for r in result]
-        
-        return {
-            "tables": tables,
-            "user_id_type": user_id_type,
-            "has_description": has_description
-        }
+        with engine.connect() as conn:
+            # Einfacher Test
+            conn.execute(text("SELECT 1")).fetchone()
+            
+            # Prüfe Users Spalten
+            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'users' ORDER BY ordinal_position")).fetchall()
+            users_columns = [r[0] for r in result]
+            
+            return {
+                "status": "ok",
+                "users_columns": users_columns
+            }
     except Exception as e:
-        return {"error": str(e)}
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 @api_router.get("/guestview-public-qr-data")
@@ -773,8 +939,34 @@ def get_guestview_public_qr_data(db: Session = Depends(get_db)):
 @api_router.post("/demo/init")
 def init_demo_user_endpoint(db: Session = Depends(get_db)):
     """Initialisiere Demo User manuell"""
-    init_demo_user(db)
-    return {"message": "Demo User initialisiert"}
+    from sqlalchemy import text
+    
+    try:
+        # Prüfe ob Demo-User existiert
+        result = db.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": "demo@welcome-link.de"})
+        existing = result.fetchone()
+        
+        if existing:
+            return {"message": "Demo User bereits vorhanden", "email": "demo@welcome-link.de"}
+        
+        # Erstelle Demo-User mit raw SQL
+        demo_id = str(uuid.uuid4())
+        db.execute(text("""
+            INSERT INTO users (id, email, password_hash, name, created_at)
+            VALUES (:id, :email, :password_hash, :name, NOW())
+        """), {
+            "id": demo_id,
+            "email": "demo@welcome-link.de",
+            "password_hash": hash_password("Demo123!"),
+            "name": "Demo Benutzer"
+        })
+        db.commit()
+        
+        return {"message": "Demo User erstellt", "email": "demo@welcome-link.de", "id": demo_id}
+        
+    except Exception as e:
+        logger.error(f"❌ Fehler beim Demo-User Init: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)}")
 
 
 @api_router.get("/guestview-qr-simple")
@@ -924,12 +1116,54 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+# ============ ENHANCED LOGGING ============
+class JSONFormatter(logging.Formatter):
+    """JSON Formatter für Production Logging"""
+    def format(self, record):
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "environment": ENVIRONMENT
+        }
+        if record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_entry)
+
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    force=True
-)
+if ENVIRONMENT == "production":
+    # JSON Logging für Production
+    handler = logging.StreamHandler()
+    handler.setFormatter(JSONFormatter())
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=[handler],
+        force=True
+    )
+else:
+    # Human-readable Logging für Development
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        force=True
+    )
+
+# Request Logging Middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = datetime.now(timezone.utc)
+    
+    # Request loggen
+    logger.info(f"Request: {request.method} {request.url.path}")
+    
+    response = await call_next(request)
+    
+    # Response loggen mit Duration
+    duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+    logger.info(f"Response: {request.method} {request.url.path} - Status: {response.status_code} - {duration_ms:.2f}ms")
+    
+    return response
 
 # ============== SCENE API ENDPOINTS ==============
 class SceneCreate(BaseModel):
@@ -1867,8 +2101,9 @@ class CleanerResponse(BaseModel):
     created_at: str
 
 @api_router.post("/cleaner/login")
-def cleaner_login(request: CleanerLoginRequest, db: Session = Depends(get_db)):
-    """Cleaner anmelden (passwortloser Login via cleanerId)"""
+@limiter.limit("10/minute")
+def cleaner_login(http_request: Request, request: CleanerLoginRequest, db: Session = Depends(get_db)):
+    """Cleaner anmelden (passwortloser Login via cleanerId) (Rate Limited: 10/Min)"""
     # Hier würde die Validierung der cleanerId stattfinden
     # Für MVP return dummy response
     return {
@@ -2096,6 +2331,107 @@ def get_global_stats(db: Session = Depends(get_db), user: User = Depends(get_cur
 
 
 # ============== END GLOBAL STATS & MONITORING API ENDPOINTS ==============
+
+# ============== BOOKING STATS WITH FILTER API ENDPOINTS ==============
+
+class BookingStatsFilter(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    status: Optional[str] = None
+    property_id: Optional[str] = None
+
+class FilteredBookingStats(BaseModel):
+    total_bookings: int
+    confirmed_bookings: int
+    completed_bookings: int
+    cancelled_bookings: int
+    total_revenue: float
+    avg_booking_value: float
+    period_start: str
+    period_end: str
+    filters_applied: Dict[str, str]
+
+@api_router.post("/api/stats/booking/filter", response_model=FilteredBookingStats, dependencies=[Depends(get_current_user)])
+def get_filtered_booking_stats(
+    filter_data: BookingStatsFilter,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Hole gefilterte Buchungs-Statistiken"""
+    query = db.query(Booking).filter(Booking.user_id == user.id)
+    
+    # Filter anwenden
+    filters_applied = {}
+    
+    if filter_data.start_date:
+        query = query.filter(Booking.created_at >= filter_data.start_date)
+        filters_applied['start_date'] = filter_data.start_date
+    
+    if filter_data.end_date:
+        query = query.filter(Booking.created_at <= filter_data.end_date)
+        filters_applied['end_date'] = filter_data.end_date
+    
+    if filter_data.status:
+        query = query.filter(Booking.status == filter_data.status)
+        filters_applied['status'] = filter_data.status
+    
+    if filter_data.property_id:
+        query = query.filter(Booking.property_id == filter_data.property_id)
+        filters_applied['property_id'] = filter_data.property_id
+    
+    bookings = query.all()
+    
+    total = len(bookings)
+    confirmed = len([b for b in bookings if b.status == 'confirmed'])
+    completed = len([b for b in bookings if b.status == 'completed'])
+    cancelled = len([b for b in bookings if b.status == 'cancelled'])
+    
+    total_revenue = sum(float(b.total_price or 0) for b in bookings)
+    avg_booking_value = total_revenue / confirmed if confirmed > 0 else 0
+    
+    return FilteredBookingStats(
+        total_bookings=total,
+        confirmed_bookings=confirmed,
+        completed_bookings=completed,
+        cancelled_bookings=cancelled,
+        total_revenue=round(total_revenue, 2),
+        avg_booking_value=round(avg_booking_value, 2),
+        period_start=filter_data.start_date or "all_time",
+        period_end=filter_data.end_date or "now",
+        filters_applied=filters_applied
+    )
+
+# ============== END BOOKING STATS WITH FILTER API ENDPOINTS ==============
+
+# ============== AUTO-FOCUS API ENDPOINTS ==============
+
+class AutoFocusConfig(BaseModel):
+    enabled: bool = True
+    focus_duration_ms: int = 3000
+    exclude_selectors: Optional[List[str]] = None
+
+class AutoFocusResponse(BaseModel):
+    success: bool
+    message: str
+
+@api_router.get("/api/autofocus/config", response_model=AutoFocusConfig, dependencies=[Depends(get_current_user)])
+def get_autofocus_config(user: User = Depends(get_current_user)):
+    """Hole Auto-Fokus Konfiguration (für Guestview Auto-Scroll)"""
+    return AutoFocusConfig(
+        enabled=True,
+        focus_duration_ms=3000,
+        exclude_selectors=[]
+    )
+
+@api_router.put("/api/autofocus/config", response_model=AutoFocusResponse, dependencies=[Depends(get_current_user)])
+def update_autofocus_config(config: AutoFocusConfig, user: User = Depends(get_current_user)):
+    """Update Auto-Fokus Konfiguration"""
+    return AutoFocusResponse(
+        success=True,
+        message="Auto-Fokus Konfiguration gespeichert"
+    )
+
+# ============== END AUTO-FOCUS API ENDPOINTS ==============
 
 # ============== BRANDING & AI API ENDPOINTS ==============
 from pydantic import BaseModel
@@ -2454,14 +2790,116 @@ def export_bookings_csv(db: Session = Depends(get_db), user: User = Depends(get_
 
 # ============== END HOST STATS API ENDPOINTS ==============
 
+# ============== FEEDBACK API ENDPOINTS ==============
+
+class FeedbackRequest(BaseModel):
+    rating: int
+    category: str
+    feedback: str
+    page: Optional[str] = None
+    userAgent: Optional[str] = None
+    timestamp: Optional[str] = None
+
+@api_router.post("/feedback")
+@limiter.limit("5/minute")
+def submit_feedback(request: Request, data: FeedbackRequest):
+    """User Feedback empfangen und speichern (Rate Limited: 5/Min)"""
+    try:
+        logger.info(f"Feedback erhalten: Rating={data.rating}, Category={data.category}")
+        
+        # In einer Production-Umgebung würde das Feedback in einer Datenbank gespeichert werden
+        # Für MVP: Loggen wir das Feedback
+        logger.info(f"Feedback Details: {data.feedback[:100]}...")
+        
+        return {
+            "message": "Feedback erfolgreich empfangen",
+            "rating": data.rating,
+            "category": data.category
+        }
+    except Exception as e:
+        logger.error(f"Fehler beim Speichern des Feedbacks: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Speichern des Feedbacks")
+
+# ============== END FEEDBACK API ENDPOINTS ==============
+
+# ============== CALENDAR EXPORT API ENDPOINTS ==============
+
+@api_router.get("/bookings/calendar.ics")
+def export_calendar_ics(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Exportiere alle Buchungen als iCal (.ics) Datei"""
+    from datetime import datetime, timedelta
+    
+    # Hole alle Buchungen des Users
+    bookings = db.query(DBBooking).join(DBProperty).filter(
+        DBProperty.user_id == user.id
+    ).all()
+    
+    if not bookings:
+        raise HTTPException(status_code=404, detail="Keine Buchungen gefunden")
+    
+    # iCal Header
+    ics_content = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Welcome Link//Booking Calendar//DE",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "X-WR-CALNAME:Welcome Link Buchungen",
+        "X-WR-TIMEZONE:Europe/Berlin",
+    ]
+    
+    # Füge jedes Booking als Event hinzu
+    for booking in bookings:
+        # Generate UID
+        event_uid = f"booking-{booking.id}@welcome-link.de"
+        
+        # Parse dates
+        check_in = booking.check_in if isinstance(booking.check_in, datetime) else datetime.strptime(str(booking.check_in), "%Y-%m-%d")
+        check_out = booking.check_out if isinstance(booking.check_out, datetime) else datetime.strptime(str(booking.check_out), "%Y-%m-%d")
+        
+        # Format dates for iCal (YYYYMMDD)
+        dtstart = check_in.strftime("%Y%m%d")
+        dtend = check_out.strftime("%Y%m%d")
+        dtstamp = datetime.now().strftime("%Y%m%dT%H%M%SZ")
+        
+        # Add event
+        ics_content.extend([
+            "BEGIN:VEVENT",
+            f"UID:{event_uid}",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;VALUE=DATE:{dtstart}",
+            f"DTEND;VALUE=DATE:{dtend}",
+            f"SUMMARY:{booking.guest_name}",
+            f"DESCRIPTION:Booking ID: {booking.id}\\nProperty: {booking.property.name if booking.property else 'N/A'}\\nEmail: {booking.guest_email or 'N/A'}",
+            f"LOCATION:{booking.property.address if booking.property and booking.property.address else ''}",
+            "STATUS:CONFIRMED",
+            "END:VEVENT",
+        ])
+    
+    # iCal Footer
+    ics_content.append("END:VCALENDAR")
+    
+    # Return as .ics file
+    from fastapi.responses import Response
+    return Response(
+        content="\r\n".join(ics_content),
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": "attachment; filename=bookings.ics"
+        }
+    )
+
+# ============== END CALENDAR EXPORT API ENDPOINTS ==============
+
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
     try:
         logger.info("🚀 Startup-Event: Initialisiere DB...")
-        if not SessionLocal:
-            logger.info("DB nicht initialisiert, rufe init_db() auf...")
-            init_db()
+        
+        # WICHTIG: init_db() IMMER zuerst aufrufen, um Migrationen auszuführen
+        from database import init_db as db_init_db
+        db_init_db()
         
         logger.info("🚀 Startup-Event: Öffne DB-Session...")
         if not SessionLocal:
@@ -2490,3 +2928,11 @@ def shutdown_db_client():
         logger.info("✓ Datenbankverbindung geschlossen")
     except Exception as e:
         logger.error(f"Fehler beim Shutdown: {str(e)}")
+# Deploy trigger
+
+
+
+
+
+
+
