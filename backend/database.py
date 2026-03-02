@@ -15,6 +15,17 @@ engine = None
 
 class User(Base):
     __tablename__ = "users"
+    # Ignoriere die problematische is_ Spalte falls sie existiert
+    __mapper_args__ = {
+        'include_properties': [
+            'id', 'email', 'password_hash', 'name', 'created_at',
+            'is_demo', 'is_email_verified', 'email_verification_token', 
+            'email_verification_token_expires', 'brand_color', 'logo_url',
+            'invoice_name', 'invoice_address', 'invoice_zip', 'invoice_city',
+            'invoice_country', 'invoice_vat_id', 'keysafe_location', 
+            'keysafe_code', 'keysafe_instructions'
+        ]
+    }
     
     id = Column(String(36), primary_key=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
