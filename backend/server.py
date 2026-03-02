@@ -624,6 +624,40 @@ def debug_db_schema(db: Session = Depends(get_db)):
     except Exception as e:
         return {"error": str(e)}
 
+@api_router.post("/debug/migrate-properties")
+def migrate_properties_table(db: Session = Depends(get_db)):
+    """Füge fehlende Spalten zur properties Tabelle hinzu"""
+    try:
+        from sqlalchemy import text
+        
+        migrations = [
+            ("description", "TEXT"),
+            ("address", "VARCHAR(500)"),
+        ]
+        
+        results = []
+        for col_name, col_type in migrations:
+            try:
+                db.execute(text(f"ALTER TABLE properties ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                results.append(f"✓ {col_name} hinzugefügt")
+            except Exception as e:
+                results.append(f"✗ {col_name}: {str(e)}")
+        
+        db.commit()
+        
+        # Zeige aktuelles Schema
+        result = db.execute(text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'properties'
+            ORDER BY ordinal_position
+        """))
+        columns = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
+        
+        return {"migrations": results, "schema": columns}
+    except Exception as e:
+        return {"error": str(e)}
+
 @api_router.get("/properties", response_model=List[Property])
 def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole alle Properties des Benutzers"""
