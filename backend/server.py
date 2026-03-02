@@ -3147,6 +3147,181 @@ def get_invoice(request: Request, checkout_id: str, db: Session = Depends(get_db
         
         # Tabelle
         data = [["Beschreibung", "Menge", "Einzelpreis", "Summe"]]
+
+
+# ============== STRIPE PAYMENT ENDPOINTS ==============
+
+class StripePaymentRequest(BaseModel):
+    checkout_id: str
+    success_url: str
+    cancel_url: str
+
+@api_router.post("/payment/stripe/create-session")
+@limiter.limit("10/minute")
+async def create_stripe_session(request: Request, data: StripePaymentRequest, db: Session = Depends(get_db)):
+    """Erstelle Stripe Checkout Session"""
+    try:
+        import os
+        stripe_secret = os.environ.get("STRIPE_SECRET_KEY")
+        if not stripe_secret:
+            raise HTTPException(status_code=500, detail="Stripe nicht konfiguriert")
+        
+        import stripe
+        stripe.api_key = stripe_secret
+        
+        # Lade Checkout
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT c.id, c.total, c.property_id, p.name as property_name
+            FROM checkouts c
+            JOIN properties p ON c.property_id = p.id
+            WHERE c.id = :id
+        """), {"id": data.checkout_id})
+        checkout = result.fetchone()
+        
+        if not checkout:
+            raise HTTPException(status_code=404, detail="Checkout nicht gefunden")
+        
+        # Erstelle Stripe Session
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'eur',
+                    'product_data': {
+                        'name': f'Extras - {checkout[3]}',
+                    },
+                    'unit_amount': int(float(checkout[1]) * 100),  # Cent
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=data.success_url,
+            cancel_url=data.cancel_url,
+            metadata={'checkout_id': data.checkout_id}
+        )
+        
+        # Update Checkout Status
+        db.execute(text("UPDATE checkouts SET status = 'processing' WHERE id = :id"), {"id": data.checkout_id})
+        db.commit()
+        
+        return {"url": session.url, "session_id": session.id}
+        
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe Error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Fehler beim Erstellen der Stripe Session: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Zahlung")
+
+
+@api_router.post("/payment/stripe/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """Stripe Webhook für Payment Updates"""
+    import os
+    stripe_secret = os.environ.get("STRIPE_SECRET_KEY")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+    
+    if not stripe_secret or not webhook_secret:
+        raise HTTPException(status_code=500, detail="Stripe nicht konfiguriert")
+    
+    import stripe
+    stripe.api_key = stripe_secret
+    
+    payload = await request.body()
+    sig_header = request.headers.get('stripe-signature')
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        checkout_id = session.get('metadata', {}).get('checkout_id')
+        
+        if checkout_id:
+            from sqlalchemy import text
+            db.execute(text("UPDATE checkouts SET status = 'paid' WHERE id = :id"), {"id": checkout_id})
+            db.commit()
+            logger.info(f"Checkout {checkout_id} paid via Stripe")
+    
+    return {"status": "success"}
+
+
+# ============== PAYPAL PAYMENT ENDPOINTS ==============
+
+class PayPalPaymentRequest(BaseModel):
+    checkout_id: str
+    return_url: str
+    cancel_url: str
+
+@api_router.post("/payment/paypal/create-order")
+@limiter.limit("10/minute")
+async def create_paypal_order(request: Request, data: PayPalPaymentRequest, db: Session = Depends(get_db)):
+    """Erstelle PayPal Order"""
+    try:
+        import os
+        paypal_client_id = os.environ.get("PAYPAL_CLIENT_ID")
+        paypal_secret = os.environ.get("PAYPAL_CLIENT_SECRET")
+        
+        if not paypal_client_id or not paypal_secret:
+            raise HTTPException(status_code=500, detail="PayPal nicht konfiguriert")
+        
+        # Lade Checkout
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT c.id, c.total FROM checkouts c WHERE c.id = :id
+        """), {"id": data.checkout_id})
+        checkout = result.fetchone()
+        
+        if not checkout:
+            raise HTTPException(status_code=404, detail="Checkout nicht gefunden")
+        
+        # PayPal API Call (vereinfacht)
+        import requests
+        import base64
+        
+        auth = base64.b64encode(f"{paypal_client_id}:{paypal_secret}".encode()).decode()
+        
+        response = requests.post(
+            "https://api-m.paypal.com/v2/checkout/orders",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Basic {auth}"
+            },
+            json={
+                "intent": "CAPTURE",
+                "purchase_units": [{
+                    "amount": {
+                        "currency_code": "EUR",
+                        "value": str(float(checkout[1]))
+                    }
+                }],
+                "application_context": {
+                    "return_url": data.return_url,
+                    "cancel_url": data.cancel_url
+                }
+            }
+        )
+        
+        if response.status_code == 201:
+            order = response.json()
+            # Update Checkout Status
+            db.execute(text("UPDATE checkouts SET status = 'processing' WHERE id = :id"), {"id": data.checkout_id})
+            db.commit()
+            return {"order_id": order["id"], "approve_url": next(link["href"] for link in order["links"] if link["rel"] == "approve")}
+        else:
+            raise HTTPException(status_code=400, detail="PayPal Order fehlgeschlagen")
+            
+    except Exception as e:
+        logger.error(f"Fehler beim Erstellen der PayPal Order: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Zahlung")
+
+
+# ============== END PAYMENT ENDPOINTS ==============
         for item in items:
             data.append([
                 f"{item[0]}\n{item[1] or ''}",
