@@ -680,6 +680,60 @@ def migrate_properties_table(db: Session = Depends(get_db)):
     except Exception as e:
         return {"error": str(e)}
 
+@api_router.post("/debug/seed-extras/{property_id}")
+def seed_demo_extras(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Erstelle Demo-Extras für eine Property"""
+    try:
+        from sqlalchemy import text
+        import uuid
+        
+        # Prüfe Ownership
+        prop = db.query(DBProperty).filter(DBProperty.id == property_id, DBProperty.user_id == user.id).first()
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property nicht gefunden")
+        
+        # Demo Extras
+        extras = [
+            {"name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen, Aufschnitt, Eiern und Getränken", "price": 15.00, "category": "food"},
+            {"name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr statt 11:00 Uhr", "price": 25.00, "category": "service"},
+            {"name": "Früh-Check-in", "description": "Check-in ab 12:00 Uhr statt 15:00 Uhr", "price": 20.00, "category": "service"},
+            {"name": "Tiefgarage", "description": "Sicherer Stellplatz in der Tiefgarage", "price": 10.00, "category": "parking"},
+            {"name": "Parkplatz Außen", "description": "Parkplatz direkt vor dem Haus", "price": 5.00, "category": "parking"},
+            {"name": "Zusätzliche Reinigung", "description": "Professionelle Zwischenreinigung während des Aufenthalts", "price": 35.00, "category": "service"},
+            {"name": "Wäscheservice", "description": "Bettwäsche und Handtücher werden alle 3 Tage gewechselt", "price": 15.00, "category": "service"},
+            {"name": "Haustier", "description": "Haustier willkommen (bitte vorher anmelden)", "price": 10.00, "category": "service"},
+            {"name": "Fahrradverleih", "description": "2 Fahrräder für Erkundungen in der Umgebung", "price": 12.00, "category": "activity"},
+            {"name": "Willkommenspaket", "description": "Regionaler Wein, Obst und Snacks bei Ankunft", "price": 25.00, "category": "food"},
+        ]
+        
+        created = []
+        for extra in extras:
+            extra_id = str(uuid.uuid4())
+            db.execute(text("""
+                INSERT INTO extras (id, property_id, name, description, price, category, is_active, created_at)
+                VALUES (:id, :pid, :name, :desc, :price, :cat, true, NOW())
+                ON CONFLICT DO NOTHING
+            """), {
+                "id": extra_id,
+                "pid": property_id,
+                "name": extra["name"],
+                "desc": extra["description"],
+                "price": extra["price"],
+                "cat": extra["category"]
+            })
+            created.append({"id": extra_id, "name": extra["name"], "price": extra["price"]})
+        
+        db.commit()
+        
+        return {"success": True, "created_count": len(created), "extras": created}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Seeden der Extras: {str(e)}")
+        db.rollback()
+        return {"error": str(e)}
+
+
 @api_router.post("/debug/migrate-extras")
 def migrate_extras_table(db: Session = Depends(get_db)):
     """Erstelle Extras-Tabelle falls nicht vorhanden"""
