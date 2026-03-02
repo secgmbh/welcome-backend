@@ -685,6 +685,34 @@ def migrate_properties_table(db: Session = Depends(get_db)):
     except Exception as e:
         return {"error": str(e)}
 
+@api_router.post("/debug/set-demo-data/{property_id}")
+def set_demo_data(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Setze Demo-Daten für Gästeseite (WLAN, KeySafe, Host)"""
+    try:
+        from sqlalchemy import text
+        
+        db.execute(text("""
+            UPDATE properties SET
+                image_url = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
+                wifi_name = 'Seeblick-Guest',
+                wifi_password = 'Sommer2024!',
+                keysafe_location = 'Links neben der Eingangstür',
+                keysafe_code = '4287',
+                keysafe_instructions = 'Schlüssel entnehmen, Safe schließen, nach dem Auschecken Schlüssel wieder in den Safe legen.',
+                checkin_time = '15:00',
+                checkout_time = '11:00',
+                host_phone = '+49 8051 123456',
+                host_email = 'gastgeber@seeblick.de',
+                host_whatsapp = '+49 170 1234567'
+            WHERE id = :id AND user_id = :uid
+        """), {"id": property_id, "uid": user.id})
+        db.commit()
+        
+        return {"success": True, "message": "Demo-Daten gesetzt"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @api_router.get("/debug/properties-raw")
 def debug_properties_raw(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Debug: Zeige rohe Properties"""
