@@ -725,12 +725,19 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
 def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Erstelle eine neue Property"""
     try:
+        import random
+        import string
+        
+        # Generiere automatisch eine public_id
+        public_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+        
         # Verwende auto-increment ID (die DB generiert die ID automatisch)
         db_property = DBProperty(
             user_id=user.id,
             name=data.name.strip(),
             description=data.description.strip() if data.description else None,
             address=data.address.strip() if data.address else None,
+            public_id=public_id,
             created_at=datetime.now(timezone.utc)
         )
         
@@ -738,7 +745,7 @@ def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_use
         db.commit()
         db.refresh(db_property)
         
-        logger.info(f"Property erstellt: {db_property.id} für Benutzer {user.id}")
+        logger.info(f"Property erstellt: {db_property.id} (public_id: {public_id}) für Benutzer {user.id}")
         
         return Property(
             id=str(db_property.id),  # Konvertiere zu String für API
@@ -746,6 +753,7 @@ def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_use
             name=db_property.name,
             description=db_property.description,
             address=db_property.address,
+            public_id=db_property.public_id,
             created_at=db_property.created_at
         )
     except Exception as e:
