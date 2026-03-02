@@ -234,6 +234,7 @@ class Property(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
     address: Optional[str] = Field(None, max_length=500)
+    public_id: Optional[str] = Field(None, max_length=20)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PropertyCreate(BaseModel):
@@ -711,6 +712,7 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
             name=p.name,
             description=p.description,
             address=p.address,
+            public_id=p.public_id,
             created_at=p.created_at
         ) for p in properties]
     except Exception as e:
@@ -771,12 +773,46 @@ def get_property(property_id: str, user: DBUser = Depends(get_current_user), db:
             name=prop.name,
             description=prop.description,
             address=prop.address,
+            public_id=prop.public_id,
             created_at=prop.created_at
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Fehler beim Abrufen von Property: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Property")
+
+
+@api_router.get("/public/properties/{public_id}")
+def get_public_property(public_id: str, db: Session = Depends(get_db)):
+    """Öffentlicher Endpoint für Gästeseite mit public_id"""
+    try:
+        from sqlalchemy import text
+        
+        # Suche nach public_id oder id
+        result = db.execute(text("""
+            SELECT id, user_id, name, description, address, created_at, public_id
+            FROM properties 
+            WHERE public_id = :pid OR id = :pid
+        """), {"pid": public_id})
+        row = result.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Property nicht gefunden")
+        
+        return {
+            "id": str(row[0]),
+            "user_id": row[1],
+            "name": row[2],
+            "description": row[3],
+            "address": row[4],
+            "created_at": row[5].isoformat() if row[5] else None,
+            "public_id": row[6]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Abrufen der öffentlichen Property: {str(e)}")
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Property")
 
 class PropertyUpdate(BaseModel):
@@ -823,6 +859,7 @@ def update_property(property_id: str, data: PropertyUpdate, user: DBUser = Depen
             name=prop.name,
             description=prop.description,
             address=prop.address,
+            public_id=prop.public_id,
             created_at=prop.created_at
         )
     except HTTPException:
