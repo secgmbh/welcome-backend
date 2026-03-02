@@ -608,6 +608,22 @@ def get_me(user: DBUser = Depends(get_current_user)):
 
 # ============ PROPERTY ROUTES ============
 
+@api_router.get("/debug/db-schema")
+def debug_db_schema(db: Session = Depends(get_db)):
+    """Debug: Zeige DB-Schema"""
+    try:
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'properties'
+            ORDER BY ordinal_position
+        """))
+        columns = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
+        return {"table": "properties", "columns": columns}
+    except Exception as e:
+        return {"error": str(e)}
+
 @api_router.get("/properties", response_model=List[Property])
 def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole alle Properties des Benutzers"""
