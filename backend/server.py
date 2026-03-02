@@ -655,8 +655,10 @@ def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_use
         )
     except Exception as e:
         logger.error(f"Fehler beim Erstellen von Property: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Property")
+        raise HTTPException(status_code=500, detail=f"Fehler beim Erstellen der Property: {str(e)}")
 
 @api_router.get("/properties/{property_id}", response_model=Property)
 def get_property(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
