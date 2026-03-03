@@ -591,3 +591,248 @@ def shutdown_db_client():
         logger.info("✓ Datenbankverbindung geschlossen")
     except Exception as e:
         logger.error(f"Fehler beim Shutdown: {str(e)}")
+
+# ============ EXTRAS MODELS & ROUTES ============
+
+class ExtraBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    price: float = Field(ge=0)
+    category: str = "other"  # food, wellness, activity, transport, other
+    is_active: bool = True
+
+class ExtraCreate(ExtraBase):
+    pass
+
+class Extra(ExtraBase):
+    id: str
+    property_id: int
+
+# In-Memory Extras Store (simplified for demo)
+EXTRAS_STORE = {}
+
+def get_demo_extras():
+    """Get demo extras"""
+    return [
+        {"id": "extra-1", "property_id": 17, "name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen", "price": 15.0, "category": "food", "is_active": True},
+        {"id": "extra-2", "property_id": 17, "name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr", "price": 25.0, "category": "other", "is_active": True},
+        {"id": "extra-3", "property_id": 17, "name": "Fahrradverleih", "description": "Pro Tag, inkl. Helm", "price": 12.0, "category": "activity", "is_active": True},
+        {"id": "extra-4", "property_id": 17, "name": "Sauna", "description": "Private Nutzung für 2 Stunden", "price": 30.0, "category": "wellness", "is_active": True},
+        {"id": "extra-5", "property_id": 17, "name": "Gepäckaufbewahrung", "description": "Pro Tag", "price": 5.0, "category": "other", "is_active": True},
+        {"id": "extra-6", "property_id": 17, "name": "Shuttle Service", "description": "Bahnhof-Transfer", "price": 20.0, "category": "transport", "is_active": True},
+        {"id": "extra-7", "property_id": 17, "name": "Willkommens-Paket", "description": "Sekt, Obst & Schokolade", "price": 35.0, "category": "food", "is_active": True},
+        {"id": "extra-8", "property_id": 17, "name": "Haustier", "description": "Pro Nacht", "price": 10.0, "category": "other", "is_active": True},
+        {"id": "extra-9", "property_id": 17, "name": "Parkplatz", "description": "Tiefgarage, pro Tag", "price": 8.0, "category": "transport", "is_active": True},
+        {"id": "extra-10", "property_id": 17, "name": "Massage", "description": "60 Min. Rücken-Nacken", "price": 65.0, "category": "wellness", "is_active": True},
+    ]
+
+@api_router.get("/properties/{property_id}/extras")
+def get_extras(property_id: int):
+    """Get all extras for a property"""
+    extras = get_demo_extras()
+    return {"extras": extras}
+
+@api_router.post("/properties/{property_id}/extras")
+def create_extra(property_id: int, data: ExtraCreate, user = Depends(get_current_user)):
+    """Create a new extra"""
+    extra_id = f"extra-{uuid.uuid4().hex[:8]}"
+    extra = {
+        "id": extra_id,
+        "property_id": property_id,
+        **data.model_dump()
+    }
+    if property_id not in EXTRAS_STORE:
+        EXTRAS_STORE[property_id] = []
+    EXTRAS_STORE[property_id].append(extra)
+    return extra
+
+# ============ CHECKOUT MODELS & ROUTES ============
+
+class CheckoutItem(BaseModel):
+    extra_id: str
+    quantity: int = Field(ge=1, le=10)
+    
+class CheckoutRequest(BaseModel):
+    property_id: int
+    items: List[CheckoutItem]
+    guest_name: str
+    guest_email: str
+    payment_method: str = "stripe"  # stripe, paypal, cash
+    
+class CheckoutResponse(BaseModel):
+    checkout_id: str
+    total: float
+    payment_url: Optional[str] = None
+    status: str
+
+# In-Memory Checkouts Store
+CHECKOUTS_STORE = {}
+
+@api_router.post("/checkout")
+def create_checkout(data: CheckoutRequest, user = Depends(get_current_user)):
+    """Create a new checkout/order"""
+    checkout_id = f"checkout-{uuid.uuid4().hex[:8]}"
+    
+    # Calculate total
+    extras = get_demo_extras()
+    total = 0.0
+    order_items = []
+    
+    for item in data.items:
+        extra = next((e for e in extras if e["id"] == item.extra_id), None)
+        if extra:
+            item_total = extra["price"] * item.quantity
+            total += item_total
+            order_items.append({
+                "extra_id": item.extra_id,
+                "name": extra["name"],
+                "price": extra["price"],
+                "quantity": item.quantity,
+                "total": item_total
+            })
+    
+    checkout = {
+        "id": checkout_id,
+        "property_id": data.property_id,
+        "items": order_items,
+        "guest_name": data.guest_name,
+        "guest_email": data.guest_email,
+        "payment_method": data.payment_method,
+        "subtotal": total,
+        "tax": round(total * 0.19, 2),
+        "total": round(total * 1.19, 2),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    CHECKOUTS_STORE[checkout_id] = checkout
+    
+    # For demo: auto-complete payment
+    if data.payment_method == "stripe":
+        checkout["status"] = "completed"
+        checkout["payment_id"] = f"pi_{uuid.uuid4().hex[:24]}"
+    
+    return CheckoutResponse(
+        checkout_id=checkout_id,
+        total=checkout["total"],
+        payment_url=None,
+        status=checkout["status"]
+    )
+
+@api_router.get("/checkout/{checkout_id}")
+def get_checkout(checkout_id: str):
+    """Get checkout details"""
+    checkout = CHECKOUTS_STORE.get(checkout_id)
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    return checkout
+
+@api_router.post("/checkout/{checkout_id}/complete")
+def complete_checkout(checkout_id: str, user = Depends(get_current_user)):
+    """Complete a checkout (simulate payment)"""
+    checkout = CHECKOUTS_STORE.get(checkout_id)
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    
+    checkout["status"] = "completed"
+    checkout["completed_at"] = datetime.now(timezone.utc).isoformat()
+    checkout["payment_id"] = f"pi_{uuid.uuid4().hex[:24]}"
+    
+    return checkout
+
+@api_router.get("/checkout/{checkout_id}/invoice")
+def get_invoice(checkout_id: str):
+    """Get invoice PDF for checkout"""
+    checkout = CHECKOUTS_STORE.get(checkout_id)
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    
+    # Generate invoice data
+    invoice_number = f"WL-{datetime.now().strftime('%Y%m%d')}-{checkout_id[-6:].upper()}"
+    
+    invoice_data = {
+        "invoice_number": invoice_number,
+        "invoice_date": datetime.now().strftime("%d.%m.%Y"),
+        "due_date": (datetime.now() + timedelta(days=14)).strftime("%d.%m.%Y"),
+        "host_name": "Welcome Link Demo",
+        "host_address": "Musterstraße 1, 12345 Musterstadt",
+        "host_email": "info@welcome-link.de",
+        "guest_name": checkout["guest_name"],
+        "guest_email": checkout["guest_email"],
+        "property_name": "Ferienwohnung Seeblick",
+        "property_address": "Seestraße 42, 83209 Prien am Chiemsee",
+        "items": checkout["items"],
+        "subtotal": checkout["subtotal"],
+        "tax": checkout["tax"],
+        "total": checkout["total"],
+        "payment_method": checkout["payment_method"],
+        "payment_status": "Bezahlt" if checkout["status"] == "completed" else "Ausstehend"
+    }
+    
+    return {"invoice": invoice_data, "checkout": checkout}
+
+# ============ PROPERTY EDIT ROUTES ============
+
+class PropertyUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+    brand_color: Optional[str] = None
+    wifi_name: Optional[str] = None
+    wifi_password: Optional[str] = None
+    keysafe_location: Optional[str] = None
+    keysafe_code: Optional[str] = None
+    checkin_time: Optional[str] = None
+    checkout_time: Optional[str] = None
+    house_rules: Optional[List[str]] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+
+@api_router.put("/properties/{property_id}")
+def update_property(property_id: int, data: PropertyUpdate, user = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update property details"""
+    prop = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+    if not prop:
+        # For demo: return success anyway
+        return {"success": True, "property_id": property_id, "updated": data.model_dump(exclude_none=True)}
+    
+    # Update fields
+    update_data = data.model_dump(exclude_none=True)
+    for key, value in update_data.items():
+        if hasattr(prop, key):
+            setattr(prop, key, value)
+    
+    db.commit()
+    db.refresh(prop)
+    
+    return {"success": True, "property": prop.to_dict() if hasattr(prop, 'to_dict') else update_data}
+
+@api_router.get("/properties/{property_id}/edit")
+def get_property_for_edit(property_id: int, user = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get property details for editing"""
+    prop = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+    
+    if not prop:
+        # Return demo property
+        return {
+            "id": property_id,
+            "name": "Ferienwohnung Seeblick",
+            "description": "Moderne 3-Zimmer Ferienwohnung direkt am Chiemsee mit eigenem Bootssteg und Panoramaterrasse.",
+            "address": "Seestraße 42, 83209 Prien am Chiemsee",
+            "brand_color": "#f97316",
+            "wifi_name": "Seeblick-Guest",
+            "wifi_password": "Welcome2024!",
+            "keysafe_location": "An der Eingangstür links",
+            "keysafe_code": "1234",
+            "checkin_time": "15:00",
+            "checkout_time": "11:00",
+            "house_rules": [
+                "Rauchen ist in der gesamten Unterkunft nicht gestattet",
+                "Bitte tragen Sie Straßenschuhe nicht in den Schlafzimmern",
+                "Ruhezeiten: 22:00 - 08:00 Uhr"
+            ],
+            "contact_phone": "+49 8051 12345",
+            "contact_email": "host@welcome-link.de"
+        }
+    
+    return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
