@@ -542,6 +542,9 @@ def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
         logger.error(f"Fehler beim Abrufen des Guestviews: {str(e)}")
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen des Guestviews")
 
+# Include the router in the main app
+app.include_router(api_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -833,8 +836,5 @@ def get_property_for_edit(property_id: int, user = Depends(get_current_user), db
         }
     
     return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
-
-# Include the router in the main app AFTER all routes are defined
-app.include_router(api_router)
 
 # Build 2026-03-03 19:56:04
