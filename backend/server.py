@@ -1,26 +1,21 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 import os
 import logging
-import json
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, EmailStr, validator, ValidationError
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, validator
+from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 import secrets
 import jwt
 from passlib.context import CryptContext
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Scene as DBScene, Extra as DBExtra, Bundle as DBBundle, BundleExtra as DBBundleExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule, Scene as DBScene, Extra as DBExtra, ABTest as DBABTest, Partner as DBPartner, SmartRule as DBSmartRule
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -51,21 +46,8 @@ SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
 SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'td2dfTR87tFiw2Wg')
 SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
 
-# Warnung wenn Leeres Password (nur in Development)
-if not SMTP_PASSWORD and ENVIRONMENT == 'development':
-    import sys
-    print(f"⚠️  WARNING: SMTP_PASSWORD ist leer! E-Mails funktionieren nicht.", file=sys.stderr)
-
-# Database connection - logger wird für fix_is_column benötigt
+# Database connection
 logger = logging.getLogger(__name__)
-
-# Fix is_ column before database initialization (für Render Production)
-try:
-    from fix_is_column import fix_is_column
-    fix_is_column()
-except Exception as e:
-    logger.warning(f"is_ column fix failed (non-critical): {e}")
-
 try:
     engine, SessionLocal = init_db()
     logger.info("✓ Datenbank initialisiert")
@@ -83,55 +65,6 @@ limiter = Limiter(key_func=get_remote_address)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
-# ============ SECURITY HEADERS MIDDLEWARE ============
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Fügt Security Headers zu allen Responses hinzu"""
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        
-        # Security Headers
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        
-        # HSTS nur in Production
-        if ENVIRONMENT == "production":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        
-        # Content-Security-Policy
-        if ENVIRONMENT == "production":
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.paypal.com; "
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data: https:; "
-                "frame-src https://js.stripe.com https://www.paypal.com; "
-                "connect-src 'self' https://api.welcome-link.de https://api.stripe.com;"
-            )
-        
-        return response
-
-# ============ GLOBAL EXCEPTION HANDLER ============
-class AppException(Exception):
-    """Custom Exception für strukturierte Error Responses"""
-    def __init__(self, status_code: int, detail: str, error_code: str = None):
-        self.status_code = status_code
-        self.detail = detail
-        self.error_code = error_code or f"ERR_{status_code}"
-
-def create_error_response(status_code: int, detail: str, error_code: str = None, request_id: str = None) -> Dict[str, Any]:
-    """Erstellt strukturierte Error Response"""
-    return {
-        "error": {
-            "code": error_code or f"ERR_{status_code}",
-            "message": detail,
-            "request_id": request_id,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-    }
-
 # Create the main app without a prefix
 app = FastAPI(
     title="Welcome Link API",
@@ -141,48 +74,6 @@ app = FastAPI(
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
 app.state.limiter = limiter
-
-# Add Security Headers Middleware
-app.add_middleware(SecurityHeadersMiddleware)
-
-# Rate Limit Exception Handler
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# Global Exception Handler
-@app.exception_handler(AppException)
-async def app_exception_handler(request: Request, exc: AppException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=create_error_response(exc.status_code, exc.detail, exc.error_code)
-    )
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=create_error_response(exc.status_code, str(exc.detail))
-    )
-
-@app.exception_handler(ValidationError)
-async def validation_exception_handler(request: Request, exc: ValidationError):
-    return JSONResponse(
-        status_code=422,
-        content=create_error_response(422, "Validierungsfehler", "VALIDATION_ERROR")
-    )
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    # In Production keine Stack Traces preisgeben
-    if ENVIRONMENT == "production":
-        return JSONResponse(
-            status_code=500,
-            content=create_error_response(500, "Interner Server-Fehler", "INTERNAL_ERROR")
-        )
-    else:
-        return JSONResponse(
-            status_code=500,
-            content=create_error_response(500, str(exc), "INTERNAL_ERROR")
-        )
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -234,7 +125,6 @@ class Property(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
     address: Optional[str] = Field(None, max_length=500)
-    public_id: Optional[str] = Field(None, max_length=20)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PropertyCreate(BaseModel):
@@ -295,83 +185,68 @@ def init_demo_user(db: Session):
     logger.info(f"Prüfe ob Demo-Benutzer existiert: {demo_email}")
     
     try:
-        # Verwende raw SQL um Schema-Probleme zu vermeiden
-        from sqlalchemy import text
-        result = db.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": demo_email})
-        existing = result.fetchone()
+        existing = db.query(DBUser).filter(DBUser.email == demo_email).first()
     except Exception as e:
         logger.error(f"❌ Fehler beim Abfragen Demo-Benutzer: {str(e)}")
         raise
     
     if not existing:
-        try:
-            # Erstelle Demo-User mit raw SQL (nur Basis-Spalten)
-            demo_id = str(uuid.uuid4())
-            db.execute(text("""
-                INSERT INTO users (id, email, password_hash, name, created_at)
-                VALUES (:id, :email, :password_hash, :name, NOW())
-            """), {
-                "id": demo_id,
-                "email": demo_email,
-                "password_hash": hash_password("Demo123!"),
-                "name": "Demo Benutzer"
-            })
-            db.commit()
-            logger.info(f"✓ Demo-Benutzer erstellt: {demo_email}")
-            
-            # Erstelle Demo-Properties mit raw SQL
-            properties = [
-                ("Boutique Hotel Alpenblick", "Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.", "Zugspitzstraße 42, 82467 Garmisch-Partenkirchen"),
-                ("Ferienwohnung Seeblick", "Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.", "Seepromenade 15, 88131 Lindau"),
-                ("Stadtapartment München City", "Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.", "Maximilianstraße 28, 80539 München"),
-            ]
-            
-            for name, desc, addr in properties:
-                db.execute(text("""
-                    INSERT INTO properties (id, user_id, name, description, address, created_at)
-                    VALUES (:id, :user_id, :name, :description, :address, NOW())
-                """), {
-                    "id": str(uuid.uuid4()),
-                    "user_id": demo_id,
-                    "name": name,
-                    "description": desc,
-                    "address": addr
-                })
-            
-            # Erstelle GuestView-Token
-            db.execute(text("""
-                INSERT INTO guest_views (id, user_id, token, created_at)
-                VALUES (:id, :user_id, :token, NOW())
-            """), {
-                "id": str(uuid.uuid4()),
-                "user_id": demo_id,
-                "token": "demo-guest-view-token"
-            })
-            
-            db.commit()
-            logger.info(f"✓ Demo-Benutzer, Properties und GuestView-Token erstellt: /guestview/demo-guest-view-token")
-            
-        except Exception as e:
-            logger.error(f"❌ Fehler beim Erstellen Demo-Benutzer: {str(e)}")
-            db.rollback()
-            raise
+        demo_user = DBUser(
+            id=str(uuid.uuid4()),
+            email=demo_email,
+            password_hash=hash_password("Demo123!"),
+            name="Demo Benutzer",
+            created_at=datetime.now(timezone.utc),
+            is_demo=True
+        )
+        db.add(demo_user)
+        db.commit()
+        
+        # Erstelle Demo-Properties
+        demo_properties = [
+            DBProperty(
+                id=str(uuid.uuid4()),
+                user_id=demo_user.id,
+                name="Boutique Hotel Alpenblick",
+                description="Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.",
+                address="Zugspitzstraße 42, 82467 Garmisch-Partenkirchen",
+                created_at=datetime.now(timezone.utc)
+            ),
+            DBProperty(
+                id=str(uuid.uuid4()),
+                user_id=demo_user.id,
+                name="Ferienwohnung Seeblick",
+                description="Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.",
+                address="Seepromenade 15, 88131 Lindau",
+                created_at=datetime.now(timezone.utc)
+            ),
+            DBProperty(
+                id=str(uuid.uuid4()),
+                user_id=demo_user.id,
+                name="Stadtapartment München City",
+                description="Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.",
+                address="Maximilianstraße 28, 80539 München",
+                created_at=datetime.now(timezone.utc)
+            )
+        ]
+        
+        for prop in demo_properties:
+            db.add(prop)
+        db.commit()
+        
+        logger.info("✓ Demo-Benutzer und Properties erstellt")
 
 # ============ AUTH ROUTES ============
 
 @api_router.post("/auth/register", response_model=AuthResponse)
-@limiter.limit("5/minute")
-def register(request: Request, data: UserRegister, db: Session = Depends(get_db)):
-    """Registriere einen neuen Benutzer (Rate Limited: 5/Min)"""
+def register(data: UserRegister, db: Session = Depends(get_db)):
+    """Registriere einen neuen Benutzer"""
     try:
         # Überprüfe ob E-Mail bereits existiert
         existing = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
         if existing:
             logger.warning(f"Registrierungsversuch mit existierender E-Mail: {data.email}")
             raise HTTPException(status_code=400, detail="E-Mail bereits registriert")
-        
-        # Erstelle Verification Token
-        verification_token = secrets.token_urlsafe(32)
-        verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         
         # Erstelle Benutzer
         user_id = str(uuid.uuid4())
@@ -381,27 +256,16 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
             password_hash=hash_password(data.password),
             name=data.name or data.email.split("@")[0],
             created_at=datetime.now(timezone.utc),
-            is_demo=False,
-            is_email_verified=False,
-            email_verification_token=verification_token,
-            email_verification_token_expires=verification_expires
+            is_demo=False
         )
         
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
         
-        # In Production: Sende Verification Email
-        # verification_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
-        # send_verification_email(data.email, verification_link)
-        
-        # Für Development: Log verification link
-        logger.info(f"✓ Neuer Benutzer registriert: {data.email}")
-        if ENVIRONMENT == "development":
-            logger.info(f"   Verification Token: {verification_token}")
-        
         # Erstelle Token
         token = create_token(user_id, db_user.email)
+        logger.info(f"Neuer Benutzer registriert: {data.email}")
         
         return AuthResponse(
             token=token,
@@ -419,130 +283,8 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
         db.rollback()
         raise HTTPException(status_code=500, detail="Registrierung fehlgeschlagen")
 
-
-# ============ EMAIL VERIFICATION ROUTES ============
-
-@api_router.get("/auth/verify-email")
-@limiter.limit("10/minute")
-def verify_email_get(request: Request, token: str, db: Session = Depends(get_db)):
-    """Verifiziere E-Mail mit Token via GET (für E-Mail Links) (Rate Limited: 10/Min)"""
-    if not token:
-        raise HTTPException(status_code=400, detail="Token fehlt")
-    
-    try:
-        user = db.query(DBUser).filter(DBUser.email_verification_token == token).first()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="Ungültiger Token")
-        
-        # Prüfe ob Token abgelaufen ist
-        if user.email_verification_token_expires and datetime.now(timezone.utc) > user.email_verification_token_expires:
-            raise HTTPException(status_code=400, detail="Token ist abgelaufen")
-        
-        # Verifiziere E-Mail
-        user.is_email_verified = True
-        user.email_verification_token = None  # Token zurücksetzen
-        db.commit()
-        
-        logger.info(f"✓ E-Mail verifiziert: {user.email}")
-        
-        return {"message": "E-Mail erfolgreich verifiziert", "email": user.email}
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler bei Email-Verifizierung: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Verifizierung fehlgeschaltet")
-
-@api_router.post("/auth/verify-email")
-@limiter.limit("10/minute")
-def verify_email_post(request: Request, data: dict, db: Session = Depends(get_db)):
-    """Verifiziere E-Mail mit Token via POST (für API Calls) (Rate Limited: 10/Min)"""
-    token = data.get("token")
-    if not token:
-        raise HTTPException(status_code=400, detail="Token fehlt")
-    
-    try:
-        user = db.query(DBUser).filter(DBUser.email_verification_token == token).first()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="Ungültiger Token")
-        
-        # Prüfe ob Token abgelaufen ist
-        if user.email_verification_token_expires and datetime.now(timezone.utc) > user.email_verification_token_expires:
-            raise HTTPException(status_code=400, detail="Token ist abgelaufen")
-        
-        # Verifiziere E-Mail
-        user.is_email_verified = True
-        user.email_verification_token = None  # Token zurücksetzen
-        db.commit()
-        
-        logger.info(f"✓ E-Mail verifiziert: {user.email}")
-        
-        return {"message": "E-Mail erfolgreich verifiziert", "email": user.email}
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler bei Email-Verifizierung: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Verifizierung fehlgeschlagen")
-
-
-@api_router.post("/auth/resend-verification")
-@limiter.limit("3/minute")
-def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
-    """Sende Verifizierungs-E-Mail erneut (Rate Limited: 3/Min)"""
-    email = data.get("email")
-    if not email:
-        raise HTTPException(status_code=400, detail="E-Mail fehlt")
-    
-    try:
-        user = db.query(DBUser).filter(DBUser.email == email.lower()).first()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
-        
-        # Prüfe ob bereits verifiziert
-        if user.is_email_verified:
-            raise HTTPException(status_code=400, detail="E-Mail bereits verifiziert")
-        
-        # Generiere neuen Token
-        import secrets
-        new_token = secrets.token_urlsafe(32)
-        from datetime import timedelta
-        user.email_verification_token = new_token
-        user.email_verification_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
-        db.commit()
-        
-        logger.info(f"Verifizierungs-E-Mail erneut gesendet an: {email}")
-        
-        # E-Mail-Versand (Production: SendGrid, AWS SES, etc.)
-        # Für MVP: Token in Response zurückgeben (für Testing)
-        try:
-            # In Production: Echte E-Mail senden
-            # send_verification_email(email, new_token)
-            logger.info(f"Verifizierungs-Token für {email}: {new_token}")
-        except Exception as email_error:
-            logger.warning(f"E-Mail konnte nicht gesendet werden: {email_error}")
-        
-        return {
-            "message": "Verifizierungs-E-Mail erneut gesendet",
-            "email": email,
-            "verification_token": new_token if os.environ.get("ENVIRONMENT") == "development" else None
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler beim Resenden der Verifizierung: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Fehler beim Resenden")
-
 @api_router.post("/auth/login", response_model=AuthResponse)
-@limiter.limit("10/minute")
-def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
+def login(data: UserLogin, db: Session = Depends(get_db)):
     """Benutzer Login mit E-Mail und Passwort"""
     try:
         # Finde Benutzer (normalisiere E-Mail)
@@ -577,24 +319,12 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)[:50]}")
 
 @api_router.post("/auth/magic-link")
-@limiter.limit("3/minute")
-def request_magic_link(request: Request, data: MagicLinkRequest):
-    """Fordere einen Magic Link an (würde in Production E-Mail senden) (Rate Limited: 3/Min)"""
-    # Generiere Magic Link Token
-    magic_token = secrets.token_urlsafe(32)
-    
-    # In Production: E-Mail mit Magic Link senden
-    # magic_link = f"{FRONTEND_URL}/auth/magic?token={magic_token}"
-    # send_magic_link_email(data.email, magic_link)
-    
+def request_magic_link(data: MagicLinkRequest):
+    """Fordere einen Magic Link an (würde in Production E-Mail senden)"""
+    # TODO: Implementiere echten E-Mail-Versand mit SendGrid oder ähnlich
+    # Für Demo: Nur bestätigung
     logger.info(f"Magic Link angefordert für: {data.email}")
-    
-    # Für Development: Token zurückgeben
-    return {
-        "message": "Magic Link wurde an Ihre E-Mail gesendet",
-        "email": data.email,
-        "magic_token": magic_token if os.environ.get("ENVIRONMENT") == "development" else None
-    }
+    return {"message": "Magic Link wurde an Ihre E-Mail gesendet", "email": data.email}
 
 @api_router.get("/auth/me", response_model=User)
 def get_me(user: DBUser = Depends(get_current_user)):
@@ -609,359 +339,34 @@ def get_me(user: DBUser = Depends(get_current_user)):
 
 # ============ PROPERTY ROUTES ============
 
-@api_router.get("/debug/db-schema")
-def debug_db_schema(db: Session = Depends(get_db)):
-    """Debug: Zeige DB-Schema"""
-    try:
-        from sqlalchemy import text
-        result = db.execute(text("""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_name = 'properties'
-            ORDER BY ordinal_position
-        """))
-        columns = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
-        return {"table": "properties", "columns": columns}
-    except Exception as e:
-        return {"error": str(e)}
-
-@api_router.post("/debug/migrate-properties")
-def migrate_properties_table(db: Session = Depends(get_db)):
-    """Füge fehlende Spalten zur properties Tabelle hinzu"""
-    try:
-        from sqlalchemy import text
-        
-        migrations = [
-            ("description", "TEXT"),
-            ("address", "VARCHAR(500)"),
-            ("public_id", "VARCHAR(20)"),
-            ("image_url", "VARCHAR(500)"),
-            ("wifi_name", "VARCHAR(100)"),
-            ("wifi_password", "VARCHAR(100)"),
-            ("keysafe_location", "VARCHAR(200)"),
-            ("keysafe_code", "VARCHAR(50)"),
-            ("keysafe_instructions", "TEXT"),
-            ("checkin_time", "VARCHAR(10)"),
-            ("checkout_time", "VARCHAR(10)"),
-            ("host_phone", "VARCHAR(50)"),
-            ("host_email", "VARCHAR(100)"),
-            ("host_whatsapp", "VARCHAR(50)"),
-        ]
-        
-        results = []
-        for col_name, col_type in migrations:
-            try:
-                db.execute(text(f"ALTER TABLE properties ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
-                db.commit()
-                results.append(f"✓ {col_name} hinzugefügt")
-            except Exception as e:
-                db.rollback()
-                results.append(f"✗ {col_name}: {str(e)[:50]}")
-        
-        # Index für public_id erstellen
-        try:
-            db.execute(text("CREATE INDEX IF NOT EXISTS ix_properties_public_id ON properties(public_id)"))
-            db.commit()
-            results.append("✓ public_id Index erstellt")
-        except Exception as e:
-            db.rollback()
-            results.append(f"✗ index: {str(e)[:50]}")
-        
-        # Zeige aktuelles Schema
-        result = db.execute(text("""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_name = 'properties'
-            ORDER BY ordinal_position
-        """))
-        columns = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
-        
-        return {"migrations": results, "schema": columns}
-    except Exception as e:
-        return {"error": str(e)}
-
-@api_router.post("/debug/seed-extras/{property_id}")
-def seed_demo_extras(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Erstelle Demo-Extras für eine Property"""
-    try:
-        from sqlalchemy import text
-        import uuid
-        
-        # Prüfe Ownership
-        prop = db.query(DBProperty).filter(DBProperty.id == property_id, DBProperty.user_id == user.id).first()
-        if not prop:
-            raise HTTPException(status_code=404, detail="Property nicht gefunden")
-        
-        # Demo Extras
-        extras = [
-            {"name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen, Aufschnitt, Eiern und Getränken", "price": 15.00, "category": "food"},
-            {"name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr statt 11:00 Uhr", "price": 25.00, "category": "service"},
-            {"name": "Früh-Check-in", "description": "Check-in ab 12:00 Uhr statt 15:00 Uhr", "price": 20.00, "category": "service"},
-            {"name": "Tiefgarage", "description": "Sicherer Stellplatz in der Tiefgarage", "price": 10.00, "category": "parking"},
-            {"name": "Parkplatz Außen", "description": "Parkplatz direkt vor dem Haus", "price": 5.00, "category": "parking"},
-            {"name": "Zusätzliche Reinigung", "description": "Professionelle Zwischenreinigung während des Aufenthalts", "price": 35.00, "category": "service"},
-            {"name": "Wäscheservice", "description": "Bettwäsche und Handtücher werden alle 3 Tage gewechselt", "price": 15.00, "category": "service"},
-            {"name": "Haustier", "description": "Haustier willkommen (bitte vorher anmelden)", "price": 10.00, "category": "service"},
-            {"name": "Fahrradverleih", "description": "2 Fahrräder für Erkundungen in der Umgebung", "price": 12.00, "category": "activity"},
-            {"name": "Willkommenspaket", "description": "Regionaler Wein, Obst und Snacks bei Ankunft", "price": 25.00, "category": "food"},
-        ]
-        
-        created = []
-        for extra in extras:
-            extra_id = str(uuid.uuid4())
-            db.execute(text("""
-                INSERT INTO extras (id, property_id, name, description, price, category, is_active, created_at)
-                VALUES (:id, :pid, :name, :desc, :price, :cat, true, NOW())
-                ON CONFLICT DO NOTHING
-            """), {
-                "id": extra_id,
-                "pid": property_id,
-                "name": extra["name"],
-                "desc": extra["description"],
-                "price": extra["price"],
-                "cat": extra["category"]
-            })
-            created.append({"id": extra_id, "name": extra["name"], "price": extra["price"]})
-        
-        db.commit()
-        
-        return {"success": True, "created_count": len(created), "extras": created}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler beim Seeden der Extras: {str(e)}")
-        db.rollback()
-        return {"error": str(e)}
-
-
-@api_router.post("/debug/migrate-extras")
-def migrate_extras_table(db: Session = Depends(get_db)):
-    """Erstelle Extras-Tabelle falls nicht vorhanden"""
-    try:
-        from sqlalchemy import text
-        
-        # Erstelle Tabelle
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS extras (
-                id VARCHAR(36) PRIMARY KEY,
-                property_id INTEGER REFERENCES properties(id),
-                name VARCHAR(200) NOT NULL,
-                description TEXT,
-                price DECIMAL(10,2) DEFAULT 0,
-                image_url VARCHAR(500),
-                category VARCHAR(50),
-                is_active BOOLEAN DEFAULT true,
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-        """))
-        db.commit()
-        
-        return {"success": True, "message": "Extras-Tabelle erstellt"}
-    except Exception as e:
-        db.rollback()
-        return {"error": str(e)}
-
-
-@api_router.post("/debug/migrate-qr-scans")
-def migrate_qr_scans_table(db: Session = Depends(get_db)):
-    """Erstelle QR-Scans Tabelle für Analytics"""
-    try:
-        from sqlalchemy import text
-        
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS qr_scans (
-                id SERIAL PRIMARY KEY,
-                property_id INTEGER REFERENCES properties(id),
-                scanned_at TIMESTAMP DEFAULT NOW(),
-                user_agent TEXT,
-                ip_hash VARCHAR(64)
-            )
-        """))
-        
-        # Index für schnellere Abfragen
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_qr_scans_property ON qr_scans(property_id)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_qr_scans_date ON qr_scans(scanned_at)"))
-        
-        db.commit()
-        
-        return {"success": True, "message": "QR-Scans Tabelle erstellt"}
-    except Exception as e:
-        db.rollback()
-        return {"error": str(e)}
-
-
-@api_router.get("/properties/{property_id}/analytics")
-def get_property_analytics(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Analytics für eine Property (QR-Scans)"""
-    try:
-        from sqlalchemy import text
-        
-        # Prüfe Ownership
-        prop = db.query(DBProperty).filter(DBProperty.id == property_id, DBProperty.user_id == user.id).first()
-        if not prop:
-            raise HTTPException(status_code=404, detail="Property nicht gefunden")
-        
-        # Total Scans
-        total = db.execute(text("SELECT COUNT(*) FROM qr_scans WHERE property_id = :pid"), {"pid": property_id}).scalar()
-        
-        # Scans letzte 7 Tage
-        daily = db.execute(text("""
-            SELECT DATE(scanned_at) as date, COUNT(*) as count
-            FROM qr_scans
-            WHERE property_id = :pid AND scanned_at > NOW() - INTERVAL '7 days'
-            GROUP BY DATE(scanned_at)
-            ORDER BY date DESC
-        """), {"pid": property_id}).fetchall()
-        
-        return {
-            "total_scans": total,
-            "daily_scans": [{"date": str(r[0]), "count": r[1]} for r in daily]
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Analytics Fehler: {str(e)}")
-        return {"total_scans": 0, "daily_scans": []}
-
-
-@api_router.post("/debug/migrate-checkouts")
-def migrate_checkouts_table(db: Session = Depends(get_db)):
-    """Erstelle Checkouts-Tabelle falls nicht vorhanden"""
-    try:
-        from sqlalchemy import text
-        
-        # Erstelle checkouts Tabelle
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS checkouts (
-                id VARCHAR(36) PRIMARY KEY,
-                property_id INTEGER REFERENCES properties(id),
-                total DECIMAL(10,2) DEFAULT 0,
-                guest_name VARCHAR(200),
-                guest_email VARCHAR(200),
-                payment_method VARCHAR(50),
-                status VARCHAR(50) DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-        """))
-        
-        # Erstelle checkout_items Tabelle
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS checkout_items (
-                id VARCHAR(36) PRIMARY KEY,
-                checkout_id VARCHAR(36) REFERENCES checkouts(id),
-                extra_id VARCHAR(36) REFERENCES extras(id),
-                quantity INTEGER DEFAULT 1
-            )
-        """))
-        
-        db.commit()
-        
-        return {"success": True, "message": "Checkout-Tabellen erstellt"}
-    except Exception as e:
-        db.rollback()
-        return {"error": str(e)}
-
-
-@api_router.post("/debug/set-demo-data/{property_id}")
-def set_demo_data(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Setze Demo-Daten für Gästeseite (WLAN, KeySafe, Host)"""
-    try:
-        from sqlalchemy import text
-        
-        db.execute(text("""
-            UPDATE properties SET
-                image_url = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
-                wifi_name = 'Seeblick-Guest',
-                wifi_password = 'Sommer2024!',
-                keysafe_location = 'Links neben der Eingangstür',
-                keysafe_code = '4287',
-                keysafe_instructions = 'Schlüssel entnehmen, Safe schließen, nach dem Auschecken Schlüssel wieder in den Safe legen.',
-                checkin_time = '15:00',
-                checkout_time = '11:00',
-                host_phone = '+49 8051 123456',
-                host_email = 'gastgeber@seeblick.de',
-                host_whatsapp = '+49 170 1234567'
-            WHERE id = :id AND user_id = :uid
-        """), {"id": property_id, "uid": user.id})
-        db.commit()
-        
-        return {"success": True, "message": "Demo-Daten gesetzt"}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@api_router.get("/debug/properties-raw")
-def debug_properties_raw(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Debug: Zeige rohe Properties"""
-    try:
-        from sqlalchemy import text
-        result = db.execute(text("SELECT id, user_id, name, public_id FROM properties WHERE user_id = :uid"), {"uid": user.id})
-        rows = [{"id": r[0], "user_id": r[1], "name": r[2], "public_id": r[3]} for r in result.fetchall()]
-        return {"user_id": user.id, "count": len(rows), "properties": rows}
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
-
-@api_router.post("/debug/set-public-id/{property_id}")
-def set_public_id(property_id: int, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Setze public_id für eine Property"""
-    try:
-        from sqlalchemy import text
-        import random
-        import string
-        
-        # Generiere 10-stellige public_id
-        public_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
-        
-        db.execute(text("UPDATE properties SET public_id = :pid WHERE id = :id AND user_id = :uid"), 
-                   {"pid": public_id, "id": property_id, "uid": user.id})
-        db.commit()
-        
-        return {"success": True, "property_id": property_id, "public_id": public_id}
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
 @api_router.get("/properties", response_model=List[Property])
 def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole alle Properties des Benutzers"""
     try:
-        logger.info(f"Getting properties for user {user.id}")
         properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
-        logger.info(f"Found {len(properties)} properties")
         return [Property(
-            id=str(p.id),  # Konvertiere Integer zu String
+            id=p.id,
             user_id=p.user_id,
             name=p.name,
             description=p.description,
             address=p.address,
-            public_id=p.public_id,
             created_at=p.created_at
         ) for p in properties]
     except Exception as e:
         logger.error(f"Fehler beim Abrufen von Properties: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen von Properties")
 
 @api_router.post("/properties", response_model=Property)
 def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Erstelle eine neue Property"""
     try:
-        import random
-        import string
-        
-        # Generiere automatisch eine public_id
-        public_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
-        
-        # Verwende auto-increment ID (die DB generiert die ID automatisch)
+        prop_id = str(uuid.uuid4())
         db_property = DBProperty(
+            id=prop_id,
             user_id=user.id,
             name=data.name.strip(),
             description=data.description.strip() if data.description else None,
             address=data.address.strip() if data.address else None,
-            public_id=public_id,
             created_at=datetime.now(timezone.utc)
         )
         
@@ -969,23 +374,20 @@ def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_use
         db.commit()
         db.refresh(db_property)
         
-        logger.info(f"Property erstellt: {db_property.id} (public_id: {public_id}) für Benutzer {user.id}")
+        logger.info(f"Property erstellt: {prop_id} für Benutzer {user.id}")
         
         return Property(
-            id=str(db_property.id),  # Konvertiere zu String für API
+            id=db_property.id,
             user_id=db_property.user_id,
             name=db_property.name,
             description=db_property.description,
             address=db_property.address,
-            public_id=db_property.public_id,
             created_at=db_property.created_at
         )
     except Exception as e:
         logger.error(f"Fehler beim Erstellen von Property: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Fehler beim Erstellen der Property: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Property")
 
 @api_router.get("/properties/{property_id}", response_model=Property)
 def get_property(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -1000,12 +402,11 @@ def get_property(property_id: str, user: DBUser = Depends(get_current_user), db:
             raise HTTPException(status_code=404, detail="Property nicht gefunden")
         
         return Property(
-            id=str(prop.id),  # Konvertiere Integer zu String
+            id=prop.id,
             user_id=prop.user_id,
             name=prop.name,
             description=prop.description,
             address=prop.address,
-            public_id=prop.public_id,
             created_at=prop.created_at
         )
     except HTTPException:
@@ -1013,168 +414,6 @@ def get_property(property_id: str, user: DBUser = Depends(get_current_user), db:
     except Exception as e:
         logger.error(f"Fehler beim Abrufen von Property: {str(e)}")
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Property")
-
-
-@api_router.get("/public/properties/{public_id}")
-@limiter.limit("60/minute")  # Rate limit für öffentliche Endpoints
-def get_public_property(request: Request, public_id: str, db: Session = Depends(get_db)):
-    """Öffentlicher Endpoint für Gästeseite mit public_id"""
-    try:
-        from sqlalchemy import text
-        
-        # Track QR-Code scan
-        try:
-            user_agent = request.headers.get("user-agent", "")
-            db.execute(text("""
-                INSERT INTO qr_scans (property_id, scanned_at, user_agent, ip_hash)
-                SELECT id, NOW(), :ua, :ip
-                FROM properties WHERE public_id = :pid
-            """), {"pid": public_id, "ua": user_agent, "ip": "anonymous"})
-            db.commit()
-        except Exception as e:
-            logger.warning(f"QR scan tracking failed: {str(e)}")
-        
-        # Suche nach public_id - alle Felder für Gästeseite
-        result = db.execute(text("""
-            SELECT id, user_id, name, description, address, created_at, public_id,
-                   image_url, wifi_name, wifi_password, 
-                   keysafe_location, keysafe_code, keysafe_instructions,
-                   checkin_time, checkout_time,
-                   host_phone, host_email, host_whatsapp
-            FROM properties 
-            WHERE public_id = :pid
-        """), {"pid": public_id})
-        row = result.fetchone()
-        
-        if not row:
-            raise HTTPException(status_code=404, detail="Property nicht gefunden")
-        
-        return {
-            "id": str(row[0]),
-            "user_id": row[1],
-            "name": row[2],
-            "description": row[3],
-            "address": row[4],
-            "created_at": row[5].isoformat() if row[5] else None,
-            "public_id": row[6],
-            # Neue Felder für Gästeseite
-            "image_url": row[7],
-            "wifi": {
-                "name": row[8],
-                "password": row[9]
-            } if row[8] else None,
-            "keysafe": {
-                "location": row[10],
-                "code": row[11],
-                "instructions": row[12]
-            } if row[10] else None,
-            "checkin_time": row[13] or "15:00",
-            "checkout_time": row[14] or "11:00",
-            "host": {
-                "phone": row[15],
-                "email": row[16],
-                "whatsapp": row[17]
-            } if row[15] or row[16] or row[17] else None
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler beim Abrufen der öffentlichen Property: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Property")
-
-class PropertyUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = Field(None, max_length=2000)
-    address: Optional[str] = Field(None, max_length=500)
-
-class UserProfileUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=100)
-    invoice_name: Optional[str] = Field(None, max_length=200)
-    invoice_address: Optional[str] = Field(None, max_length=500)
-    invoice_zip: Optional[str] = Field(None, max_length=20)
-    invoice_city: Optional[str] = Field(None, max_length=100)
-    invoice_country: Optional[str] = Field(None, max_length=100)
-    invoice_vat_id: Optional[str] = Field(None, max_length=50)
-
-@api_router.put("/properties/{property_id}", response_model=Property)
-def update_property(property_id: str, data: PropertyUpdate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Aktualisiere eine Property"""
-    try:
-        prop = db.query(DBProperty).filter(
-            DBProperty.id == property_id,
-            DBProperty.user_id == user.id
-        ).first()
-        
-        if not prop:
-            raise HTTPException(status_code=404, detail="Property nicht gefunden")
-        
-        if data.name is not None:
-            prop.name = data.name.strip()
-        if data.description is not None:
-            prop.description = data.description.strip()
-        if data.address is not None:
-            prop.address = data.address.strip()
-        
-        db.commit()
-        db.refresh(prop)
-        
-        logger.info(f"Property aktualisiert: {property_id}")
-        
-        return Property(
-            id=str(prop.id),  # Konvertiere Integer zu String
-            user_id=prop.user_id,
-            name=prop.name,
-            description=prop.description,
-            address=prop.address,
-            public_id=prop.public_id,
-            created_at=prop.created_at
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler beim Aktualisieren von Property: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren der Property")
-
-@api_router.put("/auth/profile")
-def update_profile(data: UserProfileUpdate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Aktualisiere Benutzerprofil"""
-    try:
-        if data.name is not None:
-            user.name = data.name.strip()
-        if data.invoice_name is not None:
-            user.invoice_name = data.invoice_name.strip()
-        if data.invoice_address is not None:
-            user.invoice_address = data.invoice_address.strip()
-        if data.invoice_zip is not None:
-            user.invoice_zip = data.invoice_zip.strip()
-        if data.invoice_city is not None:
-            user.invoice_city = data.invoice_city.strip()
-        if data.invoice_country is not None:
-            user.invoice_country = data.invoice_country.strip()
-        if data.invoice_vat_id is not None:
-            user.invoice_vat_id = data.invoice_vat_id.strip()
-        
-        db.commit()
-        db.refresh(user)
-        
-        logger.info(f"Profil aktualisiert: {user.email}")
-        
-        return {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "invoice_name": user.invoice_name,
-            "invoice_address": user.invoice_address,
-            "invoice_zip": user.invoice_zip,
-            "invoice_city": user.invoice_city,
-            "invoice_country": user.invoice_country,
-            "invoice_vat_id": user.invoice_vat_id
-        }
-    except Exception as e:
-        logger.error(f"Fehler beim Aktualisieren des Profils: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren des Profils")
 
 @api_router.delete("/properties/{property_id}")
 def delete_property(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -1259,207 +498,6 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
         logger.error(f"Fehler beim Erstellen des Guestview Tokens: {str(e)}")
         raise HTTPException(status_code=500, detail="Fehler beim Erstellen des Tokens")
 
-
-@api_router.get("/debug-db-schema")
-def debug_db_schema():
-    """Debug Endpoint für DB Schema"""
-    from sqlalchemy import text
-    try:
-        with engine.connect() as conn:
-            # Einfacher Test
-            conn.execute(text("SELECT 1")).fetchone()
-            
-            # Prüfe Users Spalten
-            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'users' ORDER BY ordinal_position")).fetchall()
-            users_columns = [r[0] for r in result]
-            
-            return {
-                "status": "ok",
-                "users_columns": users_columns
-            }
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
-
-@api_router.get("/guestview-public-qr-data")
-def get_guestview_public_qr_data(db: Session = Depends(get_db)):
-    """Öffentlicher Endpoint für QR Code Daten (ohne Auth) - für Demo"""
-    from sqlalchemy import text as sql_text
-    try:
-        # Hole Demo-User anhand E-Mail
-        demo_email = "demo@welcome-link.de"
-        user = db.query(DBUser).filter(DBUser.email == demo_email).first()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
-        
-        # Hole Properties direkt mit raw SQL (um alle Spalten zu bekommen)
-        stmt = sql_text("SELECT id, user_id, name, address, created_at FROM properties WHERE user_id = :user_id")
-        sql_result = db.execute(stmt, {"user_id": str(user.id)}).fetchall()
-        
-        properties = []
-        for row in sql_result:
-            p = type('Property', (), {})()
-            p.id = row.id
-            p.user_id = row.user_id
-            p.name = row.name
-            p.address = row.address
-            p.created_at = row.created_at
-            p.description = None
-            properties.append(p)
-        
-        result = []
-        
-        frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
-        qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
-        
-        for p in properties:
-            result.append({
-                "id": p.id,
-                "user_id": p.user_id,
-                "name": p.name,
-                "description": p.description,
-                "address": p.address,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-                "qr_code_url": qr_url
-            })
-        
-        logger.info(f"QR Daten zurückgegeben für {len(properties)} Properties von User {user.email}")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_msg = f"Fehler beim Abrufen der QR-Daten: {str(e)}"
-        logger.error(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
-
-
-@api_router.post("/demo/init")
-def init_demo_user_endpoint(db: Session = Depends(get_db)):
-    """Initialisiere Demo User manuell"""
-    from sqlalchemy import text
-    
-    try:
-        # Prüfe ob Demo-User existiert
-        result = db.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": "demo@welcome-link.de"})
-        existing = result.fetchone()
-        
-        if existing:
-            return {"message": "Demo User bereits vorhanden", "email": "demo@welcome-link.de"}
-        
-        # Erstelle Demo-User mit raw SQL
-        demo_id = str(uuid.uuid4())
-        db.execute(text("""
-            INSERT INTO users (id, email, password_hash, name, created_at)
-            VALUES (:id, :email, :password_hash, :name, NOW())
-        """), {
-            "id": demo_id,
-            "email": "demo@welcome-link.de",
-            "password_hash": hash_password("Demo123!"),
-            "name": "Demo Benutzer"
-        })
-        db.commit()
-        
-        return {"message": "Demo User erstellt", "email": "demo@welcome-link.de", "id": demo_id}
-        
-    except Exception as e:
-        logger.error(f"❌ Fehler beim Demo-User Init: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)}")
-
-
-@api_router.get("/guestview-qr-simple")
-def get_guestview_qr_data_simple():
-    """Simple QR Data Endpoint ohne Datenbank (für Demo)"""
-    import json
-    import os
-    
-    try:
-        # Versuche verschiedene Pfade für die JSON Datei
-        json_paths = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_properties.json"),
-            "backend/demo_properties.json",
-            "demo_properties.json"
-        ]
-        
-        json_data = None
-        for path in json_paths:
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    json_data = json.load(f)
-                    break
-            except FileNotFoundError:
-                continue
-        
-        if json_data is None:
-            raise HTTPException(status_code=500, detail="demo_properties.json nicht gefunden")
-        
-        frontend_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
-        qr_url = f"{frontend_url}/guestview/demo-guest-view-token"
-        
-        result = []
-        for p in json_data:
-            result.append({
-                "id": p.get("id"),
-                "user_id": p.get("user_id"),
-                "name": p.get("name"),
-                "description": p.get("description"),
-                "address": p.get("address"),
-                "created_at": p.get("created_at"),
-                "qr_code_url": qr_url
-            })
-        
-        logger.info(f"QR Daten (simple) zurückgegeben für {len(json_data)} Properties")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_msg = f"Fehler beim Abrufen der QR-Daten (simple): {str(e)}"
-        logger.error(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
-
-
-@api_router.get("/demo/init-guestview")
-def init_demo_guestview(db: Session = Depends(get_db)):
-    """Initialisiere Guestview Token für Demo User"""
-    from sqlalchemy import text as sql_text
-    try:
-        demo_email = "demo@welcome-link.de"
-        user = db.query(DBUser).filter(DBUser.email == demo_email.lower()).first()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail=f"Demo-User {demo_email} nicht gefunden")
-        
-        demo_token = "demo-guest-view-token"
-        
-        # Prüfe ob Token existiert
-        existing = db.query(DBGuestView).filter(DBGuestView.token == demo_token).first()
-        
-        if existing:
-            logger.info(f"✓ Guestview Token existiert bereits: {demo_token}")
-            return {"token": demo_token, "url": f"/guestview/{demo_token}"}
-        
-        # Erstelle Token
-        from sqlalchemy import text as sql_text
-        stmt = sql_text("INSERT INTO guest_views (id, user_id, token, created_at) VALUES (:id, :user_id, :token, :created_at)")
-        db.execute(stmt, {
-            "id": str(uuid.uuid4()),
-            "user_id": user.id,
-            "token": demo_token,
-            "created_at": datetime.now(timezone.utc)
-        })
-        db.commit()
-        
-        logger.info(f"✓ Guestview Token erstellt: {demo_token}")
-        return {"token": demo_token, "url": f"/guestview/{demo_token}"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_msg = f"Fehler beim Erstellen des Guestview Tokens: {str(e)}"
-        logger.error(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
-
-
 @api_router.get("/guestview/{token}")
 def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
     """Rufe Guestview Daten anhand Token ab (ohne Auth)"""
@@ -1515,2302 +553,17 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-# ============ ENHANCED LOGGING ============
-class JSONFormatter(logging.Formatter):
-    """JSON Formatter für Production Logging"""
-    def format(self, record):
-        log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "environment": ENVIRONMENT
-        }
-        if record.exc_info:
-            log_entry["exception"] = self.formatException(record.exc_info)
-        return json.dumps(log_entry)
-
 # Configure logging
-if ENVIRONMENT == "production":
-    # JSON Logging für Production
-    handler = logging.StreamHandler()
-    handler.setFormatter(JSONFormatter())
-    logging.basicConfig(
-        level=logging.INFO,
-        handlers=[handler],
-        force=True
-    )
-else:
-    # Human-readable Logging für Development
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        force=True
-    )
-
-# Request Logging Middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start_time = datetime.now(timezone.utc)
-    
-    # Request loggen
-    logger.info(f"Request: {request.method} {request.url.path}")
-    
-    response = await call_next(request)
-    
-    # Response loggen mit Duration
-    duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-    logger.info(f"Response: {request.method} {request.url.path} - Status: {response.status_code} - {duration_ms:.2f}ms")
-    
-    return response
-
-# ============== SCENE API ENDPOINTS ==============
-class SceneCreate(BaseModel):
-    property_id: str
-    title: str
-    description: Optional[str] = None
-    image_url: Optional[str] = None
-    order: Optional[int] = 0
-
-class SceneResponse(BaseModel):
-    id: str
-    property_id: str
-    title: str
-    description: Optional[str] = None
-    image_url: Optional[str] = None
-    order: int
-    created_at: str
-
-@api_router.get("/scenes", response_model=List[SceneResponse], dependencies=[Depends(get_current_user)])
-def get_scenes(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Scenes für den aktuellen User"""
-    scenes = db.query(Scene).filter(Scene.property_id.in_(
-        db.query(Property.id).filter(Property.user_id == user.id)
-    )).order_by(Scene.order).all()
-    return scenes
-
-@api_router.post("/scenes", response_model=SceneResponse, dependencies=[Depends(get_current_user)])
-def create_scene(scene: SceneCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle eine neue Scene"""
-    # Prüfe, ob Property dem User gehört
-    property = db.query(Property).filter(
-        Property.id == scene.property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden oder nicht berechtigt")
-    
-    scene_obj = Scene(
-        id=str(uuid.uuid4()),
-        property_id=scene.property_id,
-        title=scene.title,
-        description=scene.description,
-        image_url=scene.image_url,
-        order=scene.order or 0
-    )
-    db.add(scene_obj)
-    db.commit()
-    db.refresh(scene_obj)
-    return scene_obj
-
-@api_router.put("/scenes/{scene_id}", response_model=SceneResponse, dependencies=[Depends(get_current_user)])
-def update_scene(scene_id: str, scene: SceneCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere eine Scene"""
-    db_scene = db.query(Scene).filter(
-        Scene.id == scene_id,
-        Scene.property_id.in_(
-            db.query(Property.id).filter(Property.user_id == user.id)
-        )
-    ).first()
-    if not db_scene:
-        raise HTTPException(status_code=404, detail="Scene nicht gefunden")
-    
-    db_scene.title = scene.title
-    db_scene.description = scene.description
-    db_scene.image_url = scene.image_url
-    db_scene.order = scene.order or 0
-    db.commit()
-    db.refresh(db_scene)
-    return db_scene
-
-@api_router.delete("/scenes/{scene_id}", dependencies=[Depends(get_current_user)])
-def delete_scene(scene_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche eine Scene"""
-    db_scene = db.query(Scene).filter(
-        Scene.id == scene_id,
-        Scene.property_id.in_(
-            db.query(Property.id).filter(Property.user_id == user.id)
-        )
-    ).first()
-    if not db_scene:
-        raise HTTPException(status_code=404, detail="Scene nicht gefunden")
-    
-    db.delete(db_scene)
-    db.commit()
-    return {"message": "Scene gelöscht"}
-
-# ============== END SCENE API ENDPOINTS ==============
-
-# ============== A/B TESTING API ENDPOINTS ==============
-class ABTestCreate(BaseModel):
-    property_id: str
-    name: str
-    variant_a_name: Optional[str] = "Variante A"
-    variant_b_name: Optional[str] = "Variante B"
-    variant_a_url: Optional[str] = None
-    variant_b_url: Optional[str] = None
-
-class ABTestResponse(BaseModel):
-    id: str
-    property_id: str
-    name: str
-    variant_a_name: str
-    variant_b_name: str
-    variant_a_url: Optional[str]
-    variant_b_url: Optional[str]
-    active: bool
-    created_at: str
-    updated_at: str
-
-
-# ============== PARTNER API MODELS ==============
-class PartnerCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    category: str
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    website: Optional[str] = None
-    image_url: Optional[str] = None
-    commission_rate: Optional[float] = 0
-    is_active: Optional[bool] = True
-
-class PartnerResponse(BaseModel):
-    id: str
-    user_id: str
-    name: str
-    description: Optional[str] = None
-    category: str
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    website: Optional[str] = None
-    image_url: Optional[str] = None
-    commission_rate: float
-    is_active: bool
-    created_at: str
-
-
-# ============== SMART RULES API MODELS ==============
-class SmartRuleCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    trigger_type: str
-    condition: str
-    action: str
-    priority: Optional[int] = 0
-    is_active: Optional[bool] = True
-
-class SmartRuleResponse(BaseModel):
-    id: str
-    user_id: str
-    name: str
-    description: Optional[str] = None
-    trigger_type: str
-    condition: str
-    action: str
-    priority: int
-    is_active: bool
-    created_at: str
-
-@api_router.get("/ab-tests", response_model=List[ABTestResponse], dependencies=[Depends(get_current_user)])
-def get_ab_tests(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle A/B Tests für den aktuellen User"""
-    ab_tests = db.query(ABTest).filter(ABTest.property_id.in_(
-        db.query(Property.id).filter(Property.user_id == user.id)
-    )).all()
-    return ab_tests
-
-@api_router.post("/ab-tests", response_model=ABTestResponse, dependencies=[Depends(get_current_user)])
-def create_ab_test(ab_test: ABTestCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle einen neuen A/B Test"""
-    property = db.query(Property).filter(
-        Property.id == ab_test.property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden oder nicht berechtigt")
-    
-    ab_test_obj = ABTest(
-        id=str(uuid.uuid4()),
-        property_id=ab_test.property_id,
-        name=ab_test.name,
-        variant_a_name=ab_test.variant_a_name,
-        variant_b_name=ab_test.variant_b_name,
-        variant_a_url=ab_test.variant_a_url,
-        variant_b_url=ab_test.variant_b_url,
-        active=False
-    )
-    db.add(ab_test_obj)
-    db.commit()
-    db.refresh(ab_test_obj)
-    return ab_test_obj
-
-@api_router.put("/ab-tests/{ab_test_id}", response_model=ABTestResponse, dependencies=[Depends(get_current_user)])
-def update_ab_test(ab_test_id: str, ab_test: ABTestCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere einen A/B Test"""
-    db_ab_test = db.query(ABTest).filter(
-        ABTest.id == ab_test_id,
-        ABTest.property_id.in_(
-            db.query(Property.id).filter(Property.user_id == user.id)
-        )
-    ).first()
-    if not db_ab_test:
-        raise HTTPException(status_code=404, detail="A/B Test nicht gefunden")
-    
-    db_ab_test.name = ab_test.name
-    db_ab_test.variant_a_name = ab_test.variant_a_name
-    db_ab_test.variant_b_name = ab_test.variant_b_name
-    db_ab_test.variant_a_url = ab_test.variant_a_url
-    db_ab_test.variant_b_url = ab_test.variant_b_url
-    db.commit()
-    db.refresh(db_ab_test)
-    return db_ab_test
-
-@api_router.delete("/ab-tests/{ab_test_id}", dependencies=[Depends(get_current_user)])
-def delete_ab_test(ab_test_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche einen A/B Test"""
-    db_ab_test = db.query(ABTest).filter(
-        ABTest.id == ab_test_id,
-        ABTest.property_id.in_(
-            db.query(Property.id).filter(Property.user_id == user.id)
-        )
-    ).first()
-    if not db_ab_test:
-        raise HTTPException(status_code=404, detail="A/B Test nicht gefunden")
-    
-    db.delete(db_ab_test)
-    db.commit()
-    return {"message": "A/B Test gelöscht"}
-
-
-# ============== PARTNER API ENDPOINTS ==============
-from database import Partner as DBPartner, SmartRule as DBSmartRule
-
-@api_router.get("/partners", response_model=List[PartnerResponse], dependencies=[Depends(get_current_user)])
-def get_partners(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Partner für den aktuellen User"""
-    partners = db.query(DBPartner).filter(DBPartner.user_id == user.id).all()
-    return partners
-
-@api_router.post("/partners", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
-def create_partner(partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle einen neuen Partner"""
-    partner_obj = DBPartner(
-        id=str(uuid.uuid4()),
-        user_id=user.id,
-        name=partner.name,
-        description=partner.description,
-        category=partner.category,
-        address=partner.address,
-        phone=partner.phone,
-        email=partner.email,
-        website=partner.website,
-        image_url=partner.image_url,
-        commission_rate=partner.commission_rate or 0,
-        is_active=partner.is_active if partner.is_active is not None else True
-    )
-    db.add(partner_obj)
-    db.commit()
-    db.refresh(partner_obj)
-    return partner_obj
-
-@api_router.put("/partners/{partner_id}", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
-def update_partner(partner_id: str, partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere einen Partner"""
-    db_partner = db.query(DBPartner).filter(
-        DBPartner.id == partner_id,
-        DBPartner.user_id == user.id
-    ).first()
-    if not db_partner:
-        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
-    
-    db_partner.name = partner.name
-    db_partner.description = partner.description
-    db_partner.category = partner.category
-    db_partner.address = partner.address
-    db_partner.phone = partner.phone
-    db_partner.email = partner.email
-    db_partner.website = partner.website
-    db_partner.image_url = partner.image_url
-    db_partner.commission_rate = partner.commission_rate or 0
-    db_partner.is_active = partner.is_active if partner.is_active is not None else db_partner.is_active
-    db.commit()
-    db.refresh(db_partner)
-    return db_partner
-
-@api_router.delete("/partners/{partner_id}", dependencies=[Depends(get_current_user)])
-def delete_partner(partner_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche einen Partner"""
-    db_partner = db.query(DBPartner).filter(
-        DBPartner.id == partner_id,
-        DBPartner.user_id == user.id
-    ).first()
-    if not db_partner:
-        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
-    
-    db.delete(db_partner)
-    db.commit()
-    return {"message": "Partner gelöscht"}
-
-
-# ============== SMART RULES API ENDPOINTS ==============
-@api_router.get("/smart-rules", response_model=List[SmartRuleResponse], dependencies=[Depends(get_current_user)])
-def get_smart_rules(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Smart Rules für den aktuellen User"""
-    smart_rules = db.query(DBSmartRule).filter(DBSmartRule.user_id == user.id).order_by(DBSmartRule.priority).all()
-    return smart_rules
-
-@api_router.post("/smart-rules", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
-def create_smart_rule(smart_rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle eine neue Smart Rule"""
-    smart_rule_obj = DBSmartRule(
-        id=str(uuid.uuid4()),
-        user_id=user.id,
-        name=smart_rule.name,
-        description=smart_rule.description,
-        trigger_type=smart_rule.trigger_type,
-        condition=smart_rule.condition,
-        action=smart_rule.action,
-        priority=smart_rule.priority or 0,
-        is_active=smart_rule.is_active if smart_rule.is_active is not None else True
-    )
-    db.add(smart_rule_obj)
-    db.commit()
-    db.refresh(smart_rule_obj)
-    return smart_rule_obj
-
-@api_router.put("/smart-rules/{smart_rule_id}", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
-def update_smart_rule(smart_rule_id: str, smart_rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere eine Smart Rule"""
-    db_smart_rule = db.query(DBSmartRule).filter(
-        DBSmartRule.id == smart_rule_id,
-        DBSmartRule.user_id == user.id
-    ).first()
-    if not db_smart_rule:
-        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
-    
-    db_smart_rule.name = smart_rule.name
-    db_smart_rule.description = smart_rule.description
-    db_smart_rule.trigger_type = smart_rule.trigger_type
-    db_smart_rule.condition = smart_rule.condition
-    db_smart_rule.action = smart_rule.action
-    db_smart_rule.priority = smart_rule.priority or 0
-    db_smart_rule.is_active = smart_rule.is_active if smart_rule.is_active is not None else db_smart_rule.is_active
-    db.commit()
-    db.refresh(db_smart_rule)
-    return db_smart_rule
-
-@api_router.delete("/smart-rules/{smart_rule_id}", dependencies=[Depends(get_current_user)])
-def delete_smart_rule(smart_rule_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche eine Smart Rule"""
-    db_smart_rule = db.query(DBSmartRule).filter(
-        DBSmartRule.id == smart_rule_id,
-        DBSmartRule.user_id == user.id
-    ).first()
-    if not db_smart_rule:
-        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
-    
-    db.delete(db_smart_rule)
-    db.commit()
-    return {"message": "Smart Rule gelöscht"}
-
-
-@api_router.patch("/ab-tests/{ab_test_id}/activate", response_model=ABTestResponse, dependencies=[Depends(get_current_user)])
-def activate_ab_test(ab_test_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktiviere einen A/B Test (deaktiviert andere für dieselbe Property)"""
-    db_ab_test = db.query(ABTest).filter(
-        ABTest.id == ab_test_id,
-        ABTest.property_id.in_(
-            db.query(Property.id).filter(Property.user_id == user.id)
-        )
-    ).first()
-    if not db_ab_test:
-        raise HTTPException(status_code=404, detail="A/B Test nicht gefunden")
-    
-    # Deaktiviere andere Tests für dieselbe Property
-    db.query(ABTest).filter(
-        ABTest.property_id == db_ab_test.property_id,
-        ABTest.id != ab_test_id
-    ).update({ABTest.active: False})
-    
-    db_ab_test.active = not db_ab_test.active  # Toggle
-    db.commit()
-    db.refresh(db_ab_test)
-    return db_ab_test
-
-# ============== END A/B TESTING API ENDPOINTS ==============
-
-# ============== STORE CONFIGURATOR API ENDPOINTS ==============
-class ExtraCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    price: int = 0
-    stock: int = 0
-    image_url: Optional[str] = None
-    is_active: bool = True
-
-class ExtraResponse(BaseModel):
-    id: str
-    user_id: str
-    name: str
-    description: Optional[str] = None
-    price: float
-    stock: int
-    image_url: Optional[str]
-    is_active: bool
-    created_at: str
-
-@api_router.get("/extras", response_model=List[ExtraResponse], dependencies=[Depends(get_current_user)])
-def get_extras(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Extras für den aktuellen User"""
-    extras = db.query(Extra).filter(Extra.user_id == user.id).all()
-    return extras
-
-@api_router.post("/extras", response_model=ExtraResponse, dependencies=[Depends(get_current_user)])
-def create_extra(extra: ExtraCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle ein neues Extra (Upsell)"""
-    extra_obj = Extra(
-        id=str(uuid.uuid4()),
-        user_id=user.id,
-        name=extra.name,
-        description=extra.description,
-        price=extra.price,
-        stock=extra.stock,
-        image_url=extra.image_url,
-        is_active=extra.is_active
-    )
-    db.add(extra_obj)
-    db.commit()
-    db.refresh(extra_obj)
-    return extra_obj
-
-@api_router.put("/extras/{extra_id}", response_model=ExtraResponse, dependencies=[Depends(get_current_user)])
-def update_extra(extra_id: str, extra: ExtraCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere ein Extra"""
-    db_extra = db.query(Extra).filter(
-        Extra.id == extra_id,
-        Extra.user_id == user.id
-    ).first()
-    if not db_extra:
-        raise HTTPException(status_code=404, detail="Extra nicht gefunden")
-    
-    db_extra.name = extra.name
-    db_extra.description = extra.description
-    db_extra.price = extra.price
-    db_extra.stock = extra.stock
-    db_extra.image_url = extra.image_url
-    db_extra.is_active = extra.is_active
-    db.commit()
-    db.refresh(db_extra)
-    return db_extra
-
-@api_router.delete("/extras/{extra_id}", dependencies=[Depends(get_current_user)])
-def delete_extra(extra_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche ein Extra"""
-    db_extra = db.query(Extra).filter(
-        Extra.id == extra_id,
-        Extra.user_id == user.id
-    ).first()
-    if not db_extra:
-        raise HTTPException(status_code=404, detail="Extra nicht gefunden")
-    
-    db.delete(db_extra)
-    db.commit()
-    return {"message": "Extra gelöscht"}
-
-# Bundle Endpoints
-class BundleCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    price: int = 0
-    is_active: bool = True
-
-class BundleResponse(BaseModel):
-    id: str
-    user_id: str
-    name: str
-    description: Optional[str] = None
-    price: int
-    is_active: bool
-    created_at: str
-
-@api_router.get("/bundles", response_model=List[BundleResponse], dependencies=[Depends(get_current_user)])
-def get_bundles(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Bundles für den aktuellen User"""
-    bundles = db.query(Bundle).filter(Bundle.user_id == user.id).all()
-    return bundles
-
-@api_router.post("/bundles", response_model=BundleResponse, dependencies=[Depends(get_current_user)])
-def create_bundle(bundle: BundleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle ein neues Bundle"""
-    bundle_obj = Bundle(
-        id=str(uuid.uuid4()),
-        user_id=user.id,
-        name=bundle.name,
-        description=bundle.description,
-        price=bundle.price,
-        is_active=bundle.is_active
-    )
-    db.add(bundle_obj)
-    db.commit()
-    db.refresh(bundle_obj)
-    return bundle_obj
-
-@api_router.put("/bundles/{bundle_id}", response_model=BundleResponse, dependencies=[Depends(get_current_user)])
-def update_bundle(bundle_id: str, bundle: BundleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere ein Bundle"""
-    db_bundle = db.query(Bundle).filter(
-        Bundle.id == bundle_id,
-        Bundle.user_id == user.id
-    ).first()
-    if not db_bundle:
-        raise HTTPException(status_code=404, detail="Bundle nicht gefunden")
-    
-    db_bundle.name = bundle.name
-    db_bundle.description = bundle.description
-    db_bundle.price = bundle.price
-    db_bundle.is_active = bundle.is_active
-    db.commit()
-    db.refresh(db_bundle)
-    return db_bundle
-
-@api_router.delete("/bundles/{bundle_id}", dependencies=[Depends(get_current_user)])
-def delete_bundle(bundle_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche ein Bundle"""
-    db_bundle = db.query(Bundle).filter(
-        Bundle.id == bundle_id,
-        Bundle.user_id == user.id
-    ).first()
-    if not db_bundle:
-        raise HTTPException(status_code=404, detail="Bundle nicht gefunden")
-    
-    db.delete(db_bundle)
-    db.commit()
-    return {"message": "Bundle gelöscht"}
-
-# Bundle Extra Management
-class BundleExtraCreate(BaseModel):
-    extra_id: str
-    quantity: int = 1
-
-@api_router.post("/bundles/{bundle_id}/extras", dependencies=[Depends(get_current_user)])
-def add_bundle_extra(bundle_id: str, bundle_extra: BundleExtraCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Füge ein Extra zu einem Bundle hinzu"""
-    db_bundle = db.query(Bundle).filter(
-        Bundle.id == bundle_id,
-        Bundle.user_id == user.id
-    ).first()
-    if not db_bundle:
-        raise HTTPException(status_code=404, detail="Bundle nicht gefunden")
-    
-    # Prüfe ob Extra existiert
-    db_extra = db.query(Extra).filter(
-        Extra.id == bundle_extra.extra_id,
-        Extra.user_id == user.id
-    ).first()
-    if not db_extra:
-        raise HTTPException(status_code=404, detail="Extra nicht gefunden")
-    
-    bundle_extra_obj = BundleExtra(
-        id=str(uuid.uuid4()),
-        bundle_id=bundle_id,
-        extra_id=bundle_extra.extra_id,
-        quantity=bundle_extra.quantity
-    )
-    db.add(bundle_extra_obj)
-    db.commit()
-    return {"message": "Extra zum Bundle hinzugefügt"}
-
-@api_router.delete("/bundles/{bundle_id}/extras/{extra_id}", dependencies=[Depends(get_current_user)])
-def remove_bundle_extra(bundle_id: str, extra_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Entferne ein Extra aus einem Bundle"""
-    db_bundle_extra = db.query(BundleExtra).filter(
-        BundleExtra.bundle_id == bundle_id,
-        BundleExtra.extra_id == extra_id
-    ).first()
-    if not db_bundle_extra:
-        raise HTTPException(status_code=404, detail="Bundle-Extra nicht gefunden")
-    
-    db.delete(db_bundle_extra)
-    db.commit()
-    return {"message": "Extra aus Bundle entfernt"}
-
-# ============== END STORE CONFIGURATOR API ENDPOINTS ==============
-
-# ============== PARTNER API ENDPOINTS ==============
-class PartnerCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    category: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    website: Optional[str] = None
-    image_url: Optional[str] = None
-    commission_rate: Optional[float] = 0
-    is_active: Optional[bool] = True
-
-class PartnerResponse(BaseModel):
-    id: str
-    user_id: str
-    name: str
-    description: Optional[str]
-    category: Optional[str]
-    address: Optional[str]
-    phone: Optional[str]
-    email: Optional[str]
-    website: Optional[str]
-    image_url: Optional[str]
-    commission_rate: float
-    is_active: bool
-    created_at: str
-
-@api_router.get("/partners", response_model=List[PartnerResponse], dependencies=[Depends(get_current_user)])
-def get_partners(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Partner für den aktuellen User"""
-    from database import Partner
-    partners = db.query(Partner).filter(Partner.user_id == user.id).all()
-    return partners
-
-@api_router.post("/partners", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
-def create_partner(partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle einen neuen Partner"""
-    from database import Partner
-    partner_obj = Partner(
-        id=str(uuid.uuid4()),
-        user_id=user.id,
-        name=partner.name,
-        description=partner.description,
-        category=partner.category,
-        address=partner.address,
-        phone=partner.phone,
-        email=partner.email,
-        website=partner.website,
-        image_url=partner.image_url,
-        commission_rate=partner.commission_rate or 0,
-        is_active=partner.is_active if partner.is_active is not None else True
-    )
-    db.add(partner_obj)
-    db.commit()
-    db.refresh(partner_obj)
-    return partner_obj
-
-@api_router.put("/partners/{partner_id}", response_model=PartnerResponse, dependencies=[Depends(get_current_user)])
-def update_partner(partner_id: str, partner: PartnerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere einen Partner"""
-    from database import Partner
-    db_partner = db.query(Partner).filter(
-        Partner.id == partner_id,
-        Partner.user_id == user.id
-    ).first()
-    if not db_partner:
-        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
-    
-    db_partner.name = partner.name
-    db_partner.description = partner.description
-    db_partner.category = partner.category
-    db_partner.address = partner.address
-    db_partner.phone = partner.phone
-    db_partner.email = partner.email
-    db_partner.website = partner.website
-    db_partner.image_url = partner.image_url
-    db_partner.commission_rate = partner.commission_rate or 0
-    db_partner.is_active = partner.is_active if partner.is_active is not None else db_partner.is_active
-    db.commit()
-    db.refresh(db_partner)
-    return db_partner
-
-@api_router.delete("/partners/{partner_id}", dependencies=[Depends(get_current_user)])
-def delete_partner(partner_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche einen Partner"""
-    from database import Partner
-    db_partner = db.query(Partner).filter(
-        Partner.id == partner_id,
-        Partner.user_id == user.id
-    ).first()
-    if not db_partner:
-        raise HTTPException(status_code=404, detail="Partner nicht gefunden")
-    
-    db.delete(db_partner)
-    db.commit()
-    return {"message": "Partner gelöscht"}
-
-
-# ============== SMART RULES API ENDPOINTS ==============
-class SmartRuleCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    trigger_type: Optional[str] = None
-    condition: Optional[str] = None
-    action: Optional[str] = None
-    priority: Optional[int] = 0
-    is_active: Optional[bool] = True
-
-class SmartRuleResponse(BaseModel):
-    id: str
-    user_id: str
-    name: str
-    description: Optional[str]
-    trigger_type: Optional[str]
-    condition: Optional[str]
-    action: Optional[str]
-    priority: int
-    is_active: bool
-    created_at: str
-
-@api_router.get("/smart-rules", response_model=List[SmartRuleResponse], dependencies=[Depends(get_current_user)])
-def get_smart_rules(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Smart Rules für den aktuellen User"""
-    from database import SmartRule
-    smart_rules = db.query(SmartRule).filter(SmartRule.user_id == user.id).all()
-    return smart_rules
-
-@api_router.post("/smart-rules", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
-def create_smart_rule(rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle eine neue Smart Rule"""
-    from database import SmartRule
-    rule_obj = SmartRule(
-        id=str(uuid.uuid4()),
-        user_id=user.id,
-        name=rule.name,
-        description=rule.description,
-        trigger_type=rule.trigger_type,
-        condition=rule.condition,
-        action=rule.action,
-        priority=rule.priority or 0,
-        is_active=rule.is_active if rule.is_active is not None else True
-    )
-    db.add(rule_obj)
-    db.commit()
-    db.refresh(rule_obj)
-    return rule_obj
-
-@api_router.put("/smart-rules/{rule_id}", response_model=SmartRuleResponse, dependencies=[Depends(get_current_user)])
-def update_smart_rule(rule_id: str, rule: SmartRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere eine Smart Rule"""
-    from database import SmartRule
-    db_rule = db.query(SmartRule).filter(
-        SmartRule.id == rule_id,
-        SmartRule.user_id == user.id
-    ).first()
-    if not db_rule:
-        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
-    
-    db_rule.name = rule.name
-    db_rule.description = rule.description
-    db_rule.trigger_type = rule.trigger_type
-    db_rule.condition = rule.condition
-    db_rule.action = rule.action
-    db_rule.priority = rule.priority or 0
-    db_rule.is_active = rule.is_active if rule.is_active is not None else db_rule.is_active
-    db.commit()
-    db.refresh(db_rule)
-    return db_rule
-
-@api_router.delete("/smart-rules/{rule_id}", dependencies=[Depends(get_current_user)])
-def delete_smart_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lösche eine Smart Rule"""
-    from database import SmartRule
-    db_rule = db.query(SmartRule).filter(
-        SmartRule.id == rule_id,
-        SmartRule.user_id == user.id
-    ).first()
-    if not db_rule:
-        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
-    
-    db.delete(db_rule)
-    db.commit()
-    return {"message": "Smart Rule gelöscht"}
-
-# ============== END SMART RULES API ENDPOINTS ==============
-
-# ============== CHECKOUT & BOOKING API ENDPOINTS ==============
-class BookingCreate(BaseModel):
-    property_id: str
-    guest_name: str
-    guest_email: str
-    guest_phone: Optional[str] = None
-    check_in: str
-    check_out: str
-    guests: int
-    message: Optional[str] = None
-    total_price: float
-    tipping_percentage: Optional[int] = 0
-    tipping_amount: Optional[float] = 0
-    payment_method: Optional[str] = None
-
-class BookingResponse(BaseModel):
-    id: str
-    property_id: str
-    user_id: str
-    guest_name: Optional[str]
-    guest_email: Optional[str]
-    guest_phone: Optional[str]
-    check_in: Optional[str]
-    check_out: Optional[str]
-    guests: Optional[int]
-    message: Optional[str]
-    total_price: float
-    tipping_percentage: int
-    tipping_amount: float
-    status: str
-    payment_method: Optional[str]
-    invoice_generated: bool
-    created_at: str
-
-@api_router.get("/bookings", response_model=List[BookingResponse], dependencies=[Depends(get_current_user)])
-def get_bookings(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole alle Buchungen für den aktuellen User"""
-    from database import Booking
-    bookings = db.query(Booking).filter(Booking.user_id == user.id).all()
-    return bookings
-
-@api_router.post("/bookings", response_model=BookingResponse, dependencies=[Depends(get_current_user)])
-def create_booking(booking: BookingCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle eine neue Buchung (Vorab-Validierung)"""
-    from database import Booking, Property
-    # Prüfe ob Property existiert und dem User gehört
-    property = db.query(Property).filter(
-        Property.id == booking.property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden")
-    
-    # Validate dates
-    try:
-        check_in = datetime.fromisoformat(booking.check_in.replace('Z', '+00:00'))
-        check_out = datetime.fromisoformat(booking.check_out.replace('Z', '+00:00'))
-        if check_in >= check_out:
-            raise HTTPException(status_code=400, detail="Check-in muss vor Check-out liegen")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Ungültiges Datumsformat: {str(e)}")
-    
-    booking_obj = Booking(
-        id=str(uuid.uuid4()),
-        property_id=booking.property_id,
-        user_id=user.id,
-        guest_name=booking.guest_name,
-        guest_email=booking.guest_email,
-        guest_phone=booking.guest_phone,
-        check_in=check_in,
-        check_out=check_out,
-        guests=booking.guests,
-        message=booking.message,
-        total_price=booking.total_price,
-        tipping_percentage=booking.tipping_percentage or 0,
-        tipping_amount=booking.tipping_amount or 0,
-        status='pending',
-        payment_method=booking.payment_method,
-        invoice_generated=False
-    )
-    db.add(booking_obj)
-    db.commit()
-    db.refresh(booking_obj)
-    return booking_obj
-
-@api_router.post("/checkout/validate", dependencies=[Depends(get_current_user)])
-def validate_checkout(booking: BookingCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Validiere Checkout-Daten (ohne Buchung zu erstellen)"""
-    from database import Property
-    property = db.query(Property).filter(
-        Property.id == booking.property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden")
-    
-    try:
-        check_in = datetime.fromisoformat(booking.check_in.replace('Z', '+00:00'))
-        check_out = datetime.fromisoformat(booking.check_out.replace('Z', '+00:00'))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Ungültiges Datumsformat")
-    
-    return {
-        "valid": True,
-        "property_name": property.name,
-        "total_price": booking.total_price,
-        "tipping_amount": booking.tipping_amount or 0,
-        "final_total": booking.total_price + (booking.tipping_amount or 0)
-    }
-
-@api_router.get("/bookings/{booking_id}/invoice", dependencies=[Depends(get_current_user)])
-def get_booking_invoice(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole Rechnung als PDF für eine Buchung"""
-    from database import Booking, Property
-    booking = db.query(Booking).filter(
-        Booking.id == booking_id,
-        Booking.user_id == user.id
-    ).first()
-    if not booking:
-        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
-    
-    # Generiere PDF-Rechnung
-    # Hier würde der eigentliche PDF-Generierungs-Code stehen
-    # Für MVP return dummy PDF response
-    return {
-        "booking_id": booking.id,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "download_url": f"/api/bookings/{booking_id}/invoice/download",
-        "status": "ready"
-    }
-
-@api_router.post("/bookings/{booking_id}/confirm", response_model=BookingResponse, dependencies=[Depends(get_current_user)])
-def confirm_booking(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Buchung endgültig bestätigen"""
-    from database import Booking
-    booking = db.query(Booking).filter(
-        Booking.id == booking_id,
-        Booking.user_id == user.id
-    ).first()
-    if not booking:
-        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
-    
-    booking.status = 'confirmed'
-    booking.invoice_generated = True
-    db.commit()
-    db.refresh(booking)
-    return booking
-
-
-# ============== END CHECKOUT & BOOKING API ENDPOINTS ==============
-
-# ============== CLEANER & TASK API ENDPOINTS ==============
-class CleanerLoginRequest(BaseModel):
-    cleaner_id: str
-
-class CleanerResponse(BaseModel):
-    id: str
-    name: Optional[str]
-    email: Optional[str]
-    phone: Optional[str]
-    property_ids: List[str]
-    created_at: str
-
-@api_router.post("/cleaner/login")
-@limiter.limit("10/minute")
-def cleaner_login(http_request: Request, request: CleanerLoginRequest, db: Session = Depends(get_db)):
-    """Cleaner anmelden (passwortloser Login via cleanerId) (Rate Limited: 10/Min)"""
-    # Hier würde die Validierung der cleanerId stattfinden
-    # Für MVP return dummy response
-    return {
-        "success": True,
-        "cleaner_id": request.cleaner_id,
-        "message": "Cleaner erfolgreich angemeldet"
-    }
-
-@api_router.get("/cleaner/profile")
-def get_cleaner_profile(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Cleaner Profil holen"""
-    # Hier würde das echte Profil aus der DB geladen
-    return {
-        "id": user.id,
-        "name": user.name,
-        "email": user.email,
-        "phone": None,
-        "property_ids": []
-    }
-
-
-class TaskCreate(BaseModel):
-    property_id: str
-    title: str
-    description: Optional[str] = None
-    due_date: Optional[str] = None
-    priority: Optional[int] = 0
-
-class TaskResponse(BaseModel):
-    id: str
-    property_id: str
-    cleaner_id: Optional[str]
-    title: str
-    description: Optional[str]
-    due_date: Optional[str]
-    completed: bool
-    priority: int
-    created_at: str
-
-@api_router.get("/tasks", response_model=List[TaskResponse], dependencies=[Depends(get_current_user)])
-def get_tasks(db: Session = Depends(get_db), user: User = Depends(get_current_user), property_id: Optional[str] = None):
-    """Hole alle Aufgaben für den aktuellen User"""
-    from database import Task
-    query = db.query(Task).filter(Task.property_id.in_(
-        db.query(Property.id).filter(Property.user_id == user.id)
-    ))
-    if property_id:
-        query = query.filter(Task.property_id == property_id)
-    tasks = query.all()
-    return tasks
-
-@api_router.post("/tasks", response_model=TaskResponse, dependencies=[Depends(get_current_user)])
-def create_task(task: TaskCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Erstelle eine neue Aufgabe"""
-    from database import Task, Property
-    # Prüfe ob Property existiert und dem User gehört
-    property = db.query(Property).filter(
-        Property.id == task.property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden")
-    
-    due_date = None
-    if task.due_date:
-        try:
-            due_date = datetime.fromisoformat(task.due_date.replace('Z', '+00:00'))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Ungültiges Datumsformat")
-    
-    task_obj = Task(
-        id=str(uuid.uuid4()),
-        property_id=task.property_id,
-        cleaner_id=None,  # Wird beim Zuweisen gesetzt
-        title=task.title,
-        description=task.description,
-        due_date=due_date,
-        completed=False,
-        priority=task.priority or 0
-    )
-    db.add(task_obj)
-    db.commit()
-    db.refresh(task_obj)
-    return task_obj
-
-@api_router.put("/tasks/{task_id}", response_model=TaskResponse, dependencies=[Depends(get_current_user)])
-def update_task(task_id: str, task: TaskCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere eine Aufgabe"""
-    from database import Task
-    db_task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.property_id.in_(
-            db.query(Property.id).filter(Property.user_id == user.id)
-        )
-    ).first()
-    if not db_task:
-        raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
-    
-    db_task.title = task.title
-    db_task.description = task.description
-    db_task.priority = task.priority or 0
-    
-    if task.due_date:
-        try:
-            db_task.due_date = datetime.fromisoformat(task.due_date.replace('Z', '+00:00'))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Ungültiges Datumsformat")
-    
-    db.commit()
-    db.refresh(db_task)
-    return db_task
-
-@api_router.post("/tasks/{task_id}/complete", response_model=TaskResponse, dependencies=[Depends(get_current_user)])
-def complete_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Markiere eine Aufgabe als erledigt"""
-    from database import Task
-    db_task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.property_id.in_(
-            db.query(Property.id).filter(Property.user_id == user.id)
-        )
-    ).first()
-    if not db_task:
-        raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
-    
-    db_task.completed = True
-    db.commit()
-    db.refresh(db_task)
-    return db_task
-
-@api_router.get("/tasks/export/ics", dependencies=[Depends(get_current_user)])
-def export_tasks_ics(db: Session = Depends(get_db), user: User = Depends(get_current_user), property_id: Optional[str] = None):
-    """Exportiere Aufgaben als .ics Datei"""
-    from database import Task
-    # Hole alle Aufgaben
-    query = db.query(Task).filter(Task.property_id.in_(
-        db.query(Property.id).filter(Property.user_id == user.id)
-    ))
-    if property_id:
-        query = query.filter(Task.property_id == property_id)
-    tasks = query.all()
-    
-    # Erstelle .ics content
-    ics_content = """BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Welcome Link//Tasks//DE
-"""
-    for task in tasks:
-        ics_content += f"""BEGIN:VEVENT
-SUMMARY:{task.title}
-DESCRIPTION:{task.description or ''}
-DTSTART:{task.due_date.strftime('%Y%m%dT%H%M%S') if task.due_date else datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}
-DTEND:{(task.due_date + timedelta(hours=1) if task.due_date else datetime.now(timezone.utc) + timedelta(hours=1)).strftime('%Y%m%dT%H%M%S')}
-STATUS:{"COMPLETED" if task.completed else "NEEDS-ACTION"}
-END:VEVENT
-"""
-    ics_content += "END:VCALENDAR"
-    
-    from fastapi.responses import Response
-    return Response(
-        content=ics_content,
-        media_type="text/calendar",
-        headers={"Content-Disposition": "attachment; filename=tasks.ics"}
-    )
-
-
-# ============== END CLEANER & TASK API ENDPOINTS ==============
-
-# ============== GLOBAL STATS & MONITORING API ENDPOINTS ==============
-from pydantic import BaseModel
-from typing import List, Optional, Dict
-
-class GlobalStatsResponse(BaseModel):
-    total_hosts: int
-    total_properties: int
-    total_bookings: int
-    total_revenue: float
-    active_bookings_today: int
-    completed_bookings_today: int
-    updated_at: str
-
-@api_router.get("/stats/global", response_model=GlobalStatsResponse, dependencies=[Depends(get_current_user)])
-def get_global_stats(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole globale Plattform-Statistiken (nur für Admins oder alle User)"""
-    from database import User, Property, Booking
-    
-    # Zähle alle User (Hosts)
-    total_hosts = db.query(User).count()
-    
-    # Zähle alle Properties
-    total_properties = db.query(Property).count()
-    
-    # Zähle alle Buchungen
-    total_bookings = db.query(Booking).count()
-    
-    # Berechne Gesamtumsatz
-    total_revenue_result = db.query(db.func.sum(Booking.total_price)).scalar()
-    total_revenue = total_revenue_result or 0.0
-    
-    # Zähle aktive Buchungen heute
-    from datetime import datetime, date
-    today_start = datetime.combine(date.today(), datetime.min.time())
-    today_end = today_start + timedelta(days=1)
-    
-    active_bookings_today = db.query(Booking).filter(
-        Booking.created_at >= today_start,
-        Booking.created_at < today_end
-    ).count()
-    
-    completed_bookings_today = db.query(Booking).filter(
-        Booking.created_at >= today_start,
-        Booking.created_at < today_end,
-        Booking.status == 'confirmed'
-    ).count()
-    
-    return GlobalStatsResponse(
-        total_hosts=total_hosts,
-        total_properties=total_properties,
-        total_bookings=total_bookings,
-        total_revenue=total_revenue,
-        active_bookings_today=active_bookings_today,
-        completed_bookings_today=completed_bookings_today,
-        updated_at=datetime.now(timezone.utc).isoformat()
-    )
-
-
-# ============== END GLOBAL STATS & MONITORING API ENDPOINTS ==============
-
-# ============== BOOKING STATS WITH FILTER API ENDPOINTS ==============
-
-class BookingStatsFilter(BaseModel):
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    status: Optional[str] = None
-    property_id: Optional[str] = None
-
-class FilteredBookingStats(BaseModel):
-    total_bookings: int
-    confirmed_bookings: int
-    completed_bookings: int
-    cancelled_bookings: int
-    total_revenue: float
-    avg_booking_value: float
-    period_start: str
-    period_end: str
-    filters_applied: Dict[str, str]
-
-@api_router.post("/api/stats/booking/filter", response_model=FilteredBookingStats, dependencies=[Depends(get_current_user)])
-def get_filtered_booking_stats(
-    filter_data: BookingStatsFilter,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
-):
-    """Hole gefilterte Buchungs-Statistiken"""
-    query = db.query(Booking).filter(Booking.user_id == user.id)
-    
-    # Filter anwenden
-    filters_applied = {}
-    
-    if filter_data.start_date:
-        query = query.filter(Booking.created_at >= filter_data.start_date)
-        filters_applied['start_date'] = filter_data.start_date
-    
-    if filter_data.end_date:
-        query = query.filter(Booking.created_at <= filter_data.end_date)
-        filters_applied['end_date'] = filter_data.end_date
-    
-    if filter_data.status:
-        query = query.filter(Booking.status == filter_data.status)
-        filters_applied['status'] = filter_data.status
-    
-    if filter_data.property_id:
-        query = query.filter(Booking.property_id == filter_data.property_id)
-        filters_applied['property_id'] = filter_data.property_id
-    
-    bookings = query.all()
-    
-    total = len(bookings)
-    confirmed = len([b for b in bookings if b.status == 'confirmed'])
-    completed = len([b for b in bookings if b.status == 'completed'])
-    cancelled = len([b for b in bookings if b.status == 'cancelled'])
-    
-    total_revenue = sum(float(b.total_price or 0) for b in bookings)
-    avg_booking_value = total_revenue / confirmed if confirmed > 0 else 0
-    
-    return FilteredBookingStats(
-        total_bookings=total,
-        confirmed_bookings=confirmed,
-        completed_bookings=completed,
-        cancelled_bookings=cancelled,
-        total_revenue=round(total_revenue, 2),
-        avg_booking_value=round(avg_booking_value, 2),
-        period_start=filter_data.start_date or "all_time",
-        period_end=filter_data.end_date or "now",
-        filters_applied=filters_applied
-    )
-
-# ============== END BOOKING STATS WITH FILTER API ENDPOINTS ==============
-
-# ============== AUTO-FOCUS API ENDPOINTS ==============
-
-class AutoFocusConfig(BaseModel):
-    enabled: bool = True
-    focus_duration_ms: int = 3000
-    exclude_selectors: Optional[List[str]] = None
-
-class AutoFocusResponse(BaseModel):
-    success: bool
-    message: str
-
-@api_router.get("/api/autofocus/config", response_model=AutoFocusConfig, dependencies=[Depends(get_current_user)])
-def get_autofocus_config(user: User = Depends(get_current_user)):
-    """Hole Auto-Fokus Konfiguration (für Guestview Auto-Scroll)"""
-    return AutoFocusConfig(
-        enabled=True,
-        focus_duration_ms=3000,
-        exclude_selectors=[]
-    )
-
-@api_router.put("/api/autofocus/config", response_model=AutoFocusResponse, dependencies=[Depends(get_current_user)])
-def update_autofocus_config(config: AutoFocusConfig, user: User = Depends(get_current_user)):
-    """Update Auto-Fokus Konfiguration"""
-    return AutoFocusResponse(
-        success=True,
-        message="Auto-Fokus Konfiguration gespeichert"
-    )
-
-# ============== END AUTO-FOCUS API ENDPOINTS ==============
-
-# ============== BRANDING & AI API ENDPOINTS ==============
-from pydantic import BaseModel
-from typing import List, Optional, Dict
-
-class BrandingResponse(BaseModel):
-    brand_color: str
-    logo_url: Optional[str]
-    updated_at: str
-
-@api_router.get("/branding", response_model=BrandingResponse, dependencies=[Depends(get_current_user)])
-def get_branding(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole Branding-Konfiguration für den aktuellen User"""
-    return BrandingResponse(
-        brand_color=user.brand_color or '#F27C2C',
-        logo_url=user.logo_url,
-        updated_at=user.created_at.isoformat()
-    )
-
-class BrandingUpdate(BaseModel):
-    brand_color: Optional[str] = '#F27C2C'
-    logo_url: Optional[str] = None
-
-@api_router.put("/branding", response_model=BrandingResponse, dependencies=[Depends(get_current_user)])
-def update_branding(branding: BrandingUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere Branding-Konfiguration"""
-    user.brand_color = branding.brand_color
-    user.logo_url = branding.logo_url
-    db.commit()
-    db.refresh(user)
-    return BrandingResponse(
-        brand_color=user.brand_color,
-        logo_url=user.logo_url,
-        updated_at=user.created_at.isoformat()
-    )
-
-
-class AICopyRequest(BaseModel):
-    prompt: str
-    language: Optional[str] = "de"
-
-class AICopyResponse(BaseModel):
-    text: str
-    model: str
-    tokens_used: int
-
-@api_router.post("/ai/copywriter", response_model=AICopyResponse, dependencies=[Depends(get_current_user)])
-def ai_copywriter(request: AICopyRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Generiere Text mit AI (Mock für MVP)"""
-    # Hier würde der echte AI Call hin (z.B. mit Anthropic/LLaMA)
-    # Für MVP return dummy response
-    return AICopyResponse(
-        text=f"[AI Generated Text]\nPrompt: {request.prompt}\nLanguage: {request.language}\n\nDies ist ein Mock-Antwort für den MVP.",
-        model="mock-ai-v1",
-        tokens_used=150
-    )
-
-
-# ============== END BRANDING & AI API ENDPOINTS ==============
-
-# ============== KEY-SAFE API ENDPOINTS ==============
-from pydantic import BaseModel
-from typing import List, Optional, Dict
-
-class KeySafeResponse(BaseModel):
-    keysafe_location: Optional[str]
-    keysafe_code: Optional[str]
-    keysafe_instructions: Optional[str]
-    updated_at: str
-
-@api_router.get("/properties/{property_id}/keysafe", response_model=KeySafeResponse, dependencies=[Depends(get_current_user)])
-def get_keysafe_info(property_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole Key-Safe Info für ein Property"""
-    from database import Property
-    property = db.query(Property).filter(
-        Property.id == property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden")
-    
-    return KeySafeResponse(
-        keysafe_location=property.keysafe_location,
-        keysafe_code=property.keysafe_code,
-        keysafe_instructions=property.keysafe_instructions,
-        updated_at=property.created_at.isoformat()
-    )
-
-class KeySafeUpdate(BaseModel):
-    keysafe_location: Optional[str] = None
-    keysafe_code: Optional[str] = None
-    keysafe_instructions: Optional[str] = None
-
-@api_router.put("/properties/{property_id}/keysafe", response_model=KeySafeResponse, dependencies=[Depends(get_current_user)])
-def update_keysafe_info(property_id: str, keysafe: KeySafeUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Aktualisiere Key-Safe Info"""
-    from database import Property
-    property = db.query(Property).filter(
-        Property.id == property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden")
-    
-    if keysafe.keysafe_location is not None:
-        property.keysafe_location = keysafe.keysafe_location
-    if keysafe.keysafe_code is not None:
-        property.keysafe_code = keysafe.keysafe_code
-    if keysafe.keysafe_instructions is not None:
-        property.keysafe_instructions = keysafe.keysafe_instructions
-    
-    db.commit()
-    db.refresh(property)
-    return KeySafeResponse(
-        keysafe_location=property.keysafe_location,
-        keysafe_code=property.keysafe_code,
-        keysafe_instructions=property.keysafe_instructions,
-        updated_at=property.created_at.isoformat()
-    )
-
-
-# ============== END KEY-SAFE API ENDPOINTS ==============
-
-# ============== CALENDAR EXPORT API ENDPOINTS ==============
-from fastapi.responses import Response
-
-@api_router.get("/scenes/export/ics", dependencies=[Depends(get_current_user)])
-def export_all_scenes_ics(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Exportiere alle Szenen als .ics Datei"""
-    from database import Scene, Property
-    # Hole alle Szenen für den User
-    scenes = db.query(Scene).join(Property).filter(Property.user_id == user.id).all()
-    
-    # Erstelle .ics content
-    ics_content = """BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Welcome Link//Scenes//DE
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-X-WR-CALNAME:Welcome Link Szenen
-X-WR-TIMEZONE:Europe/Berlin
-"""
-    for scene in scenes:
-        # Erstelle Event mit dem Erstellungsdatum als Startzeit
-        start_time = scene.created_at or datetime.now(timezone.utc)
-        end_time = start_time + timedelta(hours=1)
-        
-        ics_content += f"""BEGIN:VEVENT
-SUMMARY:{scene.title or 'Info-Szene'}
-DESCRIPTION:{scene.content or ''}
-DTSTART:{start_time.strftime('%Y%m%dT%H%M%S')}
-DTEND:{end_time.strftime('%Y%m%dT%H%M%S')}
-END:VEVENT
-"""
-    ics_content += "END:VCALENDAR"
-    
-    return Response(
-        content=ics_content,
-        media_type="text/calendar",
-        headers={"Content-Disposition": "attachment; filename=scenes.ics"}
-    )
-
-
-@api_router.get("/properties/{property_id}/scenes/export/ics", dependencies=[Depends(get_current_user)])
-def export_property_scenes_ics(property_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Exportiere Szenen für ein Property als .ics Datei"""
-    from database import Scene, Property
-    # Prüfe ob Property existiert und dem User gehört
-    property = db.query(Property).filter(
-        Property.id == property_id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden")
-    
-    # Hole alle Szenen für dieses Property
-    scenes = db.query(Scene).filter(Scene.property_id == property_id).all()
-    
-    # Erstelle .ics content
-    ics_content = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Welcome Link//Scenes//DE
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-X-WR-CALNAME:{property.name} Szenen
-X-WR-TIMEZONE:Europe/Berlin
-"""
-    for scene in scenes:
-        start_time = scene.created_at or datetime.now(timezone.utc)
-        end_time = start_time + timedelta(hours=1)
-        
-        ics_content += f"""BEGIN:VEVENT
-SUMMARY:{scene.title or 'Info-Szene'}
-DESCRIPTION:{scene.content or ''}
-DTSTART:{start_time.strftime('%Y%m%dT%H%M%S')}
-DTEND:{end_time.strftime('%Y%m%dT%H%M%S')}
-END:VEVENT
-"""
-    ics_content += "END:VCALENDAR"
-    
-    return Response(
-        content=ics_content,
-        media_type="text/calendar",
-        headers={"Content-Disposition": f"attachment; filename=property-{property_id}-scenes.ics"}
-    )
-
-
-# ============== END CALENDAR EXPORT API ENDPOINTS ==============
-
-# ============== EXTRAS API ENDPOINTS ==============
-
-class ExtraCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = Field(None, max_length=1000)
-    price: float = Field(..., ge=0)
-    image_url: Optional[str] = Field(None, max_length=500)
-    category: Optional[str] = Field(None, max_length=50)  # breakfast, parking, spa, etc.
-
-@api_router.get("/properties/{property_id}/extras")
-@limiter.limit("60/minute")
-def get_property_extras(request: Request, property_id: int, db: Session = Depends(get_db)):
-    """Öffentliche Extras für eine Property"""
-    try:
-        from sqlalchemy import text
-        result = db.execute(text("""
-            SELECT id, name, description, price, image_url, category
-            FROM extras
-            WHERE property_id = :pid AND is_active = true
-            ORDER BY category, price
-        """), {"pid": property_id})
-        
-        extras = [{
-            "id": r[0],
-            "name": r[1],
-            "description": r[2],
-            "price": float(r[3]) if r[3] else 0,
-            "image_url": r[4],
-            "category": r[5]
-        } for r in result.fetchall()]
-        
-        return {"extras": extras}
-    except Exception as e:
-        logger.error(f"Fehler beim Laden der Extras: {str(e)}")
-        return {"extras": []}
-
-@api_router.post("/properties/{property_id}/extras")
-@limiter.limit("10/minute")
-def create_extra(request: Request, property_id: int, data: ExtraCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Erstelle ein neues Extra für eine Property"""
-    try:
-        # Prüfe ob Property dem User gehört
-        prop = db.query(DBProperty).filter(DBProperty.id == property_id, DBProperty.user_id == user.id).first()
-        if not prop:
-            raise HTTPException(status_code=404, detail="Property nicht gefunden")
-        
-        from sqlalchemy import text
-        import uuid
-        extra_id = str(uuid.uuid4())
-        
-        db.execute(text("""
-            INSERT INTO extras (id, property_id, name, description, price, image_url, category, is_active, created_at)
-            VALUES (:id, :pid, :name, :desc, :price, :img, :cat, true, NOW())
-        """), {
-            "id": extra_id,
-            "pid": property_id,
-            "name": data.name,
-            "desc": data.description,
-            "price": data.price,
-            "img": data.image_url,
-            "cat": data.category
-        })
-        db.commit()
-        
-        return {"id": extra_id, "name": data.name, "price": data.price}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler beim Erstellen des Extras: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Fehler beim Erstellen des Extras")
-
-# ============== CHECKOUT API ENDPOINTS ==============
-
-class CheckoutItem(BaseModel):
-    extra_id: str
-    quantity: int = Field(..., ge=1)
-
-class CheckoutRequest(BaseModel):
-    property_id: int
-    items: List[CheckoutItem]
-    guest_name: Optional[str] = None
-    guest_email: Optional[str] = None
-    payment_method: str = "stripe"  # stripe, paypal, cash
-
-class CheckoutResponse(BaseModel):
-    checkout_id: str
-    total: float
-    currency: str = "EUR"
-    payment_url: Optional[str] = None
-
-@api_router.post("/checkout", response_model=CheckoutResponse)
-@limiter.limit("10/minute")
-def create_checkout(request: Request, data: CheckoutRequest, db: Session = Depends(get_db)):
-    """Erstelle einen Checkout für Extras"""
-    try:
-        import uuid
-        from sqlalchemy import text
-        
-        # Validierung
-        if not data.items or len(data.items) == 0:
-            raise HTTPException(status_code=400, detail="Keine Items im Warenkorb")
-        
-        if not data.guest_name or len(data.guest_name.strip()) < 2:
-            raise HTTPException(status_code=400, detail="Gastname erforderlich")
-        
-        if not data.guest_email or "@" not in data.guest_email:
-            raise HTTPException(status_code=400, detail="Gültige Email erforderlich")
-        
-        # Berechne Gesamtbetrag
-        total = 0.0
-        for item in data.items:
-            result = db.execute(text("SELECT price, name FROM extras WHERE id = :id"), {"id": item.extra_id})
-            row = result.fetchone()
-            if row:
-                total += float(row[0]) * item.quantity
-            else:
-                raise HTTPException(status_code=400, detail=f"Extra {item.extra_id} nicht gefunden")
-        
-        checkout_id = str(uuid.uuid4())
-        
-        # Speichere Checkout
-        db.execute(text("""
-            INSERT INTO checkouts (id, property_id, total, guest_name, guest_email, payment_method, status, created_at)
-            VALUES (:id, :pid, :total, :name, :email, :method, 'pending', NOW())
-        """), {
-            "id": checkout_id,
-            "pid": data.property_id,
-            "total": total,
-            "name": data.guest_name.strip(),
-            "email": data.guest_email.strip(),
-            "method": data.payment_method
-        })
-        
-        # Speichere Items
-        for item in data.items:
-            db.execute(text("""
-                INSERT INTO checkout_items (id, checkout_id, extra_id, quantity)
-                VALUES (gen_random_uuid(), :cid, :eid, :qty)
-            """), {"cid": checkout_id, "eid": item.extra_id, "qty": item.quantity})
-        
-        db.commit()
-        
-        # Für Stripe/PayPal würde hier die Payment URL generiert
-        payment_url = None
-        if data.payment_method == "stripe":
-            payment_url = f"/payment/stripe/{checkout_id}"
-        elif data.payment_method == "paypal":
-            payment_url = f"/payment/paypal/{checkout_id}"
-        
-        return CheckoutResponse(
-            checkout_id=checkout_id,
-            total=total,
-            payment_url=payment_url
-        )
-    except Exception as e:
-        logger.error(f"Fehler beim Checkout: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Fehler beim Checkout")
-
-@api_router.get("/checkout/{checkout_id}/invoice")
-@limiter.limit("10/minute")
-def get_invoice(request: Request, checkout_id: str, db: Session = Depends(get_db)):
-    """Generiere PDF Rechnung für Checkout"""
-    try:
-        from sqlalchemy import text
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.units import cm
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-        from datetime import datetime
-        import io
-        
-        # Lade Checkout
-        result = db.execute(text("""
-            SELECT c.id, c.property_id, c.total, c.guest_name, c.guest_email, c.created_at, 
-                   p.name as property_name, p.address, c.payment_method
-            FROM checkouts c
-            JOIN properties p ON c.property_id = p.id
-            WHERE c.id = :id
-        """), {"id": checkout_id})
-        checkout = result.fetchone()
-        
-        if not checkout:
-            raise HTTPException(status_code=404, detail="Checkout nicht gefunden")
-        
-        # Lade Items
-        result = db.execute(text("""
-            SELECT e.name, e.description, e.price, ci.quantity
-            FROM checkout_items ci
-            JOIN extras e ON ci.extra_id = e.id
-            WHERE ci.checkout_id = :id
-        """), {"id": checkout_id})
-        items = result.fetchall()
-        
-        # Generiere PDF
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm)
-        styles = getSampleStyleSheet()
-        story = []
-        
-        # Custom Styles
-        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=24, textColor=colors.HexColor('#F27C2C'))
-        heading_style = ParagraphStyle('Heading', parent=styles['Normal'], fontSize=14, textColor=colors.HexColor('#333333'))
-        right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=TA_RIGHT)
-        
-        # Header mit Logo-Bereich
-        story.append(Paragraph("🧾 Welcome Link", title_style))
-        story.append(Spacer(1, 0.5*cm))
-        
-        # Rechnungsnummer und Datum
-        invoice_number = f"INV-{checkout_id[:8].upper()}"
-        story.append(Paragraph(f"<b>Rechnung #{invoice_number}</b>", heading_style))
-        story.append(Paragraph(f"Datum: {checkout[5].strftime('%d.%m.%Y')}", styles['Normal']))
-        story.append(Paragraph(f"Zahlungsart: {checkout[8].upper()}", styles['Normal']))
-        story.append(Spacer(1, 1*cm))
-        
-        # Von / An
-        story.append(Paragraph("<b>Von:</b>", styles['Normal']))
-        story.append(Paragraph(f"Welcome Link - {checkout[6]}", styles['Normal']))
-        if checkout[7]:
-            story.append(Paragraph(checkout[7], styles['Normal']))
-        story.append(Spacer(1, 0.5*cm))
-        
-        if checkout[3]:
-            story.append(Paragraph("<b>An:</b>", styles['Normal']))
-            story.append(Paragraph(checkout[3], styles['Normal']))
-            if checkout[4]:
-                story.append(Paragraph(checkout[4], styles['Normal']))
-        story.append(Spacer(1, 1*cm))
-        
-        # Tabelle
-        data = [["Beschreibung", "Menge", "Einzelpreis", "Summe"]]
-        
-        # Items hinzufügen
-        total = 0
-        for item in items:
-            line_total = float(item[2]) * item[3]
-            total += line_total
-            data.append([item[0], str(item[3]), f"€{float(item[2]):.2f}", f"€{line_total:.2f}"])
-        
-        # Gesamt
-        data.append(["", "", "Gesamt:", f"€{total:.2f}"])
-        
-        # Tabelle erstellen
-        table = Table(data, colWidths=[8*cm, 2*cm, 3*cm, 3*cm])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F27C2C')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
-            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('ALIGN', (2, -1), (-1, -1), 'RIGHT'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ]))
-        story.append(table)
-        
-        # Footer
-        story.append(Spacer(1, 2*cm))
-        story.append(Paragraph("Vielen Dank für Ihren Aufenthalt!", styles['Normal']))
-        story.append(Paragraph("www.welcome-link.de", styles['Normal']))
-        
-        # PDF bauen
-        doc.build(story)
-        
-        # Response
-        from fastapi.responses import Response
-        return Response(
-            content=buffer.getvalue(),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=invoice_{checkout_id[:8]}.pdf"}
-        )
-        
-    except Exception as e:
-        logger.error(f"Fehler beim Generieren der Rechnung: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Fehler beim Generieren der Rechnung: {str(e)}")
-
-
-# ============== STRIPE PAYMENT ENDPOINTS ==============
-
-class StripePaymentRequest(BaseModel):
-    checkout_id: str
-    success_url: str
-    cancel_url: str
-
-@api_router.post("/payment/stripe/create-session")
-@limiter.limit("10/minute")
-async def create_stripe_session(request: Request, data: StripePaymentRequest, db: Session = Depends(get_db)):
-    """Erstelle Stripe Checkout Session"""
-    try:
-        import os
-        stripe_secret = os.environ.get("STRIPE_SECRET_KEY")
-        if not stripe_secret:
-            raise HTTPException(status_code=500, detail="Stripe nicht konfiguriert")
-        
-        import stripe
-        stripe.api_key = stripe_secret
-        
-        # Lade Checkout
-        from sqlalchemy import text
-        result = db.execute(text("""
-            SELECT c.id, c.total, c.property_id, p.name as property_name
-            FROM checkouts c
-            JOIN properties p ON c.property_id = p.id
-            WHERE c.id = :id
-        """), {"id": data.checkout_id})
-        checkout = result.fetchone()
-        
-        if not checkout:
-            raise HTTPException(status_code=404, detail="Checkout nicht gefunden")
-        
-        # Erstelle Stripe Session
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
-                'price_data': {
-                    'currency': 'eur',
-                    'product_data': {
-                        'name': f'Extras - {checkout[3]}',
-                    },
-                    'unit_amount': int(float(checkout[1]) * 100),  # Cent
-                },
-                'quantity': 1,
-            }],
-            mode='payment',
-            success_url=data.success_url,
-            cancel_url=data.cancel_url,
-            metadata={'checkout_id': data.checkout_id}
-        )
-        
-        # Update Checkout Status
-        db.execute(text("UPDATE checkouts SET status = 'processing' WHERE id = :id"), {"id": data.checkout_id})
-        db.commit()
-        
-        return {"url": session.url, "session_id": session.id}
-        
-    except stripe.error.StripeError as e:
-        logger.error(f"Stripe Error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Fehler beim Erstellen der Stripe Session: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Zahlung")
-
-
-@api_router.post("/payment/stripe/webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    """Stripe Webhook für Payment Updates"""
-    import os
-    stripe_secret = os.environ.get("STRIPE_SECRET_KEY")
-    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
-    
-    if not stripe_secret or not webhook_secret:
-        raise HTTPException(status_code=500, detail="Stripe nicht konfiguriert")
-    
-    import stripe
-    stripe.api_key = stripe_secret
-    
-    payload = await request.body()
-    sig_header = request.headers.get('stripe-signature')
-    
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid signature")
-    
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        checkout_id = session.get('metadata', {}).get('checkout_id')
-        
-        if checkout_id:
-            from sqlalchemy import text
-            db.execute(text("UPDATE checkouts SET status = 'paid' WHERE id = :id"), {"id": checkout_id})
-            db.commit()
-            logger.info(f"Checkout {checkout_id} paid via Stripe")
-    
-    return {"status": "success"}
-
-
-# ============== PAYPAL PAYMENT ENDPOINTS ==============
-
-class PayPalPaymentRequest(BaseModel):
-    checkout_id: str
-    return_url: str
-    cancel_url: str
-
-@api_router.post("/payment/paypal/create-order")
-@limiter.limit("10/minute")
-async def create_paypal_order(request: Request, data: PayPalPaymentRequest, db: Session = Depends(get_db)):
-    """Erstelle PayPal Order"""
-    try:
-        import os
-        paypal_client_id = os.environ.get("PAYPAL_CLIENT_ID")
-        paypal_secret = os.environ.get("PAYPAL_CLIENT_SECRET")
-        
-        if not paypal_client_id or not paypal_secret:
-            raise HTTPException(status_code=500, detail="PayPal nicht konfiguriert")
-        
-        # Lade Checkout
-        from sqlalchemy import text
-        result = db.execute(text("""
-            SELECT c.id, c.total FROM checkouts c WHERE c.id = :id
-        """), {"id": data.checkout_id})
-        checkout = result.fetchone()
-        
-        if not checkout:
-            raise HTTPException(status_code=404, detail="Checkout nicht gefunden")
-        
-        # PayPal API Call (vereinfacht)
-        import requests
-        import base64
-        
-        auth = base64.b64encode(f"{paypal_client_id}:{paypal_secret}".encode()).decode()
-        
-        response = requests.post(
-            "https://api-m.paypal.com/v2/checkout/orders",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Basic {auth}"
-            },
-            json={
-                "intent": "CAPTURE",
-                "purchase_units": [{
-                    "amount": {
-                        "currency_code": "EUR",
-                        "value": str(float(checkout[1]))
-                    }
-                }],
-                "application_context": {
-                    "return_url": data.return_url,
-                    "cancel_url": data.cancel_url
-                }
-            }
-        )
-        
-        if response.status_code == 201:
-            order = response.json()
-            # Update Checkout Status
-            db.execute(text("UPDATE checkouts SET status = 'processing' WHERE id = :id"), {"id": data.checkout_id})
-            db.commit()
-            return {"order_id": order["id"], "approve_url": next(link["href"] for link in order["links"] if link["rel"] == "approve")}
-        else:
-            raise HTTPException(status_code=400, detail="PayPal Order fehlgeschlagen")
-            
-    except Exception as e:
-        logger.error(f"Fehler beim Erstellen der PayPal Order: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Zahlung")
-
-
-# ============== END PAYMENT ENDPOINTS ==============
-        for item in items:
-            data.append([
-                f"{item[0]}\n{item[1] or ''}",
-                str(item[3]),
-                f"€{float(item[2]):.2f}",
-                f"€{float(item[2]) * item[3]:.2f}"
-            ])
-        
-        # Gesamtzeile
-        data.append(["", "", "Gesamt:", f"€{float(checkout[2]):.2f}"])
-        
-        table = Table(data, colWidths=[7*cm, 2*cm, 3.5*cm, 3.5*cm])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F27C2C')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('TOPPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#F9F9F9')),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#DDDDDD')),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FFF5EE')),
-            ('FONTSIZE', (0, -1), (-1, -1), 12),
-            ('TOPPADDING', (0, -1), (-1, -1), 12),
-            ('BOTTOMPADDING', (0, -1), (-1, -1), 12),
-        ]))
-        story.append(table)
-        
-        # Footer
-        story.append(Spacer(1, 2*cm))
-        story.append(Paragraph("Vielen Dank für Ihre Buchung!", ParagraphStyle('Center', parent=styles['Normal'], alignment=TA_CENTER)))
-        story.append(Spacer(1, 0.5*cm))
-        story.append(Paragraph("Welcome Link - Ihr digitaler Gastgeber", ParagraphStyle('Center', parent=styles['Normal'], alignment=TA_CENTER, textColor=colors.grey)))
-        story.append(Paragraph("www.welcome-link.de", ParagraphStyle('Center', parent=styles['Normal'], alignment=TA_CENTER, textColor=colors.HexColor('#F27C2C'))))
-        
-        doc.build(story)
-        buffer.seek(0)
-        
-        return Response(
-            content=buffer.read(),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=rechnung-{checkout_id[:8]}.pdf"}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fehler beim Generieren der Rechnung: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Generieren der Rechnung")
-
-# ============== END EXTRAS API ENDPOINTS ==============
-
-# ============== HOST STATS API ENDPOINTS ==============
-from fastapi.responses import Response, StreamingResponse
-import io
-import csv
-from pydantic import BaseModel
-from typing import Optional, List
-
-class PropertyStatsResponse(BaseModel):
-    property_id: str
-    property_name: str
-    total_bookings: int
-    total_revenue: float
-    total_guests: int
-    avg_rating: Optional[float]
-    last_booking: Optional[str]
-
-@api_router.get("/stats/host/{host_id}", response_model=List[PropertyStatsResponse], dependencies=[Depends(get_current_user)])
-def get_host_stats(host_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole Property-Statistiken für einen Host"""
-    from database import Property, Booking
-    from sqlalchemy import func
-    
-    # Hole alle Properties des Users
-    properties = db.query(Property).filter(Property.user_id == user.id).all()
-    
-    stats = []
-    for prop in properties:
-        # Zähle Buchungen für dieses Property
-        total_bookings = db.query(func.count(Booking.id)).filter(
-            Booking.property_id == prop.id
-        ).scalar() or 0
-        
-        # Berechne Gesamtumsatz
-        revenue_result = db.query(func.sum(Booking.total_price)).filter(
-            Booking.property_id == prop.id
-        ).scalar()
-        total_revenue = revenue_result or 0.0
-        
-        # Berechne Gesamtanzahl Gäste (Summe aller guests pro Buchung)
-        guests_result = db.query(func.sum(Booking.guest_count)).filter(
-            Booking.property_id == prop.id
-        ).scalar()
-        total_guests = guests_result or 0
-        
-        # Hole letzte Buchung
-        last_booking = db.query(Booking).filter(
-            Booking.property_id == prop.id
-        ).order_by(Booking.created_at.desc()).first()
-        
-        stats.append(PropertyStatsResponse(
-            property_id=prop.id,
-            property_name=prop.name,
-            total_bookings=total_bookings,
-            total_revenue=total_revenue,
-            total_guests=total_guests,
-            avg_rating=None,  # Würde Bewertungen benötigen
-            last_booking=last_booking.created_at.isoformat() if last_booking else None
-        ))
-    
-    return stats
-
-
-@api_router.get("/stats/property/{id}", response_model=PropertyStatsResponse, dependencies=[Depends(get_current_user)])
-def get_property_stats(id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Hole Statistiken für ein spezifisches Property"""
-    from database import Property, Booking
-    from sqlalchemy import func
-    
-    # Prüfe ob Property existiert und dem User gehört
-    property = db.query(Property).filter(
-        Property.id == id,
-        Property.user_id == user.id
-    ).first()
-    if not property:
-        raise HTTPException(status_code=404, detail="Property nicht gefunden")
-    
-    # Zähle Buchungen
-    total_bookings = db.query(func.count(Booking.id)).filter(
-        Booking.property_id == property.id
-    ).scalar() or 0
-    
-    # Berechne Umsatz
-    revenue_result = db.query(func.sum(Booking.total_price)).filter(
-        Booking.property_id == property.id
-    ).scalar()
-    total_revenue = revenue_result or 0.0
-    
-    # Berechnte Gäste
-    guests_result = db.query(func.sum(Booking.guest_count)).filter(
-        Booking.property_id == property.id
-    ).scalar()
-    total_guests = guests_result or 0
-    
-    # Hole letzte Buchung
-    last_booking = db.query(Booking).filter(
-        Booking.property_id == property.id
-    ).order_by(Booking.created_at.desc()).first()
-    
-    return PropertyStatsResponse(
-        property_id=property.id,
-        property_name=property.name,
-        total_bookings=total_bookings,
-        total_revenue=total_revenue,
-        total_guests=total_guests,
-        avg_rating=None,
-        last_booking=last_booking.created_at.isoformat() if last_booking else None
-    )
-
-
-@api_router.get("/stats/bookings/export.csv", dependencies=[Depends(get_current_user)])
-def export_bookings_csv(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Exportiere alle Buchungen des Users als CSV"""
-    from database import Booking, Property
-    
-    # Hole alle Buchungen des Users
-    bookings = db.query(Booking).join(Property).filter(Property.user_id == user.id).all()
-    
-    # Erstelle CSV content
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Header
-    writer.writerow(['Buchungs-ID', 'Property', 'Gast', 'Check-in', 'Check-out', 'Anzahl Gäste', 'Preis', 'Status', 'Zahlungsmethode', 'Erstellt am'])
-    
-    for booking in bookings:
-        writer.writerow([
-            booking.id,
-            booking.property_name,
-            booking.guest_name,
-            booking.check_in.strftime('%Y-%m-%d') if booking.check_in else '',
-            booking.check_out.strftime('%Y-%m-%d') if booking.check_out else '',
-            booking.guest_count or 0,
-            f"{booking.total_price:.2f}",
-            booking.status or 'pending',
-            booking.payment_method or 'unknown',
-            booking.created_at.strftime('%Y-%m-%d %H:%M:%S')
-        ])
-    
-    output.seek(0)
-    
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=bookings.csv"}
-    )
-
-
-# ============== END HOST STATS API ENDPOINTS ==============
-
-# ============== FEEDBACK API ENDPOINTS ==============
-
-class FeedbackRequest(BaseModel):
-    rating: int
-    category: str
-    feedback: str
-    page: Optional[str] = None
-    userAgent: Optional[str] = None
-    timestamp: Optional[str] = None
-
-@api_router.post("/feedback")
-@limiter.limit("5/minute")
-def submit_feedback(request: Request, data: FeedbackRequest):
-    """User Feedback empfangen und speichern (Rate Limited: 5/Min)"""
-    try:
-        logger.info(f"Feedback erhalten: Rating={data.rating}, Category={data.category}")
-        
-        # In einer Production-Umgebung würde das Feedback in einer Datenbank gespeichert werden
-        # Für MVP: Loggen wir das Feedback
-        logger.info(f"Feedback Details: {data.feedback[:100]}...")
-        
-        return {
-            "message": "Feedback erfolgreich empfangen",
-            "rating": data.rating,
-            "category": data.category
-        }
-    except Exception as e:
-        logger.error(f"Fehler beim Speichern des Feedbacks: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Speichern des Feedbacks")
-
-# ============== END FEEDBACK API ENDPOINTS ==============
-
-# ============== CALENDAR EXPORT API ENDPOINTS ==============
-
-@api_router.get("/bookings/calendar.ics")
-def export_calendar_ics(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Exportiere alle Buchungen als iCal (.ics) Datei"""
-    from datetime import datetime, timedelta
-    
-    # Hole alle Buchungen des Users
-    bookings = db.query(DBBooking).join(DBProperty).filter(
-        DBProperty.user_id == user.id
-    ).all()
-    
-    if not bookings:
-        raise HTTPException(status_code=404, detail="Keine Buchungen gefunden")
-    
-    # iCal Header
-    ics_content = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Welcome Link//Booking Calendar//DE",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "X-WR-CALNAME:Welcome Link Buchungen",
-        "X-WR-TIMEZONE:Europe/Berlin",
-    ]
-    
-    # Füge jedes Booking als Event hinzu
-    for booking in bookings:
-        # Generate UID
-        event_uid = f"booking-{booking.id}@welcome-link.de"
-        
-        # Parse dates
-        check_in = booking.check_in if isinstance(booking.check_in, datetime) else datetime.strptime(str(booking.check_in), "%Y-%m-%d")
-        check_out = booking.check_out if isinstance(booking.check_out, datetime) else datetime.strptime(str(booking.check_out), "%Y-%m-%d")
-        
-        # Format dates for iCal (YYYYMMDD)
-        dtstart = check_in.strftime("%Y%m%d")
-        dtend = check_out.strftime("%Y%m%d")
-        dtstamp = datetime.now().strftime("%Y%m%dT%H%M%SZ")
-        
-        # Add event
-        ics_content.extend([
-            "BEGIN:VEVENT",
-            f"UID:{event_uid}",
-            f"DTSTAMP:{dtstamp}",
-            f"DTSTART;VALUE=DATE:{dtstart}",
-            f"DTEND;VALUE=DATE:{dtend}",
-            f"SUMMARY:{booking.guest_name}",
-            f"DESCRIPTION:Booking ID: {booking.id}\\nProperty: {booking.property.name if booking.property else 'N/A'}\\nEmail: {booking.guest_email or 'N/A'}",
-            f"LOCATION:{booking.property.address if booking.property and booking.property.address else ''}",
-            "STATUS:CONFIRMED",
-            "END:VEVENT",
-        ])
-    
-    # iCal Footer
-    ics_content.append("END:VCALENDAR")
-    
-    # Return as .ics file
-    from fastapi.responses import Response
-    return Response(
-        content="\r\n".join(ics_content),
-        media_type="text/calendar",
-        headers={
-            "Content-Disposition": "attachment; filename=bookings.ics"
-        }
-    )
-
-# ============== END CALENDAR EXPORT API ENDPOINTS ==============
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
     """Initialisiere Demo-Benutzer beim Start"""
     try:
-        logger.info("🚀 Startup-Event: Initialisiere DB...")
-        
-        # WICHTIG: init_db() IMMER zuerst aufrufen, um Migrationen auszuführen
-        from database import init_db as db_init_db
-        db_init_db()
-        
         logger.info("🚀 Startup-Event: Öffne DB-Session...")
         if not SessionLocal:
             logger.error("❌ SessionLocal ist nicht initialisiert!")
@@ -3838,11 +591,249 @@ def shutdown_db_client():
         logger.info("✓ Datenbankverbindung geschlossen")
     except Exception as e:
         logger.error(f"Fehler beim Shutdown: {str(e)}")
-# Deploy trigger
 
+# ============ EXTRAS MODELS & ROUTES ============
 
+class ExtraBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    price: float = Field(ge=0)
+    category: str = "other"  # food, wellness, activity, transport, other
+    is_active: bool = True
 
+class ExtraCreate(ExtraBase):
+    pass
 
+class Extra(ExtraBase):
+    id: str
+    property_id: int
 
+# In-Memory Extras Store (simplified for demo)
+EXTRAS_STORE = {}
 
+def get_demo_extras():
+    """Get demo extras"""
+    return [
+        {"id": "extra-1", "property_id": 17, "name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen", "price": 15.0, "category": "food", "is_active": True},
+        {"id": "extra-2", "property_id": 17, "name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr", "price": 25.0, "category": "other", "is_active": True},
+        {"id": "extra-3", "property_id": 17, "name": "Fahrradverleih", "description": "Pro Tag, inkl. Helm", "price": 12.0, "category": "activity", "is_active": True},
+        {"id": "extra-4", "property_id": 17, "name": "Sauna", "description": "Private Nutzung für 2 Stunden", "price": 30.0, "category": "wellness", "is_active": True},
+        {"id": "extra-5", "property_id": 17, "name": "Gepäckaufbewahrung", "description": "Pro Tag", "price": 5.0, "category": "other", "is_active": True},
+        {"id": "extra-6", "property_id": 17, "name": "Shuttle Service", "description": "Bahnhof-Transfer", "price": 20.0, "category": "transport", "is_active": True},
+        {"id": "extra-7", "property_id": 17, "name": "Willkommens-Paket", "description": "Sekt, Obst & Schokolade", "price": 35.0, "category": "food", "is_active": True},
+        {"id": "extra-8", "property_id": 17, "name": "Haustier", "description": "Pro Nacht", "price": 10.0, "category": "other", "is_active": True},
+        {"id": "extra-9", "property_id": 17, "name": "Parkplatz", "description": "Tiefgarage, pro Tag", "price": 8.0, "category": "transport", "is_active": True},
+        {"id": "extra-10", "property_id": 17, "name": "Massage", "description": "60 Min. Rücken-Nacken", "price": 65.0, "category": "wellness", "is_active": True},
+    ]
+
+@api_router.get("/properties/{property_id}/extras")
+def get_extras(property_id: int):
+    """Get all extras for a property"""
+    extras = get_demo_extras()
+    return {"extras": extras}
+
+@api_router.post("/properties/{property_id}/extras")
+def create_extra(property_id: int, data: ExtraCreate, user = Depends(get_current_user)):
+    """Create a new extra"""
+    extra_id = f"extra-{uuid.uuid4().hex[:8]}"
+    extra = {
+        "id": extra_id,
+        "property_id": property_id,
+        **data.model_dump()
+    }
+    if property_id not in EXTRAS_STORE:
+        EXTRAS_STORE[property_id] = []
+    EXTRAS_STORE[property_id].append(extra)
+    return extra
+
+# ============ CHECKOUT MODELS & ROUTES ============
+
+class CheckoutItem(BaseModel):
+    extra_id: str
+    quantity: int = Field(ge=1, le=10)
+    
+class CheckoutRequest(BaseModel):
+    property_id: int
+    items: List[CheckoutItem]
+    guest_name: str
+    guest_email: str
+    payment_method: str = "stripe"  # stripe, paypal, cash
+    
+class CheckoutResponse(BaseModel):
+    checkout_id: str
+    total: float
+    payment_url: Optional[str] = None
+    status: str
+
+# In-Memory Checkouts Store
+CHECKOUTS_STORE = {}
+
+@api_router.post("/checkout")
+def create_checkout(data: CheckoutRequest, user = Depends(get_current_user)):
+    """Create a new checkout/order"""
+    checkout_id = f"checkout-{uuid.uuid4().hex[:8]}"
+    
+    # Calculate total
+    extras = get_demo_extras()
+    total = 0.0
+    order_items = []
+    
+    for item in data.items:
+        extra = next((e for e in extras if e["id"] == item.extra_id), None)
+        if extra:
+            item_total = extra["price"] * item.quantity
+            total += item_total
+            order_items.append({
+                "extra_id": item.extra_id,
+                "name": extra["name"],
+                "price": extra["price"],
+                "quantity": item.quantity,
+                "total": item_total
+            })
+    
+    checkout = {
+        "id": checkout_id,
+        "property_id": data.property_id,
+        "items": order_items,
+        "guest_name": data.guest_name,
+        "guest_email": data.guest_email,
+        "payment_method": data.payment_method,
+        "subtotal": total,
+        "tax": round(total * 0.19, 2),
+        "total": round(total * 1.19, 2),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    CHECKOUTS_STORE[checkout_id] = checkout
+    
+    # For demo: auto-complete payment
+    if data.payment_method == "stripe":
+        checkout["status"] = "completed"
+        checkout["payment_id"] = f"pi_{uuid.uuid4().hex[:24]}"
+    
+    return CheckoutResponse(
+        checkout_id=checkout_id,
+        total=checkout["total"],
+        payment_url=None,
+        status=checkout["status"]
+    )
+
+@api_router.get("/checkout/{checkout_id}")
+def get_checkout(checkout_id: str):
+    """Get checkout details"""
+    checkout = CHECKOUTS_STORE.get(checkout_id)
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    return checkout
+
+@api_router.post("/checkout/{checkout_id}/complete")
+def complete_checkout(checkout_id: str, user = Depends(get_current_user)):
+    """Complete a checkout (simulate payment)"""
+    checkout = CHECKOUTS_STORE.get(checkout_id)
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    
+    checkout["status"] = "completed"
+    checkout["completed_at"] = datetime.now(timezone.utc).isoformat()
+    checkout["payment_id"] = f"pi_{uuid.uuid4().hex[:24]}"
+    
+    return checkout
+
+@api_router.get("/checkout/{checkout_id}/invoice")
+def get_invoice(checkout_id: str):
+    """Get invoice PDF for checkout"""
+    checkout = CHECKOUTS_STORE.get(checkout_id)
+    if not checkout:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    
+    # Generate invoice data
+    invoice_number = f"WL-{datetime.now().strftime('%Y%m%d')}-{checkout_id[-6:].upper()}"
+    
+    invoice_data = {
+        "invoice_number": invoice_number,
+        "invoice_date": datetime.now().strftime("%d.%m.%Y"),
+        "due_date": (datetime.now() + timedelta(days=14)).strftime("%d.%m.%Y"),
+        "host_name": "Welcome Link Demo",
+        "host_address": "Musterstraße 1, 12345 Musterstadt",
+        "host_email": "info@welcome-link.de",
+        "guest_name": checkout["guest_name"],
+        "guest_email": checkout["guest_email"],
+        "property_name": "Ferienwohnung Seeblick",
+        "property_address": "Seestraße 42, 83209 Prien am Chiemsee",
+        "items": checkout["items"],
+        "subtotal": checkout["subtotal"],
+        "tax": checkout["tax"],
+        "total": checkout["total"],
+        "payment_method": checkout["payment_method"],
+        "payment_status": "Bezahlt" if checkout["status"] == "completed" else "Ausstehend"
+    }
+    
+    return {"invoice": invoice_data, "checkout": checkout}
+
+# ============ PROPERTY EDIT ROUTES ============
+
+class PropertyUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+    brand_color: Optional[str] = None
+    wifi_name: Optional[str] = None
+    wifi_password: Optional[str] = None
+    keysafe_location: Optional[str] = None
+    keysafe_code: Optional[str] = None
+    checkin_time: Optional[str] = None
+    checkout_time: Optional[str] = None
+    house_rules: Optional[List[str]] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+
+@api_router.put("/properties/{property_id}")
+def update_property(property_id: int, data: PropertyUpdate, user = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update property details"""
+    prop = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+    if not prop:
+        # For demo: return success anyway
+        return {"success": True, "property_id": property_id, "updated": data.model_dump(exclude_none=True)}
+    
+    # Update fields
+    update_data = data.model_dump(exclude_none=True)
+    for key, value in update_data.items():
+        if hasattr(prop, key):
+            setattr(prop, key, value)
+    
+    db.commit()
+    db.refresh(prop)
+    
+    return {"success": True, "property": prop.to_dict() if hasattr(prop, 'to_dict') else update_data}
+
+@api_router.get("/properties/{property_id}/edit")
+def get_property_for_edit(property_id: int, user = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get property details for editing"""
+    prop = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+    
+    if not prop:
+        # Return demo property
+        return {
+            "id": property_id,
+            "name": "Ferienwohnung Seeblick",
+            "description": "Moderne 3-Zimmer Ferienwohnung direkt am Chiemsee mit eigenem Bootssteg und Panoramaterrasse.",
+            "address": "Seestraße 42, 83209 Prien am Chiemsee",
+            "brand_color": "#f97316",
+            "wifi_name": "Seeblick-Guest",
+            "wifi_password": "Welcome2024!",
+            "keysafe_location": "An der Eingangstür links",
+            "keysafe_code": "1234",
+            "checkin_time": "15:00",
+            "checkout_time": "11:00",
+            "house_rules": [
+                "Rauchen ist in der gesamten Unterkunft nicht gestattet",
+                "Bitte tragen Sie Straßenschuhe nicht in den Schlafzimmern",
+                "Ruhezeiten: 22:00 - 08:00 Uhr"
+            ],
+            "contact_phone": "+49 8051 12345",
+            "contact_email": "host@welcome-link.de"
+        }
+    
+    return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
 
