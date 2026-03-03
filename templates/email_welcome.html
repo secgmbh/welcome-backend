@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Willkommen bei Welcome Link</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'DM Sans', Arial, sans-serif; background-color: #f8fafc;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+    <!-- Header -->
+    <tr>
+      <td style="padding: 40px 40px 20px; text-align: center; background: linear-gradient(135deg, #f97316, #f59e0b);">
+        <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">
+          Welcome Link
+        </h1>
+      </td>
+    </tr>
+    
+    <!-- Content -->
+    <tr>
+      <td style="padding: 40px;">
+        <h2 style="margin: 0 0 20px; color: #1f2937; font-size: 24px;">
+          Willkommen, {{name}}!
+        </h2>
+        
+        <p style="margin: 0 0 20px; color: #4b5563; font-size: 16px; line-height: 1.6;">
+          Vielen Dank für Ihre Registrierung bei Welcome Link. Ihr Konto wurde erfolgreich erstellt.
+        </p>
+        
+        <p style="margin: 0 0 30px; color: #4b5563; font-size: 16px; line-height: 1.6;">
+          Mit Welcome Link können Sie:
+        </p>
+        
+        <ul style="margin: 0 0 30px; padding-left: 20px; color: #4b5563; font-size: 16px; line-height: 1.8;">
+          <li>Unterkünfte verwalten und QR-Codes generieren</li>
+          <li>Gästen digitale Informationen bereitstellen</li>
+          <li>Extras und Zusatzleistungen anbieten</li>
+          <li>Zahlungen einfach entgegennehmen</li>
+        </ul>
+        
+        <!-- CTA Button -->
+        <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+          <tr>
+            <td style="border-radius: 12px; background: linear-gradient(135deg, #f97316, #f59e0b);">
+              <a href="{{dashboard_url}}" style="display: inline-block; padding: 16px 32px; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600;">
+                Zum Dashboard →
+              </a>
+            </td>
+          </tr>
+        </table>
+        
+        <p style="margin: 30px 0 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+          Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+        </p>
+      </td>
+    </tr>
+    
+    <!-- Footer -->
+    <tr>
+      <td style="padding: 30px 40px; background-color: #f8fafc; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0 0 10px; color: #6b7280; font-size: 12px; text-align: center;">
+          SEC GmbH · Musterstraße 1 · 12345 Musterstadt
+        </p>
+        <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">
+          <a href="{{unsubscribe_url}}" style="color: #9ca3af; text-decoration: underline;">Abmelden</a>
+           · 
+          <a href="{{privacy_url}}" style="color: #9ca3af; text-decoration: underline;">Datenschutz</a>
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
