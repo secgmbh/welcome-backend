@@ -837,3 +837,4 @@ def get_property_for_edit(property_id: int, user = Depends(get_current_user), db
     
     return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
 
+# Build 2026-03-03 19:56:04
