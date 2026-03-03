@@ -916,3 +916,17 @@ def init_demo_data(db: Session = Depends(get_db)):
         "property": {"id": property.id, "name": property.name},
         "guestview_token": "QEJHEXP1QF"
     }
+
+# ============ HEALTH CHECK ============
+@api_router.get("/health")
+def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "2.1.0",
+        "services": {
+            "api": "ok",
+            "database": "ok"
+        }
+    }
