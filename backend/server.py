@@ -838,3 +838,70 @@ def get_property_for_edit(property_id: int, user = Depends(get_current_user), db
 app.include_router(api_router)
 
 # Build 2026-03-03 19:56:04
+
+# ============ DEMO INIT ============
+@api_router.post("/demo/init")
+def init_demo_data(db: Session = Depends(get_db)):
+    """Initialisiere Demo-Daten für Testing"""
+    import random
+    import string
+    
+    # Demo User erstellen
+    demo_email = "demo@welcome-link.de"
+    user = db.query(DBUser).filter(DBUser.email == demo_email).first()
+    
+    if not user:
+        # User erstellen
+        hashed_password = bcrypt.hashpw("Demo123!".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        user = DBUser(
+            id=str(uuid.uuid4()),
+            email=demo_email,
+            name="Demo User",
+            password_hash=hashed_password,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    # Demo Property erstellen
+    property = db.query(DBProperty).filter(DBProperty.user_id == user.id).first()
+    
+    if not property:
+        property = DBProperty(
+            id=17,
+            user_id=user.id,
+            name="Ferienwohnung Seeblick",
+            address="Seestraße 42, 83209 Prien am Chiemsee",
+            wifi_name="Seeblick-Guest",
+            wifi_password="Welcome2024!",
+            keysafe_location="An der Eingangstür links",
+            keysafe_code="1234",
+            checkin_time="15:00",
+            checkout_time="11:00",
+            brand_color="#F27C2C",
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(property)
+        db.commit()
+        db.refresh(property)
+    
+    # Demo Guestview Token
+    guest_view = db.query(DBGuestView).filter(DBGuestView.user_id == user.id).first()
+    
+    if not guest_view:
+        guest_view = DBGuestView(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            token="QEJHEXP1QF",
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(guest_view)
+        db.commit()
+    
+    return {
+        "success": True,
+        "user": {"id": user.id, "email": user.email, "name": user.name},
+        "property": {"id": property.id, "name": property.name},
+        "guestview_token": "QEJHEXP1QF"
+    }
