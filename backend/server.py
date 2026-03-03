@@ -837,14 +837,3 @@ def get_property_for_edit(property_id: int, user = Depends(get_current_user), db
     
     return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
 
-# Deploy Tue Mar  3 16:10:45 CET 2026
-
-# ============ VERSION ENDPOINT ============
-@api_router.get("/version")
-def get_version():
-    """Get API version and deploy time"""
-    return {
-        "version": "2.0.0",
-        "deploy_time": "2026-03-03T16:12:00Z",
-        "features": ["extras", "checkout", "invoice", "property_edit"]
-    }
