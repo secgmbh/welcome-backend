@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buchungsbestätigung - Welcome Link</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f9fafb; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #F27C2C 0%, #E06B1B 100%); padding: 30px; text-align: center; }
+    .header h1 { color: white; margin: 0; font-size: 24px; }
+    .content { padding: 30px; }
+    .success-icon { width: 60px; height: 60px; background: #10B981; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+    .success-icon span { color: white; font-size: 30px; }
+    .booking-id { background: #FEF3E7; border-radius: 8px; padding: 15px; text-align: center; margin: 20px 0; }
+    .booking-id span { font-size: 20px; font-weight: bold; color: #F27C2C; }
+    .details { margin: 20px 0; }
+    .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #E5E7EB; }
+    .detail-label { color: #6B7280; }
+    .detail-value { font-weight: 500; color: #111827; }
+    .items { background: #F9FAFB; border-radius: 8px; padding: 15px; margin: 20px 0; }
+    .item { display: flex; justify-content: space-between; padding: 8px 0; }
+    .total { font-size: 18px; font-weight: bold; color: #F27C2C; }
+    .footer { background: #F9FAFB; padding: 20px; text-align: center; color: #6B7280; font-size: 14px; }
+    .button { display: inline-block; background: #F27C2C; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎉 Buchung bestätigt!</h1>
+    </div>
+    
+    <div class="content">
+      <div class="success-icon">
+        <span>✓</span>
+      </div>
+      
+      <p style="text-align: center; color: #6B7280;">
+        Vielen Dank für Ihre Buchung, {{guest_name}}!
+      </p>
+      
+      <div class="booking-id">
+        <span>Buchungsnummer: {{booking_id}}</span>
+      </div>
+      
+      <div class="details">
+        <div class="detail-row">
+          <span class="detail-label">Unterkunft</span>
+          <span class="detail-value">{{property_name}}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Datum</span>
+          <span class="detail-value">{{booking_date}}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">E-Mail</span>
+          <span class="detail-value">{{guest_email}}</span>
+        </div>
+      </div>
+      
+      <div class="items">
+        <h3 style="margin: 0 0 15px; font-size: 16px;">Gebuchte Extras:</h3>
+        {{#items}}
+        <div class="item">
+          <span>{{name}} x {{quantity}}</span>
+          <span>€{{price}}</span>
+        </div>
+        {{/items}}
+        <div class="item" style="border-top: 2px solid #E5E7EB; margin-top: 10px; padding-top: 10px;">
+          <span style="font-weight: bold;">Gesamtbetrag</span>
+          <span class="total">€{{total}}</span>
+        </div>
+      </div>
+      
+      <div style="text-align: center; margin-top: 30px;">
+        <a href="{{invoice_url}}" class="button">Rechnung herunterladen</a>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>Diese E-Mail wurde automatisch versendet.</p>
+      <p>© 2026 Welcome Link. Alle Rechte vorbehalten.</p>
+    </div>
+  </div>
+</body>
+</html>
