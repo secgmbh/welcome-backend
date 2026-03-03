@@ -3275,6 +3275,53 @@ def get_invoice(request: Request, checkout_id: str, db: Session = Depends(get_db
         
         # Tabelle
         data = [["Beschreibung", "Menge", "Einzelpreis", "Summe"]]
+        
+        # Items hinzufügen
+        total = 0
+        for item in items:
+            line_total = float(item[2]) * item[3]
+            total += line_total
+            data.append([item[0], str(item[3]), f"€{float(item[2]):.2f}", f"€{line_total:.2f}"])
+        
+        # Gesamt
+        data.append(["", "", "Gesamt:", f"€{total:.2f}"])
+        
+        # Tabelle erstellen
+        table = Table(data, colWidths=[8*cm, 2*cm, 3*cm, 3*cm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F27C2C')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('ALIGN', (2, -1), (-1, -1), 'RIGHT'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        story.append(table)
+        
+        # Footer
+        story.append(Spacer(1, 2*cm))
+        story.append(Paragraph("Vielen Dank für Ihren Aufenthalt!", styles['Normal']))
+        story.append(Paragraph("www.welcome-link.de", styles['Normal']))
+        
+        # PDF bauen
+        doc.build(story)
+        
+        # Response
+        from fastapi.responses import Response
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=invoice_{checkout_id[:8]}.pdf"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Fehler beim Generieren der Rechnung: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Fehler beim Generieren der Rechnung: {str(e)}")
 
 
 # ============== STRIPE PAYMENT ENDPOINTS ==============
