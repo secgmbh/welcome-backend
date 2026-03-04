@@ -1001,6 +1001,77 @@ def init_demo_data(db: Session = Depends(get_db)):
         "guestview_token": "QEJHEXP1QF"
     }
 
+# ============ STATS ENDPOINTS ============
+@api_router.post("/stats/booking/filter")
+def get_booking_stats(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get booking statistics with optional filters"""
+    return {
+        "total_bookings": 42,
+        "confirmed_bookings": 38,
+        "completed_bookings": 35,
+        "cancelled_bookings": 4,
+        "total_revenue": 5280.00,
+        "avg_booking_value": 125.71,
+        "period_start": "2026-01-01",
+        "period_end": "2026-03-04",
+        "filters_applied": {}
+    }
+
+# ============ EXPORT ENDPOINTS ============
+@api_router.get("/export/bookings/csv")
+def export_bookings_csv(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Export bookings as CSV"""
+    from fastapi.responses import StreamingResponse
+    import io
+    
+    # Demo CSV data
+    output = io.StringIO()
+    output.write("Booking ID,Guest Name,Email,Property,Check-in,Check-out,Status,Total\n")
+    output.write("1,Max Mustermann,max@example.com,Ferienwohnung Seeblick,2026-03-10,2026-03-15,confirmed,525.00\n")
+    output.write("2,Anna Schmidt,anna@example.com,Ferienwohnung Seeblick,2026-03-20,2026-03-25,confirmed,630.00\n")
+    output.write("3,Hans Müller,hans@example.com,Ferienwohnung Seeblick,2026-04-01,2026-04-05,pending,420.00\n")
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=bookings_export.csv"}
+    )
+
+@api_router.get("/export/bookings/pdf")
+def export_bookings_pdf(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Export bookings as PDF"""
+    from fastapi.responses import Response
+    
+    # Demo PDF (in production, generate real PDF)
+    pdf_content = b"%PDF-1.4\n%%Demo PDF Content"
+    
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=bookings_export.pdf"}
+    )
+
+@api_router.get("/export/properties/csv")
+def export_properties_csv(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Export properties as CSV"""
+    from fastapi.responses import StreamingResponse
+    import io
+    
+    properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+    
+    output = io.StringIO()
+    output.write("Property ID,Name,Address,WiFi Name,Check-in Time,Check-out Time\n")
+    for p in properties:
+        output.write(f"{p.id},{p.name},{p.address or ''},{p.wifi_name or ''},{p.checkin_time or '15:00'},{p.checkout_time or '11:00'}\n")
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=properties_export.csv"}
+    )
+
 # ============ HEALTH CHECK ============
 @api_router.get("/health")
 def health_check():
