@@ -977,7 +977,7 @@ def init_demo_data(db: Session = Depends(get_db)):
         db.commit()
         db.refresh(property)
     
-    # Demo Guestview Token
+    # Demo Guestview Token - always ensure it exists
     guest_view = db.query(DBGuestView).filter(DBGuestView.user_id == user.id).first()
     
     if not guest_view:
@@ -988,6 +988,10 @@ def init_demo_data(db: Session = Depends(get_db)):
             created_at=datetime.now(timezone.utc)
         )
         db.add(guest_view)
+        db.commit()
+    elif guest_view.token != "QEJHEXP1QF":
+        # Ensure the demo token is always QEJHEXP1QF
+        guest_view.token = "QEJHEXP1QF"
         db.commit()
     
     return {
