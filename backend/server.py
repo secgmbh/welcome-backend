@@ -877,7 +877,6 @@ def init_demo_data(db: Session = Depends(get_db)):
     
     if not property:
         property = DBProperty(
-            id=str(uuid.uuid4()),
             user_id=user.id,
             name="Ferienwohnung Seeblick",
             address="Seestraße 42, 83209 Prien am Chiemsee",
