@@ -545,7 +545,7 @@ def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
                 "house_rules": p.house_rules or [],
                 "created_at": p.created_at.isoformat() if p.created_at else None
             } for p in properties],
-            "extras": DEMO_EXTRAS  # Extras für Buchung
+            "extras": get_demo_extras()  # Extras für Buchung
         }
     except HTTPException:
         raise
