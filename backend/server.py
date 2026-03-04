@@ -1242,6 +1242,67 @@ def delete_admin_user(user_id: str, user: DBUser = Depends(get_current_user), db
     """Delete user (admin only)"""
     return {"success": True, "message": f"User {user_id} deleted"}
 
+# ============ PAYPAL ENDPOINTS ============
+@api_router.post("/paypal/create-order")
+def create_paypal_order(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create PayPal order for payment"""
+    # Demo PayPal order creation
+    order_id = f"PAYPAL-{uuid.uuid4().hex[:12].upper()}"
+    return {
+        "order_id": order_id,
+        "status": "CREATED",
+        "amount": data.get("amount", 0),
+        "currency": data.get("currency", "EUR"),
+        "booking_id": data.get("booking_id"),
+        "links": [
+            {"rel": "approve", "href": f"https://www.paypal.com/checkoutnow?token={order_id}"},
+            {"rel": "capture", "href": f"https://api.welcome-link.de/api/paypal/capture-order"}
+        ]
+    }
+
+@api_router.post("/paypal/capture-order")
+def capture_paypal_order(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Capture PayPal order after approval"""
+    # Demo capture
+    return {
+        "success": True,
+        "order_id": data.get("order_id"),
+        "booking_id": data.get("booking_id"),
+        "status": "COMPLETED",
+        "transaction_id": f"TXN-{uuid.uuid4().hex[:16].upper()}"
+    }
+
+# ============ A/B TESTS ENDPOINTS ============
+@api_router.get("/ab-tests")
+def get_ab_tests(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all A/B tests for user"""
+    return [
+        {
+            "id": "ab-1",
+            "property_id": "17",
+            "name": "Welcome Screen Test",
+            "variant_a": {"name": "Original", "url": "/guestview/17"},
+            "variant_b": {"name": "New Design", "url": "/guestview/17?variant=b"},
+            "active": True,
+            "created_at": "2026-02-15T10:00:00Z"
+        }
+    ]
+
+@api_router.post("/ab-tests")
+def create_ab_test(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create new A/B test"""
+    return {
+        "success": True,
+        "id": f"ab-{uuid.uuid4().hex[:8]}",
+        "name": data.get("name", "New Test"),
+        "active": True
+    }
+
+@api_router.delete("/ab-tests/{test_id}")
+def delete_ab_test(test_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete A/B test"""
+    return {"success": True, "message": f"A/B Test {test_id} deleted"}
+
 # ============ HEALTH CHECK ============
 @api_router.get("/health")
 def health_check():
