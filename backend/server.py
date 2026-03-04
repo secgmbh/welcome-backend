@@ -352,7 +352,7 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
     try:
         properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
         return [Property(
-            id=p.id,
+            id=str(p.id),
             user_id=p.user_id,
             name=p.name,
             description=p.description,
