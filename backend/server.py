@@ -842,7 +842,28 @@ def update_property(property_id: int, data: PropertyUpdate, user = Depends(get_c
     db.commit()
     db.refresh(prop)
     
-    return {"success": True, "property": prop.to_dict() if hasattr(prop, 'to_dict') else update_data}
+    # Return full property data
+    return {
+        "success": True,
+        "property": {
+            "id": prop.id,
+            "user_id": prop.user_id,
+            "name": prop.name,
+            "description": prop.description,
+            "address": prop.address,
+            "brand_color": getattr(prop, 'brand_color', '#F27C2C'),
+            "wifi_name": getattr(prop, 'wifi_name', None),
+            "wifi_password": getattr(prop, 'wifi_password', None),
+            "keysafe_location": getattr(prop, 'keysafe_location', None),
+            "keysafe_code": getattr(prop, 'keysafe_code', None),
+            "checkin_time": getattr(prop, 'checkin_time', '15:00'),
+            "checkout_time": getattr(prop, 'checkout_time', '11:00'),
+            "house_rules": getattr(prop, 'house_rules', []),
+            "contact_phone": getattr(prop, 'contact_phone', None),
+            "contact_email": getattr(prop, 'contact_email', None),
+            "created_at": prop.created_at.isoformat() if prop.created_at else None
+        }
+    }
 
 @api_router.get("/properties/{property_id}/edit")
 def get_property_for_edit(property_id: int, user = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -872,7 +893,25 @@ def get_property_for_edit(property_id: int, user = Depends(get_current_user), db
             "contact_email": "host@welcome-link.de"
         }
     
-    return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
+    # Return all property fields for editing
+    return {
+        "id": prop.id,
+        "user_id": prop.user_id,
+        "name": prop.name,
+        "description": prop.description,
+        "address": prop.address,
+        "brand_color": getattr(prop, 'brand_color', '#F27C2C'),
+        "wifi_name": getattr(prop, 'wifi_name', None),
+        "wifi_password": getattr(prop, 'wifi_password', None),
+        "keysafe_location": getattr(prop, 'keysafe_location', None),
+        "keysafe_code": getattr(prop, 'keysafe_code', None),
+        "checkin_time": getattr(prop, 'checkin_time', '15:00'),
+        "checkout_time": getattr(prop, 'checkout_time', '11:00'),
+        "house_rules": getattr(prop, 'house_rules', []),
+        "contact_phone": getattr(prop, 'contact_phone', None),
+        "contact_email": getattr(prop, 'contact_email', None),
+        "created_at": prop.created_at.isoformat() if prop.created_at else None
+    }
 
 # ============ DEMO INIT ============
 @api_router.post("/demo/init")
