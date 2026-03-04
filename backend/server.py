@@ -1081,6 +1081,11 @@ def export_bookings_ical(user: DBUser = Depends(get_current_user), db: Session =
     # Get all bookings for this user
     bookings = db.query(DBBooking).filter(DBBooking.user_id == user.id).all()
     
+    # Get property names for bookings
+    property_ids = list(set(b.property_id for b in bookings if b.property_id))
+    properties = db.query(DBProperty).filter(DBProperty.id.in_(property_ids)).all()
+    property_map = {p.id: p.name for p in properties}
+    
     # Generate iCal content
     ical_lines = [
         "BEGIN:VCALENDAR",
@@ -1095,8 +1100,11 @@ def export_bookings_ical(user: DBUser = Depends(get_current_user), db: Session =
         booking_uid = f"booking-{booking.id}@welcome-link.de"
         
         # Format dates for iCal (YYYYMMDD)
-        start_date = booking.checkin.strftime("%Y%m%d") if booking.checkin else "20260301"
-        end_date = booking.checkout.strftime("%Y%m%d") if booking.checkout else "20260305"
+        start_date = booking.check_in.strftime("%Y%m%d") if booking.check_in else "20260301"
+        end_date = booking.check_out.strftime("%Y%m%d") if booking.check_out else "20260305"
+        
+        # Get property name
+        property_name = property_map.get(booking.property_id, "Unbekannt")
         
         ical_lines.extend([
             "BEGIN:VEVENT",
@@ -1104,7 +1112,7 @@ def export_bookings_ical(user: DBUser = Depends(get_current_user), db: Session =
             f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
             f"DTSTART;VALUE=DATE:{start_date}",
             f"DTEND;VALUE=DATE:{end_date}",
-            f"SUMMARY:{booking.guest_name or 'Gast'} - {booking.property.name if booking.property else 'Property'}",
+            f"SUMMARY:{booking.guest_name or 'Gast'} - {property_name}",
             f"DESCRIPTION:Buchung #{booking.id}\\nGast: {booking.guest_name or 'N/A'}\\nEmail: {booking.guest_email or 'N/A'}",
             "STATUS:CONFIRMED",
             "END:VEVENT"
