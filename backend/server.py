@@ -1072,6 +1072,52 @@ def export_properties_csv(user: DBUser = Depends(get_current_user), db: Session 
         headers={"Content-Disposition": "attachment; filename=properties_export.csv"}
     )
 
+# ============ CALENDAR EXPORT ============
+@api_router.get("/bookings/calendar.ics")
+def export_bookings_ical(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Export bookings as iCal (.ics) file"""
+    from fastapi.responses import Response
+    
+    # Get all bookings for this user
+    bookings = db.query(DBBooking).filter(DBBooking.user_id == user.id).all()
+    
+    # Generate iCal content
+    ical_lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Welcome-Link//Booking Calendar//DE",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH"
+    ]
+    
+    for booking in bookings:
+        # Generate UID
+        booking_uid = f"booking-{booking.id}@welcome-link.de"
+        
+        # Format dates for iCal (YYYYMMDD)
+        start_date = booking.checkin.strftime("%Y%m%d") if booking.checkin else "20260301"
+        end_date = booking.checkout.strftime("%Y%m%d") if booking.checkout else "20260305"
+        
+        ical_lines.extend([
+            "BEGIN:VEVENT",
+            f"UID:{booking_uid}",
+            f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTSTART;VALUE=DATE:{start_date}",
+            f"DTEND;VALUE=DATE:{end_date}",
+            f"SUMMARY:{booking.guest_name or 'Gast'} - {booking.property.name if booking.property else 'Property'}",
+            f"DESCRIPTION:Buchung #{booking.id}\\nGast: {booking.guest_name or 'N/A'}\\nEmail: {booking.guest_email or 'N/A'}",
+            "STATUS:CONFIRMED",
+            "END:VEVENT"
+        ])
+    
+    ical_lines.append("END:VCALENDAR")
+    
+    return Response(
+        content="\r\n".join(ical_lines),
+        media_type="text/calendar",
+        headers={"Content-Disposition": "attachment; filename=bookings_calendar.ics"}
+    )
+
 # ============ HEALTH CHECK ============
 @api_router.get("/health")
 def health_check():
