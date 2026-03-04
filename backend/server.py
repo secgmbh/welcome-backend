@@ -15,7 +15,7 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -858,7 +858,7 @@ def init_demo_data(db: Session = Depends(get_db)):
     
     if not user:
         # User erstellen
-        hashed_password = bcrypt.hashpw("Demo123!".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        hashed_password = pwd_context.hash("Demo123!")
         user = DBUser(
             id=str(uuid.uuid4()),
             email=demo_email,
