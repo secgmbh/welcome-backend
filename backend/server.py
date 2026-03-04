@@ -125,6 +125,13 @@ class Property(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
     address: Optional[str] = Field(None, max_length=500)
+    wifi_name: Optional[str] = None
+    wifi_password: Optional[str] = None
+    keysafe_location: Optional[str] = None
+    keysafe_code: Optional[str] = None
+    checkin_time: Optional[str] = "15:00"
+    checkout_time: Optional[str] = "11:00"
+    brand_color: Optional[str] = "#F27C2C"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PropertyCreate(BaseModel):
@@ -350,6 +357,13 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
             name=p.name,
             description=p.description,
             address=p.address,
+            wifi_name=getattr(p, 'wifi_name', None),
+            wifi_password=getattr(p, 'wifi_password', None),
+            keysafe_location=getattr(p, 'keysafe_location', None),
+            keysafe_code=getattr(p, 'keysafe_code', None),
+            checkin_time=getattr(p, 'checkin_time', '15:00'),
+            checkout_time=getattr(p, 'checkout_time', '11:00'),
+            brand_color=getattr(p, 'brand_color', '#F27C2C'),
             created_at=p.created_at
         ) for p in properties]
     except Exception as e:
