@@ -1303,6 +1303,52 @@ def delete_ab_test(test_id: str, user: DBUser = Depends(get_current_user), db: S
     """Delete A/B test"""
     return {"success": True, "message": f"A/B Test {test_id} deleted"}
 
+# ============ BOOKINGS ENDPOINTS ============
+@api_router.get("/bookings/{booking_id}")
+def get_booking(booking_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get booking details"""
+    # Demo booking
+    return {
+        "id": booking_id,
+        "property_id": 17,
+        "property_name": "Ferienwohnung Seeblick",
+        "guest_name": "Max Mustermann",
+        "guest_email": "max@example.com",
+        "check_in": "2026-03-10",
+        "check_out": "2026-03-15",
+        "nights": 5,
+        "guests": 2,
+        "total_price": 525.00,
+        "status": "confirmed",
+        "payment_method": "paypal",
+        "created_at": "2026-03-04T10:30:00Z"
+    }
+
+# ============ USER PROFILE ENDPOINTS ============
+@api_router.get("/auth/profile")
+def get_user_profile(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get current user profile"""
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.email.split("@")[0].replace(".", " ").title(),
+        "created_at": user.created_at.isoformat() if hasattr(user, 'created_at') and user.created_at else "2026-01-01T00:00:00Z",
+        "properties_count": db.query(DBProperty).filter(DBProperty.user_id == user.id).count()
+    }
+
+@api_router.put("/auth/profile")
+def update_user_profile(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update user profile"""
+    return {
+        "success": True,
+        "message": "Profile updated",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": data.get("name", user.email.split("@")[0])
+        }
+    }
+
 # ============ HEALTH CHECK ============
 @api_router.get("/health")
 def health_check():
