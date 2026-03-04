@@ -407,8 +407,14 @@ def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_use
 def get_property(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Hole eine spezifische Property"""
     try:
+        # Convert string ID to integer for database query
+        try:
+            prop_id_int = int(property_id)
+        except ValueError:
+            prop_id_int = property_id  # Keep as-is for UUID strings
+        
         prop = db.query(DBProperty).filter(
-            DBProperty.id == property_id,
+            DBProperty.id == prop_id_int,
             DBProperty.user_id == user.id
         ).first()
         
@@ -416,11 +422,18 @@ def get_property(property_id: str, user: DBUser = Depends(get_current_user), db:
             raise HTTPException(status_code=404, detail="Property nicht gefunden")
         
         return Property(
-            id=prop.id,
+            id=str(prop.id),
             user_id=prop.user_id,
             name=prop.name,
             description=prop.description,
             address=prop.address,
+            wifi_name=getattr(prop, 'wifi_name', None),
+            wifi_password=getattr(prop, 'wifi_password', None),
+            keysafe_location=getattr(prop, 'keysafe_location', None),
+            keysafe_code=getattr(prop, 'keysafe_code', None),
+            checkin_time=getattr(prop, 'checkin_time', '15:00'),
+            checkout_time=getattr(prop, 'checkout_time', '11:00'),
+            brand_color=getattr(prop, 'brand_color', '#F27C2C'),
             created_at=prop.created_at
         )
     except HTTPException:
