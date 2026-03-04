@@ -1124,6 +1124,83 @@ def export_bookings_ical(user: DBUser = Depends(get_current_user), db: Session =
         headers={"Content-Disposition": "attachment; filename=bookings_calendar.ics"}
     )
 
+# ============ ADMIN ENDPOINTS ============
+@api_router.get("/admin/stats")
+def get_admin_stats(range: str = "7d", user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get admin statistics for dashboard"""
+    # Get counts from database
+    properties_count = db.query(DBProperty).filter(DBProperty.user_id == user.id).count()
+    
+    # Demo stats for now - in production, these would be calculated from real data
+    return {
+        "overview": {
+            "totalProperties": properties_count,
+            "totalGuests": 1247,
+            "totalBookings": 856,
+            "totalRevenue": 45670.50,
+            "qrScans": 3420,
+            "avgRating": 4.8
+        },
+        "trends": {
+            "properties": {"value": 2, "trend": "up", "percent": 20},
+            "guests": {"value": 156, "trend": "up", "percent": 14},
+            "bookings": {"value": 89, "trend": "up", "percent": 12},
+            "revenue": {"value": 4567.80, "trend": "up", "percent": 11}
+        },
+        "chartData": {
+            "labels": ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun"],
+            "bookings": [45, 52, 38, 65, 78, 92],
+            "revenue": [4500, 5200, 3800, 6500, 7800, 9200]
+        },
+        "topProperties": [
+            {"name": "Ferienwohnung Seeblick", "bookings": 156, "revenue": 15600},
+            {"name": "Alpenchalet", "bookings": 98, "revenue": 12740},
+            {"name": "Stadtapartment", "bookings": 72, "revenue": 5760}
+        ],
+        "recentActivity": [
+            {"type": "booking", "message": "Neue Buchung von Max Mustermann", "time": "vor 5 Min"},
+            {"type": "qr_scan", "message": "QR-Code gescannt", "time": "vor 12 Min"},
+            {"type": "review", "message": "5-Sterne Bewertung erhalten", "time": "vor 1 Std"}
+        ]
+    }
+
+@api_router.get("/admin/bookings/feed")
+def get_bookings_feed(limit: int = 50, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get recent bookings for live feed"""
+    # Demo bookings - in production, fetch from database
+    return [
+        {
+            "id": "BK-001",
+            "property_name": "Ferienwohnung Seeblick",
+            "guest_name": "Max Mustermann",
+            "check_in": "2026-03-10",
+            "check_out": "2026-03-15",
+            "total_price": 525.00,
+            "status": "confirmed",
+            "created_at": "2026-03-04T10:30:00Z"
+        },
+        {
+            "id": "BK-002",
+            "property_name": "Ferienwohnung Seeblick",
+            "guest_name": "Anna Schmidt",
+            "check_in": "2026-03-20",
+            "check_out": "2026-03-25",
+            "total_price": 630.00,
+            "status": "confirmed",
+            "created_at": "2026-03-04T09:15:00Z"
+        },
+        {
+            "id": "BK-003",
+            "property_name": "Ferienwohnung Seeblick",
+            "guest_name": "Hans Müller",
+            "check_in": "2026-04-01",
+            "check_out": "2026-04-05",
+            "total_price": 420.00,
+            "status": "pending",
+            "created_at": "2026-03-03T16:45:00Z"
+        }
+    ]
+
 # ============ HEALTH CHECK ============
 @api_router.get("/health")
 def health_check():
