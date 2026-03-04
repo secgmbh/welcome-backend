@@ -845,11 +845,6 @@ def get_property_for_edit(property_id: int, user = Depends(get_current_user), db
     
     return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
 
-# Include the router in the main app AFTER all routes are defined
-app.include_router(api_router)
-
-# Build 2026-03-03 19:56:04
-
 # ============ DEMO INIT ============
 @api_router.post("/demo/init")
 def init_demo_data(db: Session = Depends(get_db)):
@@ -930,5 +925,6 @@ def health_check():
             "database": "ok"
         }
     }
-# Deploy 2026-03-04 04:39:56
-# Build 2026-03-04 05:28
+
+# Include the router in the main app AFTER all routes are defined
+app.include_router(api_router)
