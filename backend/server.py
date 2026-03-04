@@ -1201,24 +1201,6 @@ def get_bookings_feed(limit: int = 50, user: DBUser = Depends(get_current_user),
         }
     ]
 
-# ============ HEALTH CHECK ============
-@api_router.get("/health")
-def health_check():
-    """Health check endpoint for monitoring"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.1.0",
-        "services": {
-            "api": "ok",
-            "database": "ok"
-        }
-    }
-
-# Include the router in the main app AFTER all routes are defined
-app.include_router(api_router)
-
-# ============ ADMIN USERS ENDPOINTS ============
 @api_router.get("/admin/users")
 def get_admin_users(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all users (admin only)"""
@@ -1259,3 +1241,20 @@ def update_admin_user(user_id: str, user_data: dict, user: DBUser = Depends(get_
 def delete_admin_user(user_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Delete user (admin only)"""
     return {"success": True, "message": f"User {user_id} deleted"}
+
+# ============ HEALTH CHECK ============
+@api_router.get("/health")
+def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "2.1.0",
+        "services": {
+            "api": "ok",
+            "database": "ok"
+        }
+    }
+
+# Include the router in the main app AFTER all routes are defined
+app.include_router(api_router)
