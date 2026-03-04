@@ -547,16 +547,16 @@ def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
                 "name": p.name or "Ferienwohnung",
                 "description": p.description or "Willkommen in Ihrer Unterkunft",
                 "address": p.address or "",
-                "wifi_name": p.wifi_name or "Guest-WiFi",
-                "wifi_password": p.wifi_password or "",
-                "keysafe_location": p.keysafe_location or "",
-                "keysafe_code": p.keysafe_code or "",
-                "checkin_time": p.checkin_time or "15:00",
-                "checkout_time": p.checkout_time or "11:00",
-                "brand_color": p.brand_color or "#F27C2C",
-                "contact_phone": p.contact_phone or "",
-                "contact_email": p.contact_email or "",
-                "house_rules": p.house_rules or [],
+                "wifi_name": getattr(p, 'wifi_name', None) or "Guest-WiFi",
+                "wifi_password": getattr(p, 'wifi_password', None) or "",
+                "keysafe_location": getattr(p, 'keysafe_location', None) or "",
+                "keysafe_code": getattr(p, 'keysafe_code', None) or "",
+                "checkin_time": getattr(p, 'checkin_time', None) or "15:00",
+                "checkout_time": getattr(p, 'checkout_time', None) or "11:00",
+                "brand_color": getattr(p, 'brand_color', None) or "#F27C2C",
+                "contact_phone": getattr(p, 'contact_phone', None) or "",
+                "contact_email": getattr(p, 'contact_email', None) or "",
+                "house_rules": getattr(p, 'house_rules', None) or [],
                 "created_at": p.created_at.isoformat() if p.created_at else None
             } for p in properties],
             "extras": get_demo_extras()  # Extras für Buchung
@@ -900,7 +900,6 @@ def init_demo_data(db: Session = Depends(get_db)):
             keysafe_code="1234",
             checkin_time="15:00",
             checkout_time="11:00",
-            brand_color="#F27C2C",
             created_at=datetime.now(timezone.utc)
         )
         db.add(property)
