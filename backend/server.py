@@ -527,19 +527,38 @@ def create_guestview_token(user: DBUser = Depends(get_current_user), db: Session
 
 @api_router.get("/guestview/{token}")
 def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
-    """Rufe Guestview Daten anhand Token ab (ohne Auth)"""
+    """Rufe Guestview Daten anhand Token oder Property-ID ab (ohne Auth)"""
     try:
-        guest_view = db.query(DBGuestView).filter(DBGuestView.token == token).first()
+        # Check if token is a property ID (numeric)
+        is_property_id = token.isdigit()
         
-        if not guest_view:
-            raise HTTPException(status_code=404, detail="Ungültiger Token")
-        
-        user = db.query(DBUser).filter(DBUser.id == guest_view.user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User nicht gefunden")
-        
-        # Hole alle Properties des Users
-        properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+        if is_property_id:
+            # If it's a property ID, find the property directly
+            property_id = int(token)
+            property = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+            
+            if not property:
+                raise HTTPException(status_code=404, detail="Property nicht gefunden")
+            
+            # Get user for this property
+            user = db.query(DBUser).filter(DBUser.id == property.user_id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User nicht gefunden")
+            
+            properties = [property]
+        else:
+            # Original token-based flow
+            guest_view = db.query(DBGuestView).filter(DBGuestView.token == token).first()
+            
+            if not guest_view:
+                raise HTTPException(status_code=404, detail="Ungültiger Token")
+            
+            user = db.query(DBUser).filter(DBUser.id == guest_view.user_id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User nicht gefunden")
+            
+            # Hole alle Properties des Users
+            properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
         
         logger.info(f"Guestview aufgerufen für User {user.email} via Token")
         
