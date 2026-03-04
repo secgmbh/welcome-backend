@@ -551,7 +551,9 @@ def get_guestview_by_token(token: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Fehler beim Abrufen des Guestviews: {str(e)}")
-        raise HTTPException(status_code=500, detail="Fehler beim Abrufen des Guestviews")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen des Guestviews: {str(e)}")
 
 app.add_middleware(
     CORSMiddleware,
