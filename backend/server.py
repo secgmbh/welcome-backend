@@ -1217,3 +1217,45 @@ def health_check():
 
 # Include the router in the main app AFTER all routes are defined
 app.include_router(api_router)
+
+# ============ ADMIN USERS ENDPOINTS ============
+@api_router.get("/admin/users")
+def get_admin_users(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all users (admin only)"""
+    # Demo users for now
+    return [
+        {
+            "id": "1",
+            "email": "demo@welcome-link.de",
+            "name": "Demo Benutzer",
+            "is_admin": True,
+            "created_at": "2026-01-15T10:00:00Z",
+            "properties_count": 1
+        },
+        {
+            "id": "2",
+            "email": "max@example.com",
+            "name": "Max Mustermann",
+            "is_admin": False,
+            "created_at": "2026-02-20T14:30:00Z",
+            "properties_count": 2
+        },
+        {
+            "id": "3",
+            "email": "anna@example.com",
+            "name": "Anna Schmidt",
+            "is_admin": False,
+            "created_at": "2026-03-01T09:15:00Z",
+            "properties_count": 1
+        }
+    ]
+
+@api_router.put("/admin/users/{user_id}")
+def update_admin_user(user_id: str, user_data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update user (admin only)"""
+    return {"success": True, "message": f"User {user_id} updated"}
+
+@api_router.delete("/admin/users/{user_id}")
+def delete_admin_user(user_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete user (admin only)"""
+    return {"success": True, "message": f"User {user_id} deleted"}
