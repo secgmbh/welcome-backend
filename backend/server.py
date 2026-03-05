@@ -964,7 +964,7 @@ def init_demo_data(db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
     
-    # Demo Property erstellen
+    # Demo Property erstellen oder aktualisieren
     property = db.query(DBProperty).filter(DBProperty.user_id == user.id).first()
     
     if not property:
@@ -984,31 +984,11 @@ def init_demo_data(db: Session = Depends(get_db)):
         db.commit()
         db.refresh(property)
     
-    # Demo Guestview Token - always ensure it exists
-    guest_view = db.query(DBGuestView).filter(DBGuestView.user_id == user.id).first()
-    
-    if not guest_view:
-        guest_view = DBGuestView(
-            id=str(uuid.uuid4()),
-            user_id=user.id,
-            token="QEJHEXP1QF",
-            created_at=datetime.now(timezone.utc)
-        )
-        db.add(guest_view)
-        db.commit()
-    elif guest_view.token != "QEJHEXP1QF":
-        # Ensure the demo token is always QEJHEXP1QF
-        guest_view.token = "QEJHEXP1QF"
-        db.commit()
-    
-    # Get the first property for the user
-    first_property = db.query(DBProperty).filter(DBProperty.user_id == user.id).first()
-    property_id = first_property.id if first_property else "demo-prop-1"
-    
+    # Return the property with its actual database ID
     return {
         "success": True,
         "user": {"id": user.id, "email": user.email, "name": user.name},
-        "property": {"id": property_id, "name": property.name if first_property else "Demo Property"},
+        "property": {"id": property.id, "name": property.name},
         "guestview_token": "QEJHEXP1QF"
     }
 
