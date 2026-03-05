@@ -209,30 +209,37 @@ def init_demo_user(db: Session):
         db.add(demo_user)
         db.commit()
         
-        # Erstelle Demo-Properties
+        # Erstelle Demo-Properties mit fixen IDs für Konsistenz
         demo_properties = [
             DBProperty(
-                id=str(uuid.uuid4()),
-                user_id=demo_user.id,
-                name="Boutique Hotel Alpenblick",
-                description="Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.",
-                address="Zugspitzstraße 42, 82467 Garmisch-Partenkirchen",
-                created_at=datetime.now(timezone.utc)
-            ),
-            DBProperty(
-                id=str(uuid.uuid4()),
+                id="demo-prop-1",
                 user_id=demo_user.id,
                 name="Ferienwohnung Seeblick",
                 description="Moderne 3-Zimmer Ferienwohnung direkt am Bodensee mit eigenem Bootssteg und Panoramaterrasse.",
                 address="Seepromenade 15, 88131 Lindau",
+                brand_color="#F27C2C",
+                wifi_name="Seeblick-Guest",
+                wifi_password="welcome2024",
+                checkin_time="15:00",
+                checkout_time="11:00",
                 created_at=datetime.now(timezone.utc)
             ),
             DBProperty(
-                id=str(uuid.uuid4()),
+                id="demo-prop-2",
+                user_id=demo_user.id,
+                name="Boutique Hotel Alpenblick",
+                description="Charmantes 4-Sterne Hotel mit Bergpanorama in Garmisch-Partenkirchen. 45 Zimmer, Spa-Bereich und regionale Küche.",
+                address="Zugspitzstraße 42, 82467 Garmisch-Partenkirchen",
+                brand_color="#2C5F9E",
+                created_at=datetime.now(timezone.utc)
+            ),
+            DBProperty(
+                id="demo-prop-3",
                 user_id=demo_user.id,
                 name="Stadtapartment München City",
                 description="Stilvolles Apartment im Herzen Münchens, perfekt für Geschäftsreisende. 5 Min. zum Marienplatz.",
                 address="Maximilianstraße 28, 80539 München",
+                brand_color="#4A9D4A",
                 created_at=datetime.now(timezone.utc)
             )
         ]
@@ -670,16 +677,16 @@ EXTRAS_STORE = {}
 def get_demo_extras():
     """Get demo extras"""
     return [
-        {"id": "extra-1", "property_id": 17, "name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen", "price": 15.0, "category": "food", "is_active": True},
-        {"id": "extra-2", "property_id": 17, "name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr", "price": 25.0, "category": "other", "is_active": True},
-        {"id": "extra-3", "property_id": 17, "name": "Fahrradverleih", "description": "Pro Tag, inkl. Helm", "price": 12.0, "category": "activity", "is_active": True},
-        {"id": "extra-4", "property_id": 17, "name": "Sauna", "description": "Private Nutzung für 2 Stunden", "price": 30.0, "category": "wellness", "is_active": True},
-        {"id": "extra-5", "property_id": 17, "name": "Gepäckaufbewahrung", "description": "Pro Tag", "price": 5.0, "category": "other", "is_active": True},
-        {"id": "extra-6", "property_id": 17, "name": "Shuttle Service", "description": "Bahnhof-Transfer", "price": 20.0, "category": "transport", "is_active": True},
-        {"id": "extra-7", "property_id": 17, "name": "Willkommens-Paket", "description": "Sekt, Obst & Schokolade", "price": 35.0, "category": "food", "is_active": True},
-        {"id": "extra-8", "property_id": 17, "name": "Haustier", "description": "Pro Nacht", "price": 10.0, "category": "other", "is_active": True},
-        {"id": "extra-9", "property_id": 17, "name": "Parkplatz", "description": "Tiefgarage, pro Tag", "price": 8.0, "category": "transport", "is_active": True},
-        {"id": "extra-10", "property_id": 17, "name": "Massage", "description": "60 Min. Rücken-Nacken", "price": 65.0, "category": "wellness", "is_active": True},
+        {"id": "extra-1", "property_id": "demo-prop-1", "name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen", "price": 15.0, "category": "food", "is_active": True},
+        {"id": "extra-2", "property_id": "demo-prop-1", "name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr", "price": 25.0, "category": "other", "is_active": True},
+        {"id": "extra-3", "property_id": "demo-prop-1", "name": "Fahrradverleih", "description": "Pro Tag, inkl. Helm", "price": 12.0, "category": "activity", "is_active": True},
+        {"id": "extra-4", "property_id": "demo-prop-1", "name": "Sauna", "description": "Private Nutzung für 2 Stunden", "price": 30.0, "category": "wellness", "is_active": True},
+        {"id": "extra-5", "property_id": "demo-prop-1", "name": "Gepäckaufbewahrung", "description": "Pro Tag", "price": 5.0, "category": "other", "is_active": True},
+        {"id": "extra-6", "property_id": "demo-prop-1", "name": "Shuttle Service", "description": "Bahnhof-Transfer", "price": 20.0, "category": "transport", "is_active": True},
+        {"id": "extra-7", "property_id": "demo-prop-1", "name": "Willkommens-Paket", "description": "Sekt, Obst & Schokolade", "price": 35.0, "category": "food", "is_active": True},
+        {"id": "extra-8", "property_id": "demo-prop-1", "name": "Haustier", "description": "Pro Nacht", "price": 10.0, "category": "other", "is_active": True},
+        {"id": "extra-9", "property_id": "demo-prop-1", "name": "Parkplatz", "description": "Tiefgarage, pro Tag", "price": 8.0, "category": "transport", "is_active": True},
+        {"id": "extra-10", "property_id": "demo-prop-1", "name": "Massage", "description": "60 Min. Rücken-Nacken", "price": 65.0, "category": "wellness", "is_active": True},
     ]
 
 @api_router.get("/properties/{property_id}/extras")
@@ -994,10 +1001,14 @@ def init_demo_data(db: Session = Depends(get_db)):
         guest_view.token = "QEJHEXP1QF"
         db.commit()
     
+    # Get the first property for the user
+    first_property = db.query(DBProperty).filter(DBProperty.user_id == user.id).first()
+    property_id = first_property.id if first_property else "demo-prop-1"
+    
     return {
         "success": True,
         "user": {"id": user.id, "email": user.email, "name": user.name},
-        "property": {"id": property.id, "name": property.name},
+        "property": {"id": property_id, "name": property.name if first_property else "Demo Property"},
         "guestview_token": "QEJHEXP1QF"
     }
 
