@@ -677,16 +677,16 @@ EXTRAS_STORE = {}
 def get_demo_extras():
     """Get demo extras"""
     return [
-        {"id": "extra-1", "property_id": "demo-prop-1", "name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen", "price": 15.0, "category": "food", "is_active": True},
-        {"id": "extra-2", "property_id": "demo-prop-1", "name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr", "price": 25.0, "category": "other", "is_active": True},
-        {"id": "extra-3", "property_id": "demo-prop-1", "name": "Fahrradverleih", "description": "Pro Tag, inkl. Helm", "price": 12.0, "category": "activity", "is_active": True},
+        {"id": "extra-1", "property_id": "demo-prop-1", "name": "Frühstück", "description": "Reichhaltiges Frühstück mit frischen Brötchen, Eiern und Kaffee", "price": 15.0, "category": "food", "is_active": True},
+        {"id": "extra-2", "property_id": "demo-prop-1", "name": "Spät-Check-out", "description": "Check-out bis 14:00 Uhr", "price": 25.0, "category": "service", "is_active": True},
+        {"id": "extra-3", "property_id": "demo-prop-1", "name": "Fahrradverleih", "description": "Pro Tag, inkl. Helm und Schloss", "price": 12.0, "category": "activity", "is_active": True},
         {"id": "extra-4", "property_id": "demo-prop-1", "name": "Sauna", "description": "Private Nutzung für 2 Stunden", "price": 30.0, "category": "wellness", "is_active": True},
-        {"id": "extra-5", "property_id": "demo-prop-1", "name": "Gepäckaufbewahrung", "description": "Pro Tag", "price": 5.0, "category": "other", "is_active": True},
-        {"id": "extra-6", "property_id": "demo-prop-1", "name": "Shuttle Service", "description": "Bahnhof-Transfer", "price": 20.0, "category": "transport", "is_active": True},
-        {"id": "extra-7", "property_id": "demo-prop-1", "name": "Willkommens-Paket", "description": "Sekt, Obst & Schokolade", "price": 35.0, "category": "food", "is_active": True},
-        {"id": "extra-8", "property_id": "demo-prop-1", "name": "Haustier", "description": "Pro Nacht", "price": 10.0, "category": "other", "is_active": True},
+        {"id": "extra-5", "property_id": "demo-prop-1", "name": "Gepäckaufbewahrung", "description": "Sichere Aufbewahrung pro Tag", "price": 5.0, "category": "service", "is_active": True},
+        {"id": "extra-6", "property_id": "demo-prop-1", "name": "Shuttle Service", "description": "Bahnhof-Transfer hin und zurück", "price": 20.0, "category": "transport", "is_active": True},
+        {"id": "extra-7", "property_id": "demo-prop-1", "name": "Willkommens-Paket", "description": "Sekt, Obst & Schokolade bei Anreise", "price": 35.0, "category": "food", "is_active": True},
+        {"id": "extra-8", "property_id": "demo-prop-1", "name": "Haustier", "description": "Pro Nacht, inkl. Futter & Näpfe", "price": 10.0, "category": "other", "is_active": True},
         {"id": "extra-9", "property_id": "demo-prop-1", "name": "Parkplatz", "description": "Tiefgarage, pro Tag", "price": 8.0, "category": "transport", "is_active": True},
-        {"id": "extra-10", "property_id": "demo-prop-1", "name": "Massage", "description": "60 Min. Rücken-Nacken", "price": 65.0, "category": "wellness", "is_active": True},
+        {"id": "extra-10", "property_id": "demo-prop-1", "name": "Massage", "description": "60 Min. Rücken-Nacken im Hotel", "price": 65.0, "category": "wellness", "is_active": True},
     ]
 
 @api_router.get("/properties/{property_id}/extras")
