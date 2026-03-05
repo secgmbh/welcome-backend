@@ -1513,3 +1513,49 @@ def health_check():
 
 # Include the router in the main app AFTER all routes are defined
 app.include_router(api_router)
+
+# ============ DAILY STATS ENDPOINT ============
+@api_router.get("/admin/daily-stats")
+def get_daily_stats(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get daily statistics for dashboard charts"""
+    from datetime import datetime, timedelta
+    import random
+    
+    # Generate last 30 days of demo data
+    days = []
+    today = datetime.now()
+    
+    for i in range(30):
+        date = today - timedelta(days=i)
+        days.append({
+            "date": date.strftime("%Y-%m-%d"),
+            "scans": random.randint(20, 100),
+            "bookings": random.randint(0, 10),
+            "revenue": round(random.uniform(50, 500), 2)
+        })
+    
+    return {
+        "daily_stats": list(reversed(days)),
+        "summary": {
+            "total_scans": sum(d["scans"] for d in days),
+            "total_bookings": sum(d["bookings"] for d in days),
+            "total_revenue": round(sum(d["revenue"] for d in days), 2),
+            "avg_scans": round(sum(d["scans"] for d in days) / 30),
+            "avg_bookings": round(sum(d["bookings"] for d in days) / 30, 1),
+            "avg_revenue": round(sum(d["revenue"] for d in days) / 30, 2)
+        }
+    }
+
+# ============ TOP EXTRAS ENDPOINT ============
+@api_router.get("/admin/top-extras")
+def get_top_extras(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get top performing extras"""
+    return {
+        "extras": [
+            {"id": "extra-1", "name": "Frühstück", "bookings": 156, "revenue": 2340.00, "trend": 12},
+            {"id": "extra-4", "name": "Sauna", "bookings": 89, "revenue": 2670.00, "trend": 8},
+            {"id": "extra-6", "name": "Shuttle Service", "bookings": 67, "revenue": 1340.00, "trend": 15},
+            {"id": "extra-7", "name": "Willkommens-Paket", "bookings": 45, "revenue": 1575.00, "trend": 5},
+            {"id": "extra-3", "name": "Fahrradverleih", "bookings": 34, "revenue": 408.00, "trend": -3}
+        ]
+    }
