@@ -1168,36 +1168,78 @@ def get_admin_stats(range: str = "7d", user: DBUser = Depends(get_current_user),
 def get_bookings_feed(limit: int = 50, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get recent bookings for live feed"""
     # Demo bookings - in production, fetch from database
+    from datetime import datetime, timedelta
+    now = datetime.now()
     return [
         {
             "id": "BK-001",
             "property_name": "Ferienwohnung Seeblick",
             "guest_name": "Max Mustermann",
-            "check_in": "2026-03-10",
-            "check_out": "2026-03-15",
+            "guest_email": "max@example.com",
+            "check_in": (now + timedelta(days=6)).strftime("%Y-%m-%d"),
+            "check_out": (now + timedelta(days=11)).strftime("%Y-%m-%d"),
+            "nights": 5,
+            "guests": 2,
             "total_price": 525.00,
             "status": "confirmed",
-            "created_at": "2026-03-04T10:30:00Z"
+            "extras": ["Frühstück", "Parkplatz"],
+            "created_at": (now - timedelta(hours=2)).isoformat()
         },
         {
             "id": "BK-002",
             "property_name": "Ferienwohnung Seeblick",
             "guest_name": "Anna Schmidt",
-            "check_in": "2026-03-20",
-            "check_out": "2026-03-25",
+            "guest_email": "anna@example.com",
+            "check_in": (now + timedelta(days=16)).strftime("%Y-%m-%d"),
+            "check_out": (now + timedelta(days=21)).strftime("%Y-%m-%d"),
+            "nights": 5,
+            "guests": 3,
             "total_price": 630.00,
             "status": "confirmed",
-            "created_at": "2026-03-04T09:15:00Z"
+            "extras": ["Frühstück", "Sauna"],
+            "created_at": (now - timedelta(hours=5)).isoformat()
         },
         {
             "id": "BK-003",
             "property_name": "Ferienwohnung Seeblick",
             "guest_name": "Hans Müller",
-            "check_in": "2026-04-01",
-            "check_out": "2026-04-05",
+            "guest_email": "hans@example.com",
+            "check_in": (now + timedelta(days=28)).strftime("%Y-%m-%d"),
+            "check_out": (now + timedelta(days=32)).strftime("%Y-%m-%d"),
+            "nights": 4,
+            "guests": 2,
             "total_price": 420.00,
             "status": "pending",
-            "created_at": "2026-03-03T16:45:00Z"
+            "extras": ["Fahrradverleih"],
+            "created_at": (now - timedelta(days=1)).isoformat()
+        },
+        {
+            "id": "BK-004",
+            "property_name": "Ferienwohnung Seeblick",
+            "guest_name": "Sophie Klein",
+            "guest_email": "sophie@example.com",
+            "check_in": (now - timedelta(days=3)).strftime("%Y-%m-%d"),
+            "check_out": (now + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "nights": 5,
+            "guests": 4,
+            "total_price": 750.00,
+            "status": "active",
+            "extras": ["Frühstück", "Willkommens-Paket", "Parkplatz"],
+            "created_at": (now - timedelta(days=7)).isoformat()
+        },
+        {
+            "id": "BK-005",
+            "property_name": "Ferienwohnung Seeblick",
+            "guest_name": "Thomas Weber",
+            "guest_email": "thomas@example.com",
+            "check_in": (now + timedelta(days=45)).strftime("%Y-%m-%d"),
+            "check_out": (now + timedelta(days=52)).strftime("%Y-%m-%d"),
+            "nights": 7,
+            "guests": 2,
+            "total_price": 840.00,
+            "status": "confirmed",
+            "extras": ["Frühstück", "Massage", "Shuttle Service"],
+            "created_at": (now - timedelta(hours=12)).isoformat()
         }
     ]
 
@@ -1348,6 +1390,112 @@ def update_user_profile(data: dict, user: DBUser = Depends(get_current_user), db
             "name": data.get("name", user.email.split("@")[0])
         }
     }
+
+# ============ WALKTHROUGH / SCENES ENDPOINTS ============
+@api_router.get("/properties/{property_id}/scenes")
+def get_property_scenes(property_id: int, db: Session = Depends(get_db)):
+    """Get walkthrough scenes for a property"""
+    # Demo scenes for the property
+    return {
+        "scenes": [
+            {
+                "id": "scene-1",
+                "property_id": property_id,
+                "order": 1,
+                "title": "Willkommen",
+                "title_en": "Welcome",
+                "description": "Herzlich willkommen in Ihrer Ferienwohnung! Wir wünschen Ihnen einen angenehmen Aufenthalt.",
+                "description_en": "Welcome to your vacation apartment! We wish you a pleasant stay.",
+                "image_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop",
+                "icon": "home"
+            },
+            {
+                "id": "scene-2",
+                "property_id": property_id,
+                "order": 2,
+                "title": "WLAN-Verbindung",
+                "title_en": "WiFi Connection",
+                "description": f"Verbinden Sie sich mit dem WLAN '{'Seeblick-Guest'}'. Das Passwort finden Sie im Willkommens-Bereich.",
+                "description_en": f"Connect to the WiFi '{'Seeblick-Guest'}'. You'll find the password in the welcome section.",
+                "image_url": "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&h=600&fit=crop",
+                "icon": "wifi"
+            },
+            {
+                "id": "scene-3",
+                "property_id": property_id,
+                "order": 3,
+                "title": "Schlafzimmer",
+                "title_en": "Bedroom",
+                "description": "Das gemütliche Schlafzimmer mit Blick auf den See. Betten sind frisch bezogen.",
+                "description_en": "The cozy bedroom with lake view. Beds are freshly made.",
+                "image_url": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=800&h=600&fit=crop",
+                "icon": "bed"
+            },
+            {
+                "id": "scene-4",
+                "property_id": property_id,
+                "order": 4,
+                "title": "Küche",
+                "title_en": "Kitchen",
+                "description": "Die voll ausgestattete Küche bietet alles, was Sie für Ihren Aufenthalt benötigen.",
+                "description_en": "The fully equipped kitchen has everything you need for your stay.",
+                "image_url": "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&h=600&fit=crop",
+                "icon": "utensils"
+            },
+            {
+                "id": "scene-5",
+                "property_id": property_id,
+                "order": 5,
+                "title": "Balkon & Aussicht",
+                "title_en": "Balcony & View",
+                "description": "Genießen Sie den atemberaubenden Blick auf den Chiemsee vom eigenen Balkon.",
+                "description_en": "Enjoy the breathtaking view of Lake Chiemsee from your private balcony.",
+                "image_url": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=600&fit=crop",
+                "icon": "sun"
+            },
+            {
+                "id": "scene-6",
+                "property_id": property_id,
+                "order": 6,
+                "title": "Check-out",
+                "title_en": "Check-out",
+                "description": "Bitte verlassen Sie die Wohnung bis 11:00 Uhr. Schlüssel im Keysafe zurücklegen.",
+                "description_en": "Please check out by 11:00 AM. Return the key to the keysafe.",
+                "image_url": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop",
+                "icon": "key"
+            }
+        ]
+    }
+
+@api_router.post("/properties/{property_id}/scenes")
+def create_scene(property_id: int, data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new scene"""
+    scene_id = f"scene-{uuid.uuid4().hex[:8]}"
+    return {
+        "success": True,
+        "scene": {
+            "id": scene_id,
+            "property_id": property_id,
+            **data
+        }
+    }
+
+@api_router.put("/properties/{property_id}/scenes/{scene_id}")
+def update_scene(property_id: int, scene_id: str, data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update a scene"""
+    return {
+        "success": True,
+        "scene": {
+            "id": scene_id,
+            "property_id": property_id,
+            **data
+        }
+    }
+
+@api_router.delete("/properties/{property_id}/scenes/{scene_id}")
+def delete_scene(property_id: int, scene_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete a scene"""
+    return {"success": True, "message": f"Scene {scene_id} deleted"}
 
 # ============ HEALTH CHECK ============
 @api_router.get("/health")
