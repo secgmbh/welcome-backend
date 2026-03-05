@@ -971,24 +971,33 @@ def init_demo_data(db: Session = Depends(get_db)):
         property = DBProperty(
             user_id=user.id,
             name="Ferienwohnung Seeblick",
+            description="Gemütliche 3-Zimmer Ferienwohnung mit atemberaubendem Blick auf den Chiemsee. Perfekt für Familien und Paare, die Erholung und Natur suchen.",
             address="Seestraße 42, 83209 Prien am Chiemsee",
+            image_url="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1200&h=800&fit=crop",
             wifi_name="Seeblick-Guest",
             wifi_password="Welcome2024!",
             keysafe_location="An der Eingangstür links",
             keysafe_code="1234",
             checkin_time="15:00",
             checkout_time="11:00",
+            brand_color="#F27C2C",
             created_at=datetime.now(timezone.utc)
         )
         db.add(property)
         db.commit()
         db.refresh(property)
+    else:
+        # Update existing property with image if missing
+        if not property.image_url:
+            property.image_url = "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1200&h=800&fit=crop"
+            property.description = "Gemütliche 3-Zimmer Ferienwohnung mit atemberaubendem Blick auf den Chiemsee. Perfekt für Familien und Paare, die Erholung und Natur suchen."
+            db.commit()
     
     # Return the property with its actual database ID
     return {
         "success": True,
         "user": {"id": user.id, "email": user.email, "name": user.name},
-        "property": {"id": property.id, "name": property.name},
+        "property": {"id": property.id, "name": property.name, "image_url": property.image_url},
         "guestview_token": "QEJHEXP1QF"
     }
 
