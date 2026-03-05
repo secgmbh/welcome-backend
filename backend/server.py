@@ -1504,7 +1504,7 @@ def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.3.0",
+        "version": "2.4.0",
         "services": {
             "api": "ok",
             "database": "ok"
