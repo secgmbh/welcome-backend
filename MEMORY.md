@@ -1,45 +1,113 @@
 # MEMORY.md - Langzeit-Erinnerungen
 
-## Projekt: Welcome-Link MVP (Stand: 04.03.2026)
+## Projekt: Welcome-Link MVP (Stand: 06.03.2026)
 
-### Status Phase 1-27 Complete
-- Phase 1-25: ✅ Complete (siehe TODO_GUESTVIEW.md)
-- Phase 26-27: ✅ Checkout & Property Editor (03.03.2026)
-- Phase 28: ⏳ Nightly Improvements (04.03.2026)
+### 🎉 PRODUCTION READY!
 
-### Nightly Session 04.03.2026
-- ✅ Checkout Success Page
-- ✅ Skeleton Loading Components
-- ✅ Toast Notifications
-- ✅ Error Handling in Checkout
-- ✅ cn Utility Function fix
-- ✅ Cron Jobs eingerichtet (später entfernt)
+**Live URLs:**
+- **API:** https://api.welcome-link.de (v2.5.3)
+- **Frontend:** https://www.welcome-link.de
+- **Dashboard:** https://www.welcome-link.de/dashboard
+- **Guestview:** https://www.welcome-link.de/guestview/QEJHEXP1QF
 
-### Commits (04.03.2026)
-- Frontend: 33 Commits
-- Backend: 29 Commits
-- **Total: 62 Commits**
+**Demo Login:**
+- Email: `demo@welcome-link.de`
+- Password: `Demo123!`
 
-### Render Problem ⚠️
-- Backend deployed NICHT automatisch
-- Lösung: Manuelles Deploy auf dashboard.render.com
-- `welcome-link-backend` → Manual Deploy
+---
 
-### Backend
-- API Base URL: `https://api.welcome-link.de`
-- Demo Login: `demo@welcome-link.de`
-- Branch: `main`
+## ✅ Phasen 1-32 COMPLETE
 
-### Frontend
-- GitHub: `welcome-frontend` submodule
-- Backend: `welcome-backend` submodule
-- Branch: `main`
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1-27 | Core Features | ✅ |
+| 28 | Security Headers & Rate Limiting | ✅ |
+| 29 | Testing (Backend, Frontend, E2E) | ✅ |
+| 30 | Documentation & Health Check | ✅ |
+| 31 | Demo Data & Endpoints | ✅ |
+| 32 | Frontend Build Fix | ✅ |
 
-### Wichtige Dateien
-- TODO_GUESTVIEW.md: Feature-Status
-- memory/YYYY-MM-DD.md: Tägliche Logs
-- HEARTBEAT.md: Aktuelle Aufgaben
+---
 
-### Demo
-- Gästeseite: https://www.welcome-link.de/guestview/QEJHEXP1QF
-- Login: demo@welcome-link.de / Demo123!
+## Demo Data
+
+- **Property:** Ferienwohnung Seeblick (Prien am Chiemsee)
+- **Bookings:** 3 (confirmed, pending, completed)
+- **Scenes:** 4 (Willkommen, WLAN, Check-out, Umgebung)
+- **Extras:** 10 (Frühstück, Sauna, Massage, etc.)
+- **Stats:** €5,280 Revenue, 42 Bookings
+
+---
+
+## API Endpoints
+
+```
+# Auth
+POST /api/auth/register
+POST /api/auth/login
+GET  /api/auth/me
+
+# Guestview
+GET  /api/guestview/{token}
+POST /api/guestview-token
+
+# CRUD
+GET/POST /api/properties
+GET/POST /api/bookings
+GET/POST /api/scenes
+GET/POST /api/extras
+
+# Stats
+GET  /api/stats/global
+POST /api/stats/booking/filter
+
+# Export
+GET  /api/export/bookings/csv
+GET  /api/export/bookings/pdf
+
+# Payment
+POST /api/paypal/create-order
+POST /api/paypal/capture-order
+POST /api/checkout
+```
+
+---
+
+## Bug Fixes (06.03.2026)
+
+1. **ToastProvider Import** - Pfad korrigiert (`Toast` → `toast`)
+2. **is_ Spalte** - User Model mit include_properties
+3. **Environment Variables** - VITE_API_URL für Frontend
+
+---
+
+## Wichtige Dateien
+
+- `TODO_GUESTVIEW.md` - Feature-Status
+- `HEARTBEAT.md` - Aktuelle Aufgaben
+- `memory/YYYY-MM-DD.md` - Tägliche Logs
+- `backend/USER_GUIDE.md` - User Dokumentation
+
+---
+
+## Git Branches
+
+- **main** - Production (deployed)
+- **nightly-improvements** - Development (merged)
+
+---
+
+## Render Deployment
+
+- Backend: `welcome-link-backend` auf Render
+- Frontend: `welcome-frontend` auf Render
+- Auto-Deploy: Aktiviert (push auf main)
+
+---
+
+## Nächste Schritte (Optional)
+
+1. Production Monitoring (Sentry Dashboard)
+2. CI/CD Pipeline Optimization
+3. Feature Flags System
+4. Performance Monitoring Dashboard
