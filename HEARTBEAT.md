@@ -1,30 +1,15 @@
 # Heartbeat Task List
 
-## 🎉 PHASE 31 COMPLETE! (16:15 Uhr)
+## 🎉 PRODUCTION READY! (23:14 Uhr)
 
-### ✅ Production Verified
-- ✅ API v2.5.3 - Alle Endpoints aktiv
-- ✅ Frontend Dashboard - Vollständig funktionsfähig
-- ✅ Demo Login - Funktioniert
-- ✅ User Guide erstellt
-
-### Demo Data Live
-- **Properties:** 1 (Ferienwohnung Seeblick)
-- **Bookings:** 3 (confirmed, pending, completed)
-- **Scenes:** 4 (Willkommen, WLAN, Check-out, Umgebung)
-- **Extras:** 10 (Frühstück, Sauna, Massage, etc.)
-- **Stats:** €5,280 Revenue, 42 Bookings
-
-### Frontend Dashboard Features
-- ✅ Übersicht mit Stats (QR-Scans, Upsell-Umsatz)
-- ✅ Buchungskalender
-- ✅ Letzte Aktivitäten
-- ✅ Top Properties Ranking
-- ✅ Schnellaktionen
-- ✅ Navigation (Properties, QR-Codes, Analytics, etc.)
+### ✅ API v2.6.1 - Neue Features!
+- ✅ Email Integration (SMTP)
+- ✅ Password Reset API
+- ✅ Magic Link Emails
+- ✅ HTML Email Templates
 
 ### Production URLs
-- **API:** https://api.welcome-link.de (v2.5.3)
+- **API:** https://api.welcome-link.de (v2.6.1)
 - **Frontend:** https://www.welcome-link.de
 - **Dashboard:** https://www.welcome-link.de/dashboard
 - **Guestview:** https://www.welcome-link.de/guestview/QEJHEXP1QF
@@ -33,29 +18,32 @@
 - **Email:** demo@welcome-link.de
 - **Password:** Demo123!
 
-## ✅ Phase 28-31 COMPLETE
+## ✅ Phase 28-32 COMPLETE
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 28 | Security Headers & Rate Limiting | ✅ |
-| 29 | Testing (Backend, Frontend, E2E) | ✅ |
+| 29 | Testing (Backend 42, Frontend 30) | ✅ |
 | 30 | Documentation & Health Check | ✅ |
 | 31 | Demo Data & Endpoints | ✅ |
-| 32 | Frontend Build Fix | ✅ |
+| 32 | Bug Fixes & Optimierung | ✅ |
+| 33 | Email Integration + Password Reset | ✅ |
 
 ## Bug Fixes (06.03.2026)
-- ✅ ToastProvider import korrigiert (Toast → toast)
+- ✅ ToastProvider import korrigiert
 - ✅ React navigate() Warning - useEffect Fix
 - ✅ Test Suite - 30 tests passing
-- ✅ Frontend Build erfolgreich
-- ✅ Dashboard lädt ohne Fehler
-- ✅ **Guestview Endpoint** - `/api/guestview/{token}` statt `/api/public/properties/`
+- ✅ Guestview Endpoint korrigiert
+- ✅ Unused Imports bereinigt
 
-## Deployment Status (20:22)
-- Frontend: `main.122110a9.js` - deployed ✅
-- Guestview nutzt jetzt korrekten Endpoint ✅
+## Neue Features (v2.6.0/2.6.1)
+- `send_email()` - SMTP E-Mail-Versand
+- `send_magic_link_email()` - Magic Link E-Mails
+- `send_welcome_email()` - Willkommens-E-Mails
+- `POST /api/auth/password-reset/request`
+- `POST /api/auth/password-reset/confirm`
 
 ## Nächste Schritte (Optional)
-1. Production Monitoring (Sentry Dashboard)
-2. CI/CD Pipeline
-3. Feature Flags System
+1. Frontend Password Reset Page
+2. Production Monitoring (Sentry)
+3. CI/CD Pipeline
