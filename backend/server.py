@@ -1,10 +1,14 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 import os
 import logging
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr, validator
 from typing import List, Optional
@@ -69,11 +73,139 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="1.0.0",
+    version="2.5.0",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
 app.state.limiter = limiter
+
+
+# ============ SECURITY HEADERS MIDDLEWARE ============
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Fügt Security Headers zu allen Responses hinzu"""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Prevent clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # Prevent MIME-type sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        
+        # XSS Protection
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        
+        # Referrer Policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Content Security Policy (basic)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https: blob:; "
+            "connect-src 'self' https://api.welcome-link.de https://www.welcome-link.de; "
+            "frame-ancestors 'none';"
+        )
+        
+        # HSTS (nur in Production)
+        if ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+        # Permissions Policy
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), "
+            "microphone=(), "
+            "camera=(), "
+            "payment=()"
+        )
+        
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+# ============ GLOBAL EXCEPTION HANDLER ============
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Globaler HTTP Exception Handler mit strukturierten Responses"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": True,
+            "status_code": exc.status_code,
+            "message": exc.detail,
+            "path": str(request.url.path),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Validierungsfehler mit detaillierten Informationen"""
+    errors = []
+    for error in exc.errors():
+        errors.append({
+            "field": ".".join(str(loc) for loc in error["loc"]),
+            "message": error["msg"],
+            "type": error["type"]
+        })
+    
+    logger.warning(f"Validation error on {request.url.path}: {errors}")
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": True,
+            "status_code": 422,
+            "message": "Validation failed",
+            "errors": errors,
+            "path": str(request.url.path),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Globaler Exception Handler für unerwartete Fehler"""
+    import traceback
+    error_id = str(uuid.uuid4())[:8]
+    
+    logger.error(
+        f"[{error_id}] Unhandled exception on {request.url.path}: {str(exc)}\n"
+        f"{traceback.format_exc()}"
+    )
+    
+    # In Production keine internen Details preisgeben
+    if ENVIRONMENT == "production":
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": True,
+                "status_code": 500,
+                "message": "Internal server error",
+                "error_id": error_id,
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": True,
+                "status_code": 500,
+                "message": str(exc),
+                "error_id": error_id,
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "traceback": traceback.format_exc().split("\n")
+            }
+        )
+
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -253,7 +385,8 @@ def init_demo_user(db: Session):
 # ============ AUTH ROUTES ============
 
 @api_router.post("/auth/register", response_model=AuthResponse)
-def register(data: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, data: UserRegister, db: Session = Depends(get_db)):
     """Registriere einen neuen Benutzer"""
     try:
         # Überprüfe ob E-Mail bereits existiert
@@ -298,7 +431,8 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Registrierung fehlgeschlagen")
 
 @api_router.post("/auth/login", response_model=AuthResponse)
-def login(data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     """Benutzer Login mit E-Mail und Passwort"""
     try:
         # Finde Benutzer (normalisiere E-Mail)
@@ -333,7 +467,8 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)[:50]}")
 
 @api_router.post("/auth/magic-link")
-def request_magic_link(data: MagicLinkRequest):
+@limiter.limit("3/minute")
+async def request_magic_link(request: Request, data: MagicLinkRequest):
     """Fordere einen Magic Link an (würde in Production E-Mail senden)"""
     # TODO: Implementiere echten E-Mail-Versand mit SendGrid oder ähnlich
     # Für Demo: Nur bestätigung
@@ -617,10 +752,34 @@ app.add_middleware(
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+if ENVIRONMENT == "production":
+    # JSON Logging für Production (besser für Cloud-Logging)
+    import json as json_module
+    
+    class JSONFormatter(logging.Formatter):
+        def format(self, record):
+            log_obj = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+                "module": record.module,
+                "function": record.funcName,
+                "line": record.lineno
+            }
+            if record.exc_info:
+                log_obj["exception"] = self.formatException(record.exc_info)
+            return json_module.dumps(log_obj)
+    
+    handler = logging.StreamHandler()
+    handler.setFormatter(JSONFormatter())
+    logging.root.handlers = [handler]
+    logging.root.setLevel(logging.INFO)
+else:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
