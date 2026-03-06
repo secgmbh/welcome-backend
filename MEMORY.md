@@ -1,6 +1,6 @@
 # MEMORY.md - Langzeit-Erinnerungen
 
-## Projekt: Welcome-Link MVP (Stand: 06.03.2026)
+## Projekt: Welcome-Link MVP (Stand: 06.03.2026 - 20:53)
 
 ### 🎉 PRODUCTION READY!
 
@@ -22,10 +22,39 @@
 |-------|-------------|--------|
 | 1-27 | Core Features | ✅ |
 | 28 | Security Headers & Rate Limiting | ✅ |
-| 29 | Testing (Backend, Frontend, E2E) | ✅ |
+| 29 | Testing (Backend 42✅, Frontend 30✅) | ✅ |
 | 30 | Documentation & Health Check | ✅ |
 | 31 | Demo Data & Endpoints | ✅ |
-| 32 | Frontend Build Fix | ✅ |
+| 32 | Bug Fixes & Optimierung | ✅ |
+
+---
+
+## Bug Fixes (06.03.2026)
+
+1. **ToastProvider Import** - Pfad korrigiert (`Toast` → `toast`)
+2. **React navigate() Warning** - useEffect Fix
+3. **Test Suite** - 30 tests passing
+4. **Guestview Endpoint** - `/api/guestview/{token}` statt `/api/public/properties/`
+5. **Unused Imports** - BookingCalendar bereinigt
+
+---
+
+## Tech Stack
+
+### Backend (FastAPI)
+- 55 API Endpoints
+- 14 Pydantic Models
+- SQLite Database (192KB)
+- Security Headers (CSP, X-Frame-Options, etc.)
+- Rate Limiting auf Auth-Endpoints
+- JWT Authentication
+
+### Frontend (React)
+- Build Size: 6.1MB
+- Error Boundaries: 3 Komponenten
+- Loading States: 176 Implementierungen
+- Tailwind CSS Styling
+- PWA Support
 
 ---
 
@@ -39,75 +68,30 @@
 
 ---
 
-## API Endpoints
+## Security Status ✅
 
 ```
-# Auth
-POST /api/auth/register
-POST /api/auth/login
-GET  /api/auth/me
-
-# Guestview
-GET  /api/guestview/{token}
-POST /api/guestview-token
-
-# CRUD
-GET/POST /api/properties
-GET/POST /api/bookings
-GET/POST /api/scenes
-GET/POST /api/extras
-
-# Stats
-GET  /api/stats/global
-POST /api/stats/booking/filter
-
-# Export
-GET  /api/export/bookings/csv
-GET  /api/export/bookings/pdf
-
-# Payment
-POST /api/paypal/create-order
-POST /api/paypal/capture-order
-POST /api/checkout
+Content-Security-Policy: ✅
+X-Content-Type-Options: nosniff ✅
+X-Frame-Options: DENY ✅
+X-XSS-Protection: 1; mode=block ✅
+Rate Limiting: ✅
+JWT Auth: ✅
 ```
-
----
-
-## Bug Fixes (06.03.2026)
-
-1. **ToastProvider Import** - Pfad korrigiert (`Toast` → `toast`)
-2. **is_ Spalte** - User Model mit include_properties
-3. **Environment Variables** - VITE_API_URL für Frontend
-
----
-
-## Wichtige Dateien
-
-- `TODO_GUESTVIEW.md` - Feature-Status
-- `HEARTBEAT.md` - Aktuelle Aufgaben
-- `memory/YYYY-MM-DD.md` - Tägliche Logs
-- `backend/USER_GUIDE.md` - User Dokumentation
 
 ---
 
 ## Git Branches
 
 - **main** - Production (deployed)
-- **nightly-improvements** - Development (merged)
-
----
-
-## Render Deployment
-
-- Backend: `welcome-link-backend` auf Render
-- Frontend: `welcome-frontend` auf Render
-- Auto-Deploy: Aktiviert (push auf main)
+- Auto-Deploy auf Render aktiviert
 
 ---
 
 ## Nächste Schritte (Optional)
 
-1. Production Monitoring (Sentry Dashboard)
-2. CI/CD Pipeline Optimization
-3. Feature Flags System
-4. Performance Monitoring Dashboard
+1. E-Mail-Versand (SendGrid Integration)
+2. Production Monitoring (Sentry Dashboard)
+3. CI/CD Pipeline
+4. Feature Flags System
+5. Performance Monitoring
