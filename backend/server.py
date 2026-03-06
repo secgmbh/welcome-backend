@@ -123,9 +123,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         
         return response
 
-app.add_middleware(SecurityHeadersMiddleware)
-
-
 # ============ GLOBAL EXCEPTION HANDLER ============
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -750,6 +747,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+# Security Headers Middleware (nach CORS)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Configure logging
 if ENVIRONMENT == "production":
