@@ -272,6 +272,87 @@ Bei Fragen: support@welcome-link.de
     
     return send_email(email, f"Zahlungsbestätigung - €{amount:.2f}", html, text)
 
+def send_guest_welcome_email(email: str, guest_name: str, property_name: str, host_name: str, checkin: str, checkout: str, wifi_name: str, wifi_password: str, guestview_url: str):
+    """Sende Willkommens-E-Mail an Gäste"""
+    html = f"""
+    <html>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #F27C2C 0%, #FF9F4A 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Willkommen in {property_name}! 🏡</h1>
+        </div>
+        <div style="background: #fff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hallo {guest_name}!</h2>
+            <p style="color: #666; font-size: 16px;">{host_name} freut sich auf Ihren Besuch. Hier sind alle wichtigen Informationen für Ihre Ankunft:</p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #F27C2C; margin-top: 0;">📅 Ihre Buchung</h3>
+                <table style="width: 100%; color: #666;">
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Check-in:</strong></td>
+                        <td style="padding: 8px 0;">{checkin}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Check-out:</strong></td>
+                        <td style="padding: 8px 0;">{checkout}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #0284c7; margin-top: 0;">📶 WLAN-Zugang</h3>
+                <table style="width: 100%; color: #666;">
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Netzwerk:</strong></td>
+                        <td style="padding: 8px 0;">{wifi_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Passwort:</strong></td>
+                        <td style="padding: 8px 0; font-family: monospace;">{wifi_password}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{guestview_url}" style="display: inline-block; background: #F27C2C; color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                    📱 Digitale Gästemappe öffnen
+                </a>
+            </div>
+            
+            <p style="color: #666; font-size: 14px;">In der digitalen Gästemappe finden Sie:</p>
+            <ul style="color: #666; font-size: 14px;">
+                <li>Hausregeln und Tipps</li>
+                <li>Umgebungsempfehlungen</li>
+                <li>Kontaktdaten des Gastgebers</li>
+                <li>Extras und Services buchen</li>
+            </ul>
+            
+            <p style="color: #999; font-size: 14px; margin-top: 30px;">Bei Fragen wenden Sie sich an {host_name}.</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text = f"""Willkommen in {property_name}!
+
+Hallo {guest_name}!
+
+{host_name} freut sich auf Ihren Besuch.
+
+Buchungsdetails:
+- Check-in: {checkin}
+- Check-out: {checkout}
+
+WLAN-Zugang:
+- Netzwerk: {wifi_name}
+- Passwort: {wifi_password}
+
+Digitale Gästemappe: {guestview_url}
+
+Viel Spaß bei Ihrem Aufenthalt!
+"""
+    
+    return send_email(email, f"Willkommen in {property_name}!", html, text)
+
 # ============ SENTRY ERROR TRACKING ============
 SENTRY_DSN = os.environ.get("SENTRY_DSN")
 if SENTRY_DSN:
@@ -317,7 +398,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.6.3",
+    version="2.6.4",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -952,7 +1033,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.6.3", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.6.4", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -963,7 +1044,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.6.3",
+        "version": "2.6.4",
         "environment": ENVIRONMENT,
         "services": {}
     }
