@@ -208,6 +208,70 @@ Bei Fragen: support@welcome-link.de
     
     return send_email(email, f"Buchungsbestätigung - {property_name}", html, text)
 
+def send_payment_receipt_email(email: str, name: str, amount: float, payment_method: str, transaction_id: str, property_name: str):
+    """Sende Zahlungsbestätigungs-E-Mail"""
+    html = f"""
+    <html>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #10B981 0%, #34D399 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Zahlung erhalten ✓</h1>
+        </div>
+        <div style="background: #fff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hallo {name}!</h2>
+            <p style="color: #666; font-size: 16px;">Vielen Dank für Ihre Zahlung. Hier ist Ihre Zahlungsbestätigung:</p>
+            
+            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #10B981;">
+                <table style="width: 100%; color: #333;">
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Betrag:</strong></td>
+                        <td style="padding: 8px 0; font-size: 20px; color: #10B981;"><strong>€{amount:.2f}</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Zahlungsart:</strong></td>
+                        <td style="padding: 8px 0;">{payment_method}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Transaktions-ID:</strong></td>
+                        <td style="padding: 8px 0; font-family: monospace;">{transaction_id}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Unterkunft:</strong></td>
+                        <td style="padding: 8px 0;">{property_name}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <p style="color: #666; font-size: 14px;">Die Zahlung wurde erfolgreich verarbeitet. Sie erhalten eine separate Buchungsbestätigung.</p>
+            
+            <a href="https://www.welcome-link.de/dashboard" style="display: inline-block; background: #10B981; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 20px 0;">
+                Im Dashboard ansehen
+            </a>
+            
+            <p style="color: #999; font-size: 14px; margin-top: 30px;">Bei Fragen erreichen Sie uns unter support@welcome-link.de</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text = f"""Zahlungsbestätigung - Welcome Link
+
+Hallo {name}!
+
+Vielen Dank für Ihre Zahlung.
+
+Zahlungsdetails:
+- Betrag: €{amount:.2f}
+- Zahlungsart: {payment_method}
+- Transaktions-ID: {transaction_id}
+- Unterkunft: {property_name}
+
+Die Zahlung wurde erfolgreich verarbeitet.
+
+Bei Fragen: support@welcome-link.de
+"""
+    
+    return send_email(email, f"Zahlungsbestätigung - €{amount:.2f}", html, text)
+
 # ============ SENTRY ERROR TRACKING ============
 SENTRY_DSN = os.environ.get("SENTRY_DSN")
 if SENTRY_DSN:
@@ -253,7 +317,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.6.2",
+    version="2.6.3",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -888,7 +952,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.6.2", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.6.3", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -899,7 +963,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.6.2",
+        "version": "2.6.3",
         "environment": ENVIRONMENT,
         "services": {}
     }
