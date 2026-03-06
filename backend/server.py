@@ -398,7 +398,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.6.5",
+    version="2.7.0",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -1033,7 +1033,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.6.5", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.7.0", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -1044,7 +1044,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.6.5",
+        "version": "2.7.0",
         "environment": ENVIRONMENT,
         "services": {}
     }
@@ -1431,6 +1431,79 @@ def complete_checkout(checkout_id: str, user = Depends(get_current_user)):
     checkout["payment_id"] = f"pi_{uuid.uuid4().hex[:24]}"
     
     return checkout
+
+# ============ PAYPAL WEBHOOK ============
+@api_router.post("/webhooks/paypal")
+async def paypal_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle PayPal webhook events"""
+    try:
+        payload = await request.json()
+        event_type = payload.get("event_type", "")
+        
+        logger.info(f"PayPal webhook received: {event_type}")
+        
+        if event_type == "PAYMENT.CAPTURE.COMPLETED":
+            # Payment completed
+            resource = payload.get("resource", {})
+            transaction_id = resource.get("id", "")
+            amount = float(resource.get("amount", {}).get("value", 0))
+            custom_id = resource.get("custom_id", "")
+            
+            logger.info(f"PayPal payment completed: {transaction_id}, Amount: €{amount}")
+            
+            # TODO: Update booking status and send confirmation email
+            # send_payment_receipt_email(email, name, amount, "PayPal", transaction_id, property_name)
+            
+        elif event_type == "PAYMENT.CAPTURE.DENIED":
+            logger.warning(f"PayPal payment denied: {payload}")
+            
+        elif event_type == "CHECKOUT.ORDER.APPROVED":
+            order_id = payload.get("resource", {}).get("id", "")
+            logger.info(f"PayPal order approved: {order_id}")
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        logger.error(f"PayPal webhook error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ============ STRIPE WEBHOOK ============
+@api_router.post("/webhooks/stripe")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle Stripe webhook events"""
+    try:
+        payload = await request.body()
+        sig_header = request.headers.get("stripe-signature", "")
+        
+        # TODO: Verify signature with Stripe secret
+        # import stripe
+        # event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        
+        event_data = await request.json()
+        event_type = event_data.get("type", "")
+        
+        logger.info(f"Stripe webhook received: {event_type}")
+        
+        if event_type == "payment_intent.succeeded":
+            # Payment succeeded
+            data = event_data.get("data", {})
+            payment_intent = data.get("object", {})
+            transaction_id = payment_intent.get("id", "")
+            amount = payment_intent.get("amount", 0) / 100  # Convert cents to euros
+            
+            logger.info(f"Stripe payment succeeded: {transaction_id}, Amount: €{amount}")
+            
+            # TODO: Update booking status and send confirmation email
+            # send_payment_receipt_email(email, name, amount, "Stripe", transaction_id, property_name)
+            
+        elif event_type == "payment_intent.payment_failed":
+            logger.warning(f"Stripe payment failed: {event_data}")
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        logger.error(f"Stripe webhook error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @api_router.get("/checkout/{checkout_id}/invoice")
 def get_invoice(checkout_id: str):
