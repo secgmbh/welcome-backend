@@ -1579,6 +1579,78 @@ def delete_ab_test(test_id: str, user: DBUser = Depends(get_current_user), db: S
     return {"success": True, "message": f"A/B Test {test_id} deleted"}
 
 # ============ BOOKINGS ENDPOINTS ============
+@api_router.get("/bookings")
+def get_bookings(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all bookings for user"""
+    # Demo bookings
+    return {
+        "bookings": [
+            {
+                "id": "booking-1",
+                "property_id": 17,
+                "property_name": "Ferienwohnung Seeblick",
+                "guest_name": "Max Mustermann",
+                "guest_email": "max@example.com",
+                "check_in": "2026-03-10",
+                "check_out": "2026-03-15",
+                "nights": 5,
+                "guests": 2,
+                "total_price": 525.00,
+                "status": "confirmed",
+                "payment_method": "paypal",
+                "created_at": "2026-03-04T10:30:00Z"
+            },
+            {
+                "id": "booking-2",
+                "property_id": 17,
+                "property_name": "Ferienwohnung Seeblick",
+                "guest_name": "Anna Schmidt",
+                "guest_email": "anna@example.com",
+                "check_in": "2026-03-20",
+                "check_out": "2026-03-25",
+                "nights": 5,
+                "guests": 3,
+                "total_price": 575.00,
+                "status": "pending",
+                "payment_method": "stripe",
+                "created_at": "2026-03-05T14:20:00Z"
+            },
+            {
+                "id": "booking-3",
+                "property_id": 17,
+                "property_name": "Ferienwohnung Seeblick",
+                "guest_name": "Thomas Weber",
+                "guest_email": "thomas@example.com",
+                "check_in": "2026-03-01",
+                "check_out": "2026-03-05",
+                "nights": 4,
+                "guests": 2,
+                "total_price": 420.00,
+                "status": "completed",
+                "payment_method": "paypal",
+                "created_at": "2026-02-25T09:15:00Z"
+            }
+        ],
+        "total": 3,
+        "page": 1,
+        "per_page": 20
+    }
+
+@api_router.post("/bookings")
+def create_booking(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new booking"""
+    booking_id = f"booking-{uuid.uuid4().hex[:8]}"
+    return {
+        "id": booking_id,
+        "property_id": data.get("property_id", 17),
+        "guest_name": data.get("guest_name", ""),
+        "guest_email": data.get("guest_email", ""),
+        "check_in": data.get("check_in", ""),
+        "check_out": data.get("check_out", ""),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
 @api_router.get("/bookings/{booking_id}")
 def get_booking(booking_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get booking details"""
@@ -1598,6 +1670,84 @@ def get_booking(booking_id: str, user: DBUser = Depends(get_current_user), db: S
         "payment_method": "paypal",
         "created_at": "2026-03-04T10:30:00Z"
     }
+
+# ============ SCENES ENDPOINTS ============
+@api_router.get("/scenes")
+def get_scenes(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all scenes for user's properties"""
+    # Demo scenes
+    return {
+        "scenes": [
+            {
+                "id": "scene-1",
+                "property_id": 17,
+                "title": "Willkommen",
+                "content": "Herzlich willkommen in unserer Ferienwohnung! Wir freuen uns, dass Sie hier sind.",
+                "order": 1,
+                "is_active": True,
+                "created_at": "2026-03-01T10:00:00Z"
+            },
+            {
+                "id": "scene-2",
+                "property_id": 17,
+                "title": "WLAN & Internet",
+                "content": "Netzwerk: Guest-WiFi\nPasswort: welcome2024\n\nDas Passwort finden Sie auch am Router im Flur.",
+                "order": 2,
+                "is_active": True,
+                "created_at": "2026-03-01T10:05:00Z"
+            },
+            {
+                "id": "scene-3",
+                "property_id": 17,
+                "title": "Check-out",
+                "content": "Bitte checken Sie bis 11:00 Uhr aus. Legen Sie die Schlüssel in den Keysafe zurück.",
+                "order": 3,
+                "is_active": True,
+                "created_at": "2026-03-01T10:10:00Z"
+            },
+            {
+                "id": "scene-4",
+                "property_id": 17,
+                "title": "Umgebung & Tipps",
+                "content": "Der Chiemsee ist nur 5 Gehminuten entfernt. Empfehlenswerte Restaurants: Seewirt, Gasthof Zur Post.",
+                "order": 4,
+                "is_active": True,
+                "created_at": "2026-03-01T10:15:00Z"
+            }
+        ],
+        "total": 4
+    }
+
+@api_router.post("/scenes")
+def create_scene(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new scene"""
+    scene_id = f"scene-{uuid.uuid4().hex[:8]}"
+    return {
+        "id": scene_id,
+        "property_id": data.get("property_id", 17),
+        "title": data.get("title", ""),
+        "content": data.get("content", ""),
+        "order": data.get("order", 1),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
+@api_router.put("/scenes/{scene_id}")
+def update_scene(scene_id: str, data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update a scene"""
+    return {
+        "id": scene_id,
+        "title": data.get("title", ""),
+        "content": data.get("content", ""),
+        "order": data.get("order", 1),
+        "is_active": data.get("is_active", True),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+
+@api_router.delete("/scenes/{scene_id}")
+def delete_scene(scene_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete a scene"""
+    return {"success": True, "message": f"Scene {scene_id} deleted"}
 
 # ============ USER PROFILE ENDPOINTS ============
 @api_router.get("/auth/profile")
