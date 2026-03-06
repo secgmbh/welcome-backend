@@ -125,10 +125,10 @@
 
 ## 🚧 Phase 28: Production Readiness (IN BEARBEITUNG)
 
-- [ ] Environment Variables Check
+- [x] Environment Variables Check ✅ (Hardcoded Secrets entfernt)
 - [x] Security Headers ✅ (X-Frame-Options, CSP, HSTS, etc.)
 - [x] Rate Limiting ✅ (Auth Endpoints: 5-10 req/min)
-- [ ] Input Validation
+- [x] Input Validation ✅ (Pydantic EmailStr, Field validators)
 - [x] Error Handling ✅ (Global Exception Handler)
 - [x] Logging & Monitoring ✅ (JSON Logging für Production)
 
