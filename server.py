@@ -553,6 +553,8 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+# Security Headers Middleware (nach CORS)
+app.add_middleware(SecurityHeadersMiddleware)
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
