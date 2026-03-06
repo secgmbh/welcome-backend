@@ -613,6 +613,91 @@ def get_me(user: DBUser = Depends(get_current_user)):
         is_demo=user.is_demo
     )
 
+# ============ PASSWORD RESET ============
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6)
+
+# In-Memory Token Store (in Production: Redis)
+password_reset_tokens = {}
+
+@api_router.post("/auth/password-reset/request")
+@limiter.limit("3/minute")
+async def request_password_reset(request: Request, data: PasswordResetRequest, db: Session = Depends(get_db)):
+    """Fordere Password Reset an"""
+    # Prüfe ob User existiert
+    user = db.query(DBUser).filter(DBUser.email == data.email).first()
+    
+    # Generiere Token (auch wenn User nicht existiert - keine Info泄露)
+    token = secrets.token_urlsafe(32)
+    password_reset_tokens[token] = {
+        "email": data.email,
+        "expires": datetime.now(timezone.utc) + timedelta(minutes=15)
+    }
+    
+    if user:
+        # Sende E-Mail
+        reset_url = f"https://www.welcome-link.de/auth/reset-password?token={token}"
+        
+        html = f"""
+        <html>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #F27C2C 0%, #FF9F4A 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Welcome Link</h1>
+            </div>
+            <div style="background: #fff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <h2 style="color: #333; margin-top: 0;">Passwort zurücksetzen</h2>
+                <p style="color: #666; font-size: 16px;">Sie haben angefordert, Ihr Passwort zurückzusetzen.</p>
+                <a href="{reset_url}" style="display: inline-block; background: #F27C2C; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 20px 0;">
+                    Passwort zurücksetzen
+                </a>
+                <p style="color: #999; font-size: 14px;">Oder kopieren Sie diesen Link in Ihren Browser:</p>
+                <p style="color: #666; font-size: 14px; word-break: break-all; background: #f5f5f5; padding: 10px; border-radius: 6px;">{reset_url}</p>
+                <p style="color: #999; font-size: 12px; margin-top: 30px;">Der Link ist 15 Minuten gültig.</p>
+                <p style="color: #999; font-size: 12px;">Falls Sie dies nicht angefordert haben, können Sie diese E-Mail ignorieren.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        send_email(data.email, "Passwort zurücksetzen - Welcome Link", html)
+        logger.info(f"Password reset requested for: {data.email}")
+    
+    # Immer gleiche Antwort (keine Info泄露)
+    return {"message": "Falls ein Account mit dieser E-Mail existiert, erhalten Sie eine E-Mail mit weiteren Anweisungen."}
+
+@api_router.post("/auth/password-reset/confirm")
+async def confirm_password_reset(data: PasswordResetConfirm, db: Session = Depends(get_db)):
+    """Bestätige Password Reset mit Token"""
+    # Prüfe Token
+    token_data = password_reset_tokens.get(data.token)
+    
+    if not token_data:
+        raise HTTPException(status_code=400, detail="Ungültiger oder abgelaufener Token")
+    
+    if datetime.now(timezone.utc) > token_data["expires"]:
+        del password_reset_tokens[data.token]
+        raise HTTPException(status_code=400, detail="Token ist abgelaufen")
+    
+    # Finde User
+    user = db.query(DBUser).filter(DBUser.email == token_data["email"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User nicht gefunden")
+    
+    # Update Passwort
+    user.password_hash = pwd_context.hash(data.new_password)
+    db.commit()
+    
+    # Lösche Token
+    del password_reset_tokens[data.token]
+    
+    logger.info(f"Password reset completed for: {user.email}")
+    
+    return {"message": "Passwort erfolgreich zurückgesetzt"}
+
 # ============ PROPERTY ROUTES ============
 
 @api_router.get("/properties", response_model=List[Property])
@@ -739,7 +824,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.6.0", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.6.1", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -750,7 +835,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.6.0",
+        "version": "2.6.1",
         "environment": ENVIRONMENT,
         "services": {}
     }
