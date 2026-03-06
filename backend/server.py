@@ -43,12 +43,17 @@ if JWT_SECRET and len(JWT_SECRET) < 32:
     if ENVIRONMENT != 'development':
         raise ValueError("❌ SECRET_KEY muss mindestens 32 Zeichen lang sein!")
 
-# ============ SMTP CONFIG (mit Fallback für Demo/Development) ============
-SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.your-server.de')
+# ============ SMTP CONFIG ============
+SMTP_HOST = os.environ.get('SMTP_HOST', 'localhost')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
-SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
-SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'td2dfTR87tFiw2Wg')
-SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_FROM = os.environ.get('SMTP_FROM', 'noreply@welcome-link.de')
+
+# Warnung wenn SMTP nicht konfiguriert in Production
+if ENVIRONMENT == 'production' and not SMTP_PASSWORD:
+    import sys
+    print(f"⚠️  WARNING: SMTP_PASSWORD nicht gesetzt - E-Mails werden nicht versendet!", file=sys.stderr)
 
 # Database connection
 logger = logging.getLogger(__name__)
