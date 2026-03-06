@@ -208,6 +208,6 @@ PUT  /api/autofocus/config   # Auto-Focus aktualisieren
 
 ## 🎯 Nächste Schritte
 
-1. **Render Deploy** - Demo-Anmeldung Fix (is_ Spalte)
+1. **Demo Data Enhancement** - Bookings & Scenes Endpoints (deploying)
 2. **Final Testing** - Alle Features testen
-3. **Production Readiness** - Security & Monitoring
+3. **User Guide** - Dokumentation für Endbenutzer
