@@ -620,6 +620,7 @@ def root():
 def health_check(db: Session = Depends(get_db)):
     """Detaillierter Health Check für Monitoring"""
     from datetime import datetime, timezone
+    from sqlalchemy import text
     
     health = {
         "status": "healthy",
@@ -631,7 +632,7 @@ def health_check(db: Session = Depends(get_db)):
     
     # Database check
     try:
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         health["services"]["database"] = {
             "status": "healthy",
             "type": "sqlite"
