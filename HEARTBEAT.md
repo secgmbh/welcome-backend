@@ -49,6 +49,11 @@
 - ✅ Test Suite - 30 tests passing
 - ✅ Frontend Build erfolgreich
 - ✅ Dashboard lädt ohne Fehler
+- ✅ **Guestview Endpoint** - `/api/guestview/{token}` statt `/api/public/properties/`
+
+## Deployment Status (20:22)
+- Frontend: `main.122110a9.js` - deployed ✅
+- Guestview nutzt jetzt korrekten Endpoint ✅
 
 ## Nächste Schritte (Optional)
 1. Production Monitoring (Sentry Dashboard)
