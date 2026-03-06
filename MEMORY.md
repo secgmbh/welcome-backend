@@ -1,6 +1,6 @@
 # MEMORY.md - Langzeit-Erinnerungen
 
-## Projekt: Welcome-Link MVP (Stand: 06.03.2026 - 23:35)
+## Projekt: Welcome-Link MVP (Stand: 07.03.2026 - 00:41)
 
 ### 🎉 PRODUCTION READY!
 
@@ -23,7 +23,7 @@
 |-------|-------------|--------|
 | 1-27 | Core Features | ✅ |
 | 28 | Security Headers & Rate Limiting | ✅ |
-| 29 | Testing (Backend 42✅, Frontend 30✅) | ✅ |
+| 29 | Testing (Backend 47, Frontend 30) | ✅ |
 | 30 | Documentation & Health Check | ✅ |
 | 31 | Demo Data & Endpoints | ✅ |
 | 32 | Bug Fixes & Optimierung | ✅ |
@@ -31,7 +31,7 @@
 
 ---
 
-## Heutige Errungenschaften (06.03.2026)
+## Session-Fortschritt (06./07.03.2026)
 
 ### Backend (v2.6.1)
 ```
@@ -41,110 +41,46 @@ Neue Features:
 - send_welcome_email() - Willkommens-E-Mails
 - POST /api/auth/password-reset/request - Passwort-Reset anfordern
 - POST /api/auth/password-reset/confirm - Passwort zurücksetzen
-
-Email Templates:
-- Magic Link Email (HTML + Text)
-- Welcome Email (HTML)
-- Password Reset Email (HTML)
+- 55 API Endpoints total
+- 47 Backend Tests passing
 ```
 
 ### Frontend
 ```
 Neue Seiten:
-- /reset-password - Passwort vergessen Seite
-- /auth/reset-password?token=xxx - Neues Passwort setzen
+- /reset-password - Passwort vergessen Seite ✅
+- /auth/reset-password?token=xxx - Neues Passwort setzen ✅
+- "Passwort vergessen?" Link im Login ✅
 
-Neue Komponenten:
+Components:
 - ResetPasswordPage.jsx
 - ConfirmResetPasswordPage.jsx
+- LoginPage.jsx (aktualisiert)
 
-Updates:
-- LoginPage.jsx - "Passwort vergessen?" Link hinzugefügt
-- App.js - Neue Routen für Password Reset
-```
-
-### Bug Fixes
-```
-- ToastProvider import korrigiert (Toast → toast)
-- React navigate() Warning - useEffect Fix
-- Guestview Endpoint (/api/guestview/{token})
-- Unused Imports in BookingCalendar
-- Test Suite - 30 tests passing
+Build: main.8afa497e.js
 ```
 
----
-
-## API Endpoints (55 Total)
-
-### Auth Endpoints
+### Tests
 ```
-POST /api/auth/register - Benutzer registrieren
-POST /api/auth/login - Benutzer anmelden
-GET  /api/auth/me - Aktuellen Benutzer abrufen
-POST /api/auth/magic-link - Magic Link anfordern
-POST /api/auth/password-reset/request - Passwort-Reset anfordern
-POST /api/auth/password-reset/confirm - Passwort zurücksetzen
-```
-
-### Property Endpoints
-```
-GET  /api/properties - Alle Properties
-POST /api/properties - Property erstellen
-GET  /api/properties/{id} - Property abrufen
-PUT  /api/properties/{id} - Property aktualisieren
-DELETE /api/properties/{id} - Property löschen
-```
-
-### Guestview Endpoints
-```
-GET  /api/guestview/{token} - Guestview-Daten abrufen
-POST /api/guestview-token - Neuen Token generieren
-```
-
-### Booking Endpoints
-```
-GET  /api/bookings - Alle Buchungen
-POST /api/bookings - Buchung erstellen
-GET  /api/bookings/{id} - Buchung abrufen
-```
-
-### Scene Endpoints
-```
-GET  /api/scenes - Alle Szenen
-POST /api/scenes - Szene erstellen
-```
-
-### Stats Endpoints
-```
-GET  /api/stats/global - Globale Statistiken
-POST /api/stats/booking/filter - Gefilterte Buchungsstatistiken
+Backend: 47 passed, 6 skipped
+Frontend: 30 passed
+- test_password_reset.py (NEU)
+- test_api.py
+- test_security.py
+- test_load.py
 ```
 
 ---
 
-## Tech Stack
+## API Response Times (Production)
 
-### Backend (FastAPI)
-- Python 3.11
-- FastAPI mit Starlette
-- SQLAlchemy ORM
-- SQLite Database (192KB)
-- JWT Authentication
-- Rate Limiting (slowapi)
-- Security Headers Middleware
-
-### Frontend (React)
-- React 18 mit Vite/CRA
-- Tailwind CSS
-- React Router v6
-- React Query (TanStack Query)
-- Lucide Icons
-- Dark Mode Support
-
-### Deployment
-- Render.com (Backend + Frontend)
-- Auto-Deploy on git push
-- GitHub Integration
+```
+/api/auth/login: 79ms ✅
+/api/properties: 60ms ✅
+/api/guestview: 103ms ✅
+/api/bookings: 60ms ✅
+/api/stats/global: 45ms ✅
+```
 
 ---
 
@@ -158,88 +94,75 @@ X-XSS-Protection: 1; mode=block ✅
 Rate Limiting: ✅ (Auth Endpoints)
 JWT Auth: ✅
 SMTP: ✅ (Configured)
+Sentry: ✅ (Ready)
 ```
 
 ---
 
-## Demo Data
+## Git Commits (Diese Session)
 
-- **Property:** Ferienwohnung Seeblick (Prien am Chiemsee)
-- **Bookings:** 3 (confirmed, pending, completed)
-- **Scenes:** 4 (Willkommen, WLAN, Check-out, Umgebung)
-- **Extras:** 10 (Frühstück, Sauna, Massage, etc.)
-- **Stats:** €5,280 Revenue, 42 Bookings
-
----
-
-## Git Commits (06.03.2026)
-
+### Backend
 ```
-Backend:
-- feat: Add SMTP email integration with magic link support (v2.6.0)
+- feat: Add SMTP email integration (v2.6.0)
 - feat: Add password reset functionality (v2.6.1)
+- test: Add password reset validation tests
+```
 
-Frontend:
-- fix: Remove unused imports in BookingCalendar component
+### Frontend
+```
+- fix: Remove unused imports in BookingCalendar
 - fix: Guestview endpoint - use /api/guestview/{token}
 - feat: Add password reset pages
+- feat: Update LoginPage with "Passwort vergessen?" link
 ```
-
----
-
-## Environment Variables
-
-### Backend (.env)
-```
-SECRET_KEY=xxx (min 32 Zeichen)
-DATABASE_URL=sqlite:///./app.db
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=xxx
-SMTP_PASSWORD=xxx
-SMTP_FROM=noreply@welcome-link.de
-SENTRY_DSN=xxx (optional)
-```
-
----
-
-## Nächste Schritte (TODO für morgen)
-
-1. **Email Templates verfeinern**
-   - Booking Confirmation Email
-   - Payment Receipt Email
-   - Guest Welcome Email
-
-2. **Frontend Password Reset testen**
-   - E2E Test auf Production
-   - Email Delivery Check
-
-3. **Production Monitoring**
-   - Sentry Dashboard einrichten
-   - Error Alerts konfigurieren
-
-4. **Performance Optimierung**
-   - Bundle Size reduzieren
-   - Lazy Loading verbessern
-
-5. **CI/CD Pipeline**
-   - GitHub Actions einrichten
-   - Automated Tests
 
 ---
 
 ## Wichtige Dateien
 
-- `TODO_GUESTVIEW.md` - Feature-Status
-- `HEARTBEAT.md` - Aktuelle Aufgaben
-- `memory/YYYY-MM-DD.md` - Tägliche Logs
-- `backend/USER_GUIDE.md` - User Dokumentation
-- `backend/server.py` - Haupt-API-Datei (2000+ Zeilen)
+```
+Backend:
+- server.py (Haupt-API, 2100+ Zeilen)
+- tests/test_password_reset.py (NEU)
+- tests/test_api.py
+- tests/test_security.py
+
+Frontend:
+- src/features/auth/ResetPasswordPage.jsx (NEU)
+- src/features/auth/ConfirmResetPasswordPage.jsx (NEU)
+- src/features/auth/LoginPage.jsx (aktualisiert)
+- src/App.js (Routen hinzugefügt)
+```
 
 ---
 
-## Kontakte & URLs
+## TODO für Morgen (07.03.2026)
 
-- **GitHub:** secgmbh/welcome-backend, secgmbh/welcome-frontend
-- **Render:** welcome-link-backend, welcome-frontend
-- **Support:** support@welcome-link.de
+### Priorität 1 - Email Testing
+- [ ] SMTP Versand verifizieren
+- [ ] Password Reset E2E testen
+- [ ] Magic Link Flow testen
+
+### Priorität 2 - Performance
+- [ ] Bundle Size optimieren
+- [ ] Lighthouse Score prüfen
+- [ ] Lazy Loading verbessern
+
+### Priorität 3 - Monitoring
+- [ ] Sentry Dashboard einrichten
+- [ ] Error Alerts konfigurieren
+- [ ] Performance Tracking
+
+### Priorität 4 - Features
+- [ ] Booking Confirmation Email
+- [ ] Payment Receipt Email
+- [ ] Guest Welcome Email
+
+---
+
+## Nächste Schritte
+
+1. **Email Templates verfeinern**
+2. **E2E Testing (Playwright/Cypress)**
+3. **CI/CD Pipeline (GitHub Actions)**
+4. **Performance Monitoring Dashboard**
