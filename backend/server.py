@@ -398,7 +398,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.6.4",
+    version="2.6.5",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -1033,7 +1033,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.6.4", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.6.5", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -1044,7 +1044,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.6.4",
+        "version": "2.6.5",
         "environment": ENVIRONMENT,
         "services": {}
     }
@@ -2061,13 +2061,39 @@ def get_bookings(user: DBUser = Depends(get_current_user), db: Session = Depends
 def create_booking(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Create a new booking"""
     booking_id = f"booking-{uuid.uuid4().hex[:8]}"
+    
+    # Send booking confirmation email if guest_email provided
+    guest_email = data.get("guest_email", "")
+    guest_name = data.get("guest_name", "Gast")
+    property_name = data.get("property_name", "Unterkunft")
+    check_in = data.get("check_in", "")
+    check_out = data.get("check_out", "")
+    guests = data.get("guests", 1)
+    total_price = data.get("total_price", 0)
+    
+    if guest_email:
+        # Send confirmation email asynchronously (don't block)
+        try:
+            send_booking_confirmation_email(
+                email=guest_email,
+                name=guest_name,
+                property_name=property_name,
+                checkin=check_in,
+                checkout=check_out,
+                guests=guests,
+                total=total_price
+            )
+            logger.info(f"Booking confirmation email sent to: {guest_email}")
+        except Exception as e:
+            logger.error(f"Failed to send booking email: {str(e)}")
+    
     return {
         "id": booking_id,
         "property_id": data.get("property_id", 17),
-        "guest_name": data.get("guest_name", ""),
-        "guest_email": data.get("guest_email", ""),
-        "check_in": data.get("check_in", ""),
-        "check_out": data.get("check_out", ""),
+        "guest_name": guest_name,
+        "guest_email": guest_email,
+        "check_in": check_in,
+        "check_out": check_out,
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
