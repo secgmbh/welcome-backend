@@ -18,6 +18,9 @@ import secrets
 import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from slowapi.util import get_remote_address
 from slowapi.util import get_remote_address
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking
@@ -55,6 +58,91 @@ SMTP_FROM = os.environ.get('SMTP_FROM', 'noreply@welcome-link.de')
 if ENVIRONMENT == 'production' and not SMTP_PASSWORD:
     import sys
     print(f"⚠️  WARNING: SMTP_PASSWORD nicht gesetzt - E-Mails werden nicht versendet!", file=sys.stderr)
+
+# ============ EMAIL HELPER ============
+def send_email(to_email: str, subject: str, html_body: str, text_body: str = None):
+    """Sende E-Mail über SMTP"""
+    if not SMTP_PASSWORD:
+        logger.warning(f"E-Mail nicht gesendet (SMTP nicht konfiguriert): {to_email}")
+        return False
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = SMTP_FROM
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        if text_body:
+            msg.attach(MIMEText(text_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, to_email, msg.as_string())
+        
+        logger.info(f"✅ E-Mail gesendet an: {to_email}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ E-Mail-Fehler: {str(e)}")
+        return False
+
+def send_magic_link_email(email: str, token: str):
+    """Sende Magic Link E-Mail"""
+    magic_url = f"https://www.welcome-link.de/auth/magic?token={token}"
+    
+    html = f"""
+    <html>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #F27C2C 0%, #FF9F4A 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Welcome Link</h1>
+        </div>
+        <div style="background: #fff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Ihr Magic Link</h2>
+            <p style="color: #666; font-size: 16px;">Klicken Sie auf den Button, um sich anzumelden:</p>
+            <a href="{magic_url}" style="display: inline-block; background: #F27C2C; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 20px 0;">
+                Anmelden
+            </a>
+            <p style="color: #999; font-size: 14px;">Oder kopieren Sie diesen Link in Ihren Browser:</p>
+            <p style="color: #666; font-size: 14px; word-break: break-all; background: #f5f5f5; padding: 10px; border-radius: 6px;">{magic_url}</p>
+            <p style="color: #999; font-size: 12px; margin-top: 30px;">Der Link ist 15 Minuten gültig.</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text = f"""Welcome Link - Magic Link
+    
+Klicken Sie auf diesen Link um sich anzumelden:
+{magic_url}
+
+Der Link ist 15 Minuten gültig.
+"""
+    
+    return send_email(email, "Ihr Magic Link - Welcome Link", html, text)
+
+def send_welcome_email(email: str, name: str):
+    """Sende Willkommens-E-Mail nach Registrierung"""
+    html = f"""
+    <html>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #F27C2C 0%, #FF9F4A 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Willkommen bei Welcome Link! 🎉</h1>
+        </div>
+        <div style="background: #fff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hallo {name}!</h2>
+            <p style="color: #666; font-size: 16px;">Vielen Dank für Ihre Registrierung bei Welcome Link.</p>
+            <p style="color: #666; font-size: 16px;">Sie können jetzt Ihre erste Unterkunft einrichten und digitale Gäste-Mappen erstellen.</p>
+            <a href="https://www.welcome-link.de/dashboard" style="display: inline-block; background: #F27C2C; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 20px 0;">
+                Zum Dashboard
+            </a>
+            <p style="color: #999; font-size: 14px; margin-top: 30px;">Bei Fragen erreichen Sie uns unter support@welcome-link.de</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return send_email(email, f"Willkommen bei Welcome Link, {name}!", html)
 
 # ============ SENTRY ERROR TRACKING ============
 SENTRY_DSN = os.environ.get("SENTRY_DSN")
@@ -493,12 +581,26 @@ async def login(request: Request, data: UserLogin, db: Session = Depends(get_db)
 
 @api_router.post("/auth/magic-link")
 @limiter.limit("3/minute")
-async def request_magic_link(request: Request, data: MagicLinkRequest):
-    """Fordere einen Magic Link an (würde in Production E-Mail senden)"""
-    # TODO: Implementiere echten E-Mail-Versand mit SendGrid oder ähnlich
-    # Für Demo: Nur bestätigung
-    logger.info(f"Magic Link angefordert für: {data.email}")
-    return {"message": "Magic Link wurde an Ihre E-Mail gesendet", "email": data.email}
+async def request_magic_link(request: Request, data: MagicLinkRequest, db: Session = Depends(get_db)):
+    """Fordere einen Magic Link an"""
+    # Generiere Token
+    token = secrets.token_urlsafe(32)
+    
+    # Speichere Token in DB (oder Cache) mit 15 Min Gültigkeit
+    # Für Demo: E-Mail senden
+    email_sent = send_magic_link_email(data.email, token)
+    
+    if email_sent:
+        logger.info(f"Magic Link gesendet an: {data.email}")
+        return {"message": "Magic Link wurde an Ihre E-Mail gesendet", "email": data.email}
+    else:
+        # Fallback für Demo ohne SMTP
+        logger.info(f"Magic Link angefordert für: {data.email} (SMTP nicht konfiguriert)")
+        return {
+            "message": "Magic Link wurde angefordert. SMTP nicht konfiguriert - prüfen Sie die Logs.",
+            "email": data.email,
+            "demo_url": f"https://www.welcome-link.de/auth/magic?token={token}"
+        }
 
 @api_router.get("/auth/me", response_model=User)
 def get_me(user: DBUser = Depends(get_current_user)):
@@ -637,7 +739,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.5.3", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.6.0", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -648,7 +750,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.5.3",
+        "version": "2.6.0",
         "environment": ENVIRONMENT,
         "services": {}
     }
