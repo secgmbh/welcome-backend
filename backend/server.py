@@ -19,6 +19,7 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from slowapi.util import get_remote_address
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking
 
 ROOT_DIR = Path(__file__).parent
@@ -54,6 +55,28 @@ SMTP_FROM = os.environ.get('SMTP_FROM', 'noreply@welcome-link.de')
 if ENVIRONMENT == 'production' and not SMTP_PASSWORD:
     import sys
     print(f"⚠️  WARNING: SMTP_PASSWORD nicht gesetzt - E-Mails werden nicht versendet!", file=sys.stderr)
+
+# ============ SENTRY ERROR TRACKING ============
+SENTRY_DSN = os.environ.get("SENTRY_DSN")
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+        
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment=ENVIRONMENT,
+            traces_sample_rate=0.1,  # 10% der Requests tracen
+            integrations=[
+                FastApiIntegration(),
+                SqlalchemyIntegration(),
+            ],
+        )
+        print("✓ Sentry initialized")
+    except ImportError:
+        print("⚠️  Sentry SDK not installed - skipping error tracking")
+        SENTRY_DSN = None
 
 # Database connection
 logger = logging.getLogger(__name__)
