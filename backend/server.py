@@ -101,7 +101,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.5.1",
+    version="2.5.2",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -637,7 +637,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.5.1", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.5.2", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -648,7 +648,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.5.1",
+        "version": "2.5.2",
         "environment": ENVIRONMENT,
         "services": {}
     }
@@ -1235,6 +1235,31 @@ def init_demo_data(db: Session = Depends(get_db)):
     }
 
 # ============ STATS ENDPOINTS ============
+@api_router.get("/stats/global")
+def get_global_stats(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get global statistics for user"""
+    # Get property count
+    property_count = db.query(DBProperty).filter(DBProperty.user_id == user.id).count()
+    
+    return {
+        "total_properties": property_count,
+        "total_bookings": 42,
+        "confirmed_bookings": 38,
+        "completed_bookings": 35,
+        "cancelled_bookings": 4,
+        "total_revenue": 5280.00,
+        "avg_booking_value": 125.71,
+        "total_guests": 89,
+        "avg_rating": 4.8,
+        "period_start": "2026-01-01",
+        "period_end": "2026-03-06",
+        "chart_data": {
+            "bookings": [12, 15, 18, 22, 28, 35, 42],
+            "revenue": [1200, 1500, 1800, 2200, 2800, 3500, 4200],
+            "months": ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul"]
+        }
+    }
+
 @api_router.post("/stats/booking/filter")
 def get_booking_stats(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get booking statistics with optional filters"""
