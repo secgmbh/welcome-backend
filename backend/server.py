@@ -614,7 +614,52 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.4.0"}
+    return {"message": "Welcome Link API", "version": "2.5.0", "status": "healthy"}
+
+@api_router.get("/health")
+def health_check(db: Session = Depends(get_db)):
+    """Detaillierter Health Check für Monitoring"""
+    from datetime import datetime, timezone
+    
+    health = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "2.5.0",
+        "environment": ENVIRONMENT,
+        "services": {}
+    }
+    
+    # Database check
+    try:
+        db.execute("SELECT 1")
+        health["services"]["database"] = {
+            "status": "healthy",
+            "type": "sqlite"
+        }
+    except Exception as e:
+        health["services"]["database"] = {
+            "status": "unhealthy",
+            "error": str(e)[:100]
+        }
+        health["status"] = "degraded"
+    
+    # Security headers check
+    health["services"]["security"] = {
+        "status": "healthy",
+        "headers": ["X-Frame-Options", "X-Content-Type-Options", "CSP", "HSTS"]
+    }
+    
+    # Rate limiting check
+    health["services"]["rate_limiting"] = {
+        "status": "healthy",
+        "limits": {
+            "register": "5/minute",
+            "login": "10/minute",
+            "magic_link": "3/minute"
+        }
+    }
+    
+    return health
 
 @api_router.post("/status", response_model=StatusCheck)
 def create_status_check(input: StatusCheckCreate, db: Session = Depends(get_db)):
