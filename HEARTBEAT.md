@@ -45,6 +45,8 @@
 
 ## Bug Fixes (06.03.2026)
 - ✅ ToastProvider import korrigiert (Toast → toast)
+- ✅ React navigate() Warning - useEffect Fix
+- ✅ Test Suite - 30 tests passing
 - ✅ Frontend Build erfolgreich
 - ✅ Dashboard lädt ohne Fehler
 
