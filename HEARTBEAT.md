@@ -1,6 +1,6 @@
 # Heartbeat Task List
 
-## 🎉 PRODUCTION READY! (07.03.2026 - 09:30)
+## 🎉 PRODUCTION READY! (07.03.2026 - 09:45)
 
 ### 🔐 Zugangsdaten
 
@@ -13,26 +13,20 @@
 **Admin-Account (nur für Oleg):**
 - URL: https://www.welcome-link.de/admin/login
 - E-Mail: admin@welcome-link.de
-- Passwort: (erst bei erstem Login selbst festlegen)
+- Passwort: (muss einmalig via API erstellt werden)
 - ✅ Volle Admin-Rechte
 
-### 🆕 Admin Panel (v2.7.3)
-- **Route:** `/admin/login` → Separater Admin-Login
-- **Route:** `/admin/panel` → Admin Dashboard
-- **Features:**
-  - Übersicht: Stats, Top Properties, Neuanmeldungen, Revenue by Plan
-  - Benutzerverwaltung: Alle Benutzer mit Plan/Status/Actions
-  - System Health: API, Database, SMTP, Payments Status
-  - Verbesserungen: Priorisierte Liste mit Setup-Schritten
+### 🔒 Admin-Account erstellen (einmalig)
 
-### ✅ Frontend Bug Fixes
-- Guestview property.name Anzeige gefixt (API Response Array-Struktur)
-- Impressum Platzhalter-Texte ersetzt mit Demo-Daten
+Admin-Account kann **nur** via API mit Secret erstellt werden:
 
-### 🔧 Backend Improvements (v2.7.2)
-- Stripe Webhook Signatur-Verifikation implementiert
-- Cron Jobs mit echten Booking Queries aktiviert
-- Admin-only Login Endpoint
+```bash
+curl -X POST https://api.welcome-link.de/api/admin/create-admin \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@welcome-link.de","password":"DEIN_PASSWORT","secret":"WL-Admin-2026-Secret!"}'
+```
+
+⚠️ **Wichtig:** Nach der Erstellung kann niemand sonst Admin werden!
 
 ### ⏳ Noch offen (braucht Render-Zugang)
 - SMTP_PASSWORD setzen
