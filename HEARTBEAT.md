@@ -1,6 +1,6 @@
 # Heartbeat Task List
 
-## 🎉 PRODUCTION READY! (07.03.2026 - 08:45)
+## 🎉 PRODUCTION READY! (07.03.2026 - 09:15)
 
 ### ✅ Frontend Bug Fixes
 - Guestview property.name Anzeige gefixt (API Response Array-Struktur)
@@ -10,6 +10,25 @@
 - Stripe Webhook Signatur-Verifikation implementiert
 - Cron Jobs mit echten Booking Queries aktiviert
 - STRIPE_WEBHOOK_SECRET Environment Variable hinzugefügt
+
+### 🆕 Admin Panel (v2.7.3)
+- **Neue Route:** `/admin/panel` - Comprehensive Admin Dashboard
+- **Features:**
+  - Übersicht: Stats, Top Properties, Neuanmeldungen, Revenue by Plan
+  - Benutzerverwaltung: Alle Benutzer mit Plan/Status/Actions
+  - System Health: API, Database, SMTP, Payments Status
+  - Verbesserungen: Priorisierte Liste mit Setup-Schritten
+- **Admin Login:** `POST /admin/login` - Admin-only Auth
+- **Admin Account Creation:** `POST /admin/create-admin`
+
+### Demo Credentials
+- **User:** demo@welcome-link.de / Demo123!
+- **Admin:** demo@welcome-link.de (hat Admin-Rechte)
+
+### ⏳ Noch offen (braucht Render-Zugang)
+- SMTP_PASSWORD setzen
+- ENVIRONMENT=production
+- STRIPE_WEBHOOK_SECRET
 
 ### ✅ API v2.7.2 - Security & Cron Improvements!
 - ✅ Email Integration (SMTP)
