@@ -398,7 +398,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.7.0",
+    version="2.7.1",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -1033,7 +1033,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.7.0", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.7.1", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -1044,7 +1044,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.7.0",
+        "version": "2.7.1",
         "environment": ENVIRONMENT,
         "services": {}
     }
@@ -1466,6 +1466,133 @@ async def paypal_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"PayPal webhook error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+# ============ CRON JOBS ============
+@api_router.post("/cron/booking-reminders")
+async def send_booking_reminders(db: Session = Depends(get_db)):
+    """
+    Send booking reminder emails.
+    This endpoint should be called by a cron job daily.
+    Sends reminders for check-ins in 1 day.
+    """
+    try:
+        # Get bookings with check-in tomorrow
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date()
+        
+        # Demo: Return success
+        reminders_sent = 0
+        
+        # TODO: Query real bookings
+        # bookings = db.query(DBBooking).filter(
+        #     DBBooking.check_in == tomorrow,
+        #     DBBooking.status == "confirmed"
+        # ).all()
+        
+        # for booking in bookings:
+        #     send_booking_reminder_email(
+        #         email=booking.guest_email,
+        #         name=booking.guest_name,
+        #         property_name=booking.property.name,
+        #         checkin=booking.check_in.strftime("%d.%m.%Y"),
+        #         checkout=booking.check_out.strftime("%d.%m.%Y")
+        #     )
+        #     reminders_sent += 1
+        
+        logger.info(f"Booking reminders sent: {reminders_sent}")
+        
+        return {
+            "status": "success",
+            "reminders_sent": reminders_sent,
+            "checked_for": tomorrow.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Booking reminder error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/cron/guest-welcome")
+async def send_guest_welcome_emails(db: Session = Depends(get_db)):
+    """
+    Send welcome emails to guests on check-in day.
+    This endpoint should be called by a cron job daily.
+    """
+    try:
+        today = datetime.now(timezone.utc).date()
+        
+        # Demo: Return success
+        welcomes_sent = 0
+        
+        # TODO: Query real bookings
+        # bookings = db.query(DBBooking).filter(
+        #     DBBooking.check_in == today,
+        #     DBBooking.status == "confirmed"
+        # ).all()
+        
+        # for booking in bookings:
+        #     # Get property details for WiFi
+        #     property = db.query(DBProperty).filter(DBProperty.id == booking.property_id).first()
+        #     send_guest_welcome_email(
+        #         email=booking.guest_email,
+        #         guest_name=booking.guest_name,
+        #         property_name=property.name,
+        #         host_name=booking.user.name,
+        #         checkin=booking.check_in.strftime("%d.%m.%Y"),
+        #         checkout=booking.check_out.strftime("%d.%m.%Y"),
+        #         wifi_name=property.wifi_name,
+        #         wifi_password=property.wifi_password,
+        #         guestview_url=f"https://www.welcome-link.de/guestview/{property.public_id}"
+        #     )
+        #     welcomes_sent += 1
+        
+        logger.info(f"Guest welcome emails sent: {welcomes_sent}")
+        
+        return {
+            "status": "success",
+            "welcomes_sent": welcomes_sent,
+            "checked_for": today.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Guest welcome error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/cron/checkout-followup")
+async def send_checkout_followup_emails(db: Session = Depends(get_db)):
+    """
+    Send follow-up emails after checkout.
+    This endpoint should be called by a cron job daily.
+    """
+    try:
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+        
+        # Demo: Return success
+        followups_sent = 0
+        
+        # TODO: Query real bookings
+        # bookings = db.query(DBBooking).filter(
+        #     DBBooking.check_out == yesterday,
+        #     DBBooking.status == "completed"
+        # ).all()
+        
+        # for booking in bookings:
+        #     send_checkout_followup_email(
+        #         email=booking.guest_email,
+        #         name=booking.guest_name,
+        #         property_name=booking.property.name
+        #     )
+        #     followups_sent += 1
+        
+        logger.info(f"Checkout followup emails sent: {followups_sent}")
+        
+        return {
+            "status": "success",
+            "followups_sent": followups_sent,
+            "checked_for": yesterday.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Checkout followup error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============ STRIPE WEBHOOK ============
 @api_router.post("/webhooks/stripe")
