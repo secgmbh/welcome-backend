@@ -840,8 +840,8 @@ async def admin_login(request: Request, data: UserLogin, db: Session = Depends(g
             logger.warning(f"Admin-Login fehlgeschlagen: Falsches Passwort - {data.email}")
             raise HTTPException(status_code=401, detail="Zugriff verweigert")
 
-        # Überprüfe Admin-Status (erlaube demo@welcome-link.de als Admin)
-        is_admin = user.email == "demo@welcome-link.de" or user.email == "admin@welcome-link.de" or getattr(user, 'is_admin', False)
+        # Überprüfe Admin-Status (NUR admin@welcome-link.de oder User mit is_admin=True)
+        is_admin = user.email == "admin@welcome-link.de" or getattr(user, 'is_admin', False)
 
         if not is_admin:
             logger.warning(f"Admin-Login fehlgeschlagen: Keine Admin-Berechtigung - {data.email}")
@@ -2214,31 +2214,57 @@ def get_bookings_feed(limit: int = 50, user: DBUser = Depends(get_current_user),
 @api_router.get("/admin/users")
 def get_admin_users(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all users (admin only)"""
-    # Demo users for now
+    # Demo users for now - demo user is NOT admin
     return [
         {
             "id": "1",
-            "email": "demo@welcome-link.de",
-            "name": "Demo Benutzer",
+            "email": "admin@welcome-link.de",
+            "name": "Administrator",
             "is_admin": True,
-            "created_at": "2026-01-15T10:00:00Z",
-            "properties_count": 1
+            "created_at": "2026-01-01T00:00:00Z",
+            "properties_count": 0,
+            "plan": "Enterprise",
+            "status": "active"
         },
         {
             "id": "2",
+            "email": "demo@welcome-link.de",
+            "name": "Demo Benutzer",
+            "is_admin": False,
+            "created_at": "2026-01-15T10:00:00Z",
+            "properties_count": 1,
+            "plan": "Professional",
+            "status": "demo"
+        },
+        {
+            "id": "3",
             "email": "max@example.com",
             "name": "Max Mustermann",
             "is_admin": False,
             "created_at": "2026-02-20T14:30:00Z",
-            "properties_count": 2
+            "properties_count": 2,
+            "plan": "Professional",
+            "status": "active"
         },
         {
-            "id": "3",
+            "id": "4",
             "email": "anna@example.com",
             "name": "Anna Schmidt",
             "is_admin": False,
             "created_at": "2026-03-01T09:15:00Z",
-            "properties_count": 1
+            "properties_count": 1,
+            "plan": "Starter",
+            "status": "active"
+        },
+        {
+            "id": "5",
+            "email": "hotel@bayerhof.de",
+            "name": "Hotel Bayerhof",
+            "is_admin": False,
+            "created_at": "2026-03-07T08:00:00Z",
+            "properties_count": 15,
+            "plan": "Enterprise",
+            "status": "trial"
         }
     ]
 
