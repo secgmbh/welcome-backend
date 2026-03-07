@@ -866,13 +866,26 @@ async def admin_login(request: Request, data: UserLogin, db: Session = Depends(g
         logger.error(f"❌ Fehler bei Admin-Login: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)[:50]}")
 
-@api_router.post("/admin/create-admin")
-@limiter.limit("1/minute")
-async def create_admin_account(request: Request, data: UserLogin, db: Session = Depends(get_db)):
-    """Erstelle Admin-Account (nur in Development oder mit Secret)"""
-    # Security: Nur erlaubt mit speziellen Credentials oder in Development
-    admin_secret = os.environ.get('ADMIN_SECRET', 'create-admin-2026')
 
+class AdminCreateRequest(BaseModel):
+    email: str
+    password: str
+    secret: str  # Erforderlich für Sicherheit
+
+
+@api_router.post("/admin/create-admin")
+@limiter.limit("1/hour")  # Stark limitiert
+async def create_admin_account(request: Request, data: AdminCreateRequest, db: Session = Depends(get_db)):
+    """Erstelle Admin-Account - Nur mit Secret möglich"""
+    
+    # Security: Secret erforderlich (wird nicht in der UI gezeigt)
+    ADMIN_SECRET = os.environ.get('ADMIN_SECRET', 'WL-Admin-2026-Secret!')
+    
+    if data.secret != ADMIN_SECRET:
+        logger.warning(f"Admin-Account-Erstellung mit falschem Secret versucht")
+        raise HTTPException(status_code=403, detail="Nicht autorisiert")
+    
+    # Nur admin@welcome-link.de erlaubt
     if data.email != "admin@welcome-link.de":
         raise HTTPException(status_code=400, detail="Nur admin@welcome-link.de erlaubt")
 
@@ -898,7 +911,7 @@ async def create_admin_account(request: Request, data: UserLogin, db: Session = 
 
     return {
         "success": True,
-        "message": "Admin-Account erstellt. Sie können sich jetzt unter /admin/login einloggen."
+        "message": "Admin-Account erstellt."
     }
 
 # ============ PASSWORD RESET ============
