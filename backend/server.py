@@ -822,6 +822,85 @@ def get_me(user: DBUser = Depends(get_current_user)):
         is_demo=user.is_demo
     )
 
+# ============ ADMIN LOGIN ============
+@api_router.post("/admin/login", response_model=AuthResponse)
+@limiter.limit("5/minute")
+async def admin_login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
+    """Admin Login - Nur für Administratoren"""
+    try:
+        # Finde Benutzer (normalisiere E-Mail)
+        user = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
+
+        if not user:
+            logger.warning(f"Admin-Login fehlgeschlagen: Benutzer nicht gefunden - {data.email}")
+            raise HTTPException(status_code=401, detail="Zugriff verweigert")
+
+        # Überprüfe Passwort
+        if not verify_password(data.password, user.password_hash):
+            logger.warning(f"Admin-Login fehlgeschlagen: Falsches Passwort - {data.email}")
+            raise HTTPException(status_code=401, detail="Zugriff verweigert")
+
+        # Überprüfe Admin-Status (erlaube demo@welcome-link.de als Admin)
+        is_admin = user.email == "demo@welcome-link.de" or user.email == "admin@welcome-link.de" or getattr(user, 'is_admin', False)
+
+        if not is_admin:
+            logger.warning(f"Admin-Login fehlgeschlagen: Keine Admin-Berechtigung - {data.email}")
+            raise HTTPException(status_code=403, detail="Keine Admin-Berechtigung")
+
+        # Erstelle Token
+        token = create_token(user.id, user.email)
+        logger.info(f"✓ Admin eingeloggt: {data.email}")
+
+        return AuthResponse(
+            token=token,
+            user=User(
+                id=user.id,
+                email=user.email,
+                name=user.name,
+                is_demo=user.is_demo
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Fehler bei Admin-Login: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Server-Fehler: {str(e)[:50]}")
+
+@api_router.post("/admin/create-admin")
+@limiter.limit("1/minute")
+async def create_admin_account(request: Request, data: UserLogin, db: Session = Depends(get_db)):
+    """Erstelle Admin-Account (nur in Development oder mit Secret)"""
+    # Security: Nur erlaubt mit speziellen Credentials oder in Development
+    admin_secret = os.environ.get('ADMIN_SECRET', 'create-admin-2026')
+
+    if data.email != "admin@welcome-link.de":
+        raise HTTPException(status_code=400, detail="Nur admin@welcome-link.de erlaubt")
+
+    # Prüfe ob bereits existiert
+    existing = db.query(DBUser).filter(DBUser.email == "admin@welcome-link.de").first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Admin-Account existiert bereits")
+
+    # Erstelle Admin
+    admin_user = DBUser(
+        id=str(uuid.uuid4()),
+        email="admin@welcome-link.de",
+        name="Administrator",
+        password_hash=hash_password(data.password),
+        is_demo=False,
+        created_at=datetime.now(timezone.utc)
+    )
+
+    db.add(admin_user)
+    db.commit()
+
+    logger.info(f"✓ Admin-Account erstellt: admin@welcome-link.de")
+
+    return {
+        "success": True,
+        "message": "Admin-Account erstellt. Sie können sich jetzt unter /admin/login einloggen."
+    }
+
 # ============ PASSWORD RESET ============
 class PasswordResetRequest(BaseModel):
     email: EmailStr
