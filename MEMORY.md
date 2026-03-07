@@ -1,6 +1,6 @@
 # MEMORY.md - Langzeit-Erinnerungen
 
-## Projekt: Welcome-Link MVP (Stand: 07.03.2026 - 01:15)
+## Projekt: Welcome-Link MVP (Stand: 07.03.2026 - 06:30)
 
 ### 🎉 PRODUCTION READY!
 
@@ -148,22 +148,35 @@ Component tests
 
 ---
 
-## WICHTIG: Morgen früh (07.03.2026)
+## Backend Commits (07.03.2026)
 
-### Priorität 1 - SMTP Testing
-- [ ] SMTP mit echtem Server testen
-- [ ] Email Versand verifizieren
-- [ ] HTML Rendering prüfen
+### v2.7.2 - Security & Cron Improvements
+```
+feat: Improve Stripe webhook security and activate real booking queries
+- Stripe webhook signature verification (security)
+- Real booking queries for cron jobs activated
+- STRIPE_WEBHOOK_SECRET environment variable added
+```
 
-### Priorität 2 - Payment Testing
-- [ ] PayPal Webhook testen
-- [ ] Stripe Webhook testen
-- [ ] Payment Receipt Email
+## Test-Ergebnisse (07.03.2026)
 
-### Priorität 3 - Cron Jobs
-- [ ] Cron Job Schedule einrichten
-- [ ] Booking Reminder testen
-- [ ] Guest Welcome testen
+### ✅ Funktional
+| Test | Status |
+|------|--------|
+| Login API | ✅ |
+| Password Reset Request | ✅ |
+| Cron: Booking Reminders | ✅ |
+| Cron: Guest Welcome | ✅ |
+| Cron: Checkout Followup | ✅ |
+| PayPal Webhook | ✅ |
+| Stripe Webhook | ✅ |
+
+### ❌ Benötigt Render-Zugang
+| Issue | Status |
+|-------|--------|
+| SMTP_PASSWORD nicht gesetzt | ❌ Braucht Render Secrets |
+| ENVIRONMENT = development | ❌ Sollte production sein |
+| STRIPE_WEBHOOK_SECRET | ❌ Neu hinzugefügt |
 
 ---
 

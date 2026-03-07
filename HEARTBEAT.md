@@ -1,8 +1,17 @@
 # Heartbeat Task List
 
-## 🎉 PRODUCTION READY! (02:11 Uhr)
+## 🎉 PRODUCTION READY! (07.03.2026 - 08:45)
 
-### ✅ API v2.7.1 - Cron Jobs + Scripts!
+### ✅ Frontend Bug Fixes
+- Guestview property.name Anzeige gefixt (API Response Array-Struktur)
+- Impressum Platzhalter-Texte ersetzt mit Demo-Daten
+
+### 🔧 Backend Improvements (v2.7.2)
+- Stripe Webhook Signatur-Verifikation implementiert
+- Cron Jobs mit echten Booking Queries aktiviert
+- STRIPE_WEBHOOK_SECRET Environment Variable hinzugefügt
+
+### ✅ API v2.7.2 - Security & Cron Improvements!
 - ✅ Email Integration (SMTP)
 - ✅ Password Reset API + Frontend
 - ✅ 6 Email Templates
@@ -65,6 +74,11 @@
 - "Passwort vergessen?" Link im Login
 
 ## Nächste Schritte
-1. SMTP in Production testen
-2. Payment Webhooks mit echten Payment Providers testen
-3. Performance Monitoring
+1. ⏳ Render Secrets setzen (SMTP, ENVIRONMENT, STRIPE_WEBHOOK_SECRET) - Oleg arbeitet daran
+2. SMTP in Production testen
+3. Payment Webhooks mit echten Payment Providers testen
+4. Performance Monitoring
+
+## Blockiert
+- SMTP/Email Versand braucht Render Secrets (kein Zugriff)
+- Production Environment Variable fehlt
