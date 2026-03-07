@@ -16,22 +16,32 @@
 - Passwort: (muss einmalig via API erstellt werden)
 - ✅ Volle Admin-Rechte
 
-### 🔒 Admin-Account erstellen (einmalig)
+### 🔒 Admin-Account
+✅ **Erstellt!** Admin-Account ist aktiv.
 
-Admin-Account kann **nur** via API mit Secret erstellt werden:
+**Admin-Login:** https://www.welcome-link.de/admin/login
+**Credentials:** admin@welcome-link.de / AdminOleg2026!
 
-```bash
-curl -X POST https://api.welcome-link.de/api/admin/create-admin \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@welcome-link.de","password":"DEIN_PASSWORT","secret":"WL-Admin-2026-Secret!"}'
-```
+### ✅ SMTP Getestet (07.03.2026 - 16:57)
+- ✅ Password Reset E-Mail funktioniert
+- ✅ Magic Link E-Mail funktioniert
+- ✅ Registration Welcome E-Mail funktioniert
+- ✅ Cron Jobs laufen (Booking Reminders, Guest Welcome, Checkout Followup)
 
-⚠️ **Wichtig:** Nach der Erstellung kann niemand sonst Admin werden!
+### ✅ Admin Panel (07.03.2026 - 19:20)
+- ✅ Admin-Account erstellt
+- ✅ Admin-Login `/admin/login` - funktioniert
+- ✅ Admin-Panel `/admin/panel` - alle Tabs funktionieren
+  - Übersicht: Stats, Top Properties, Revenue
+  - Benutzer: 5 User mit Plan/Status
+  - System: API/DB/SMTP/Payments Status
+  - Verbesserungen: 5 priorisierte Tasks
+- ✅ Health Data korrigiert
+- ✅ Verbesserungen-Liste aktualisiert (SMTP ✅ erledigt)
 
-### ⏳ Noch offen (braucht Render-Zugang)
-- SMTP_PASSWORD setzen
-- ENVIRONMENT=production
-- STRIPE_WEBHOOK_SECRET
+### ⏳ Noch offen
+- ENVIRONMENT=production setzen (derzeit "development")
+- STRIPE_WEBHOOK_SECRET für Payment-Verifikation
 
 ### ✅ API v2.7.2 - Security & Cron Improvements!
 - ✅ Email Integration (SMTP)
