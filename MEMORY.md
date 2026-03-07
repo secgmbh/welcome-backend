@@ -1,11 +1,11 @@
 # MEMORY.md - Langzeit-Erinnerungen
 
-## Projekt: Welcome-Link MVP (Stand: 07.03.2026 - 01:00)
+## Projekt: Welcome-Link MVP (Stand: 07.03.2026 - 01:15)
 
 ### 🎉 PRODUCTION READY!
 
 **Live URLs:**
-- **API:** https://api.welcome-link.de (v2.6.5)
+- **API:** https://api.welcome-link.de (v2.7.1)
 - **Frontend:** https://www.welcome-link.de
 - **Dashboard:** https://www.welcome-link.de/dashboard
 - **Guestview:** https://www.welcome-link.de/guestview/QEJHEXP1QF
@@ -17,7 +17,7 @@
 
 ---
 
-## ✅ Phasen 1-35 COMPLETE
+## ✅ Phasen 1-36 COMPLETE
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -29,103 +29,79 @@
 | 32 | Bug Fixes & Optimierung | ✅ |
 | 33 | Email Integration + Password Reset | ✅ |
 | 34 | CI/CD Pipeline | ✅ |
-| 35 | Email Templates + Booking Integration | ✅ |
+| 35 | Email Templates + Webhooks | ✅ |
+| 36 | Cron Job Endpoints | ✅ |
 
 ---
 
-## Session-Fortschritt (06./07.03.2026)
+## API Endpoints (60+)
 
-### Backend (v2.6.5)
+### Auth (7)
 ```
-Email Templates:
-- send_email() - SMTP Basis-Funktion
-- send_magic_link_email() - Magic Link
-- send_welcome_email() - Registrierung
-- send_booking_confirmation_email() - Buchung
-- send_payment_receipt_email() - Zahlung
-- send_guest_welcome_email() - Gäste-Willkommen
-
-Integration:
-- create_booking() - Automatische Email bei Buchung
-
-Endpoints: 57 Total
-Tests: 50 passing, 9 skipped
+POST /api/auth/register
+POST /api/auth/login
+GET  /api/auth/me
+POST /api/auth/magic-link
+POST /api/auth/password-reset/request
+POST /api/auth/password-reset/confirm
+POST /api/auth/demo/init
 ```
 
-### Frontend
+### Properties (6)
 ```
-Neue Seiten:
-- /reset-password ✅
-- /auth/reset-password?token=xxx ✅
-- "Passwort vergessen?" Link ✅
-
-Tests: 30 passing
-Build: main.8afa497e.js
-```
-
-### CI/CD
-```
-GitHub Actions Workflow:
-- backend-tests: pytest tests/ -v
-- frontend-tests: npm test
-- lint: npm run lint
-- build: npm run build
-- deploy: Notification
+GET  /api/properties
+POST /api/properties
+GET  /api/properties/{id}
+PUT  /api/properties/{id}
+DELETE /api/properties/{id}
+GET  /api/properties/{id}/extras
 ```
 
----
-
-## API Response Times (Production)
-
+### Bookings (4)
 ```
-/api/auth/login: 79ms ✅
-/api/properties: 60ms ✅
-/api/guestview: 103ms ✅
-/api/bookings: 60ms ✅
-/api/stats/global: 45ms ✅
+GET  /api/bookings
+POST /api/bookings
+GET  /api/bookings/{id}
+GET  /api/bookings/feed
+```
+
+### Guestview (2)
+```
+GET  /api/guestview/{token}
+POST /api/guestview-token
+```
+
+### Webhooks (2)
+```
+POST /api/webhooks/paypal
+POST /api/webhooks/stripe
+```
+
+### Cron Jobs (3)
+```
+POST /api/cron/booking-reminders
+POST /api/cron/guest-welcome
+POST /api/cron/checkout-followup
 ```
 
 ---
 
-## Email Templates (Complete)
+## Email Templates (6)
 
-### 1. Magic Link Email
-- Token-basierter Login
-- 15 Minuten gültig
-- HTML + Text Format
-
-### 2. Welcome Email
-- Nach Registrierung
-- Dashboard Link
-- Branding
-
-### 3. Password Reset Email
-- Passwort vergessen
-- Token-basierter Reset
-- 15 Minuten gültig
-
-### 4. Booking Confirmation Email
-- Buchungsbestätigung
-- Check-in/out Details
-- Gästeanzahl, Gesamtbetrag
-- Automatisch bei create_booking()
-
-### 5. Payment Receipt Email
-- Zahlungsbestätigung
-- Transaktions-ID
-- Zahlungsart, Betrag
-
-### 6. Guest Welcome Email
-- Willkommensgruß
-- WLAN-Daten
-- Gästemappe Link
-- Hausregeln, Umgebung
+| Template | Funktion | Trigger |
+|----------|----------|---------|
+| `send_magic_link_email()` | Magic Link Login | Auth Request |
+| `send_welcome_email()` | Registrierung | Nach Registrierung |
+| `send_password_reset_email()` | Passwort Reset | Request |
+| `send_booking_confirmation_email()` | Buchungsbestätigung | create_booking() |
+| `send_payment_receipt_email()` | Zahlungsbestätigung | Webhook |
+| `send_guest_welcome_email()` | Gäste-Willkommen | Cron Job |
 
 ---
 
-## Git Commits (Diese Session)
+## Git Commits (06./07.03.2026)
 
-### Backend
+### Backend Commits
 ```
 v2.6.0: feat: Add SMTP email integration
 v2.6.1: feat: Add password reset functionality
@@ -133,19 +109,61 @@ v2.6.2: feat: Add booking confirmation email template
 v2.6.3: feat: Add payment receipt email template
 v2.6.4: feat: Add guest welcome email template
 v2.6.5: feat: Integrate booking confirmation email in create_booking
+v2.7.0: feat: Add PayPal and Stripe webhook handlers
+v2.7.1: feat: Add cron job endpoints for booking reminders
 test: Add password reset validation tests
 test: Add E2E tests for API endpoints
 test: Fix E2E tests - all 50 tests passing
 ci: Add GitHub Actions CI/CD pipeline
 ```
 
-### Frontend
+### Frontend Commits
 ```
 fix: Remove unused imports in BookingCalendar
 fix: Guestview endpoint - use /api/guestview/{token}
+fix: Ensure password reset link shows in login
 feat: Add password reset pages
 feat: Update LoginPage with "Passwort vergessen?" link
 ```
+
+---
+
+## Test Status
+
+### Backend Tests (50 passing)
+```
+tests/test_api.py - API endpoints
+tests/test_security.py - Security headers
+tests/test_password_reset.py - Password reset validation
+tests/test_e2e.py - E2E flow tests
+tests/test_load.py - Load tests
+```
+
+### Frontend Tests (30 passing)
+```
+Login/Register tests
+Dashboard tests
+Component tests
+```
+
+---
+
+## WICHTIG: Morgen früh (07.03.2026)
+
+### Priorität 1 - SMTP Testing
+- [ ] SMTP mit echtem Server testen
+- [ ] Email Versand verifizieren
+- [ ] HTML Rendering prüfen
+
+### Priorität 2 - Payment Testing
+- [ ] PayPal Webhook testen
+- [ ] Stripe Webhook testen
+- [ ] Payment Receipt Email
+
+### Priorität 3 - Cron Jobs
+- [ ] Cron Job Schedule einrichten
+- [ ] Booking Reminder testen
+- [ ] Guest Welcome testen
 
 ---
 
@@ -161,77 +179,44 @@ JWT Auth: ✅
 SMTP: ✅ (Configured)
 Sentry: ✅ (Ready)
 CI/CD: ✅ (GitHub Actions)
+Webhooks: ✅ (PayPal, Stripe)
 ```
 
 ---
 
-## Test Coverage
+## Performance
 
-### Backend (50 passing)
 ```
-tests/test_api.py: API endpoints
-tests/test_security.py: Security headers
-tests/test_password_reset.py: Password reset validation
-tests/test_e2e.py: E2E flow tests
-tests/test_load.py: Load tests
-```
+API Response Times:
+/api/auth/login: 79ms
+/api/properties: 60ms
+/api/guestview: 103ms
+/api/bookings: 60ms
+/api/stats/global: 45ms
 
-### Frontend (30 passing)
-```
-Login/Register tests
-Dashboard tests
-Component tests
+Frontend Bundle: ~450KB
 ```
 
 ---
 
-## Wichtige Dateien
+## Environment Variables
 
+### Backend (.env)
 ```
-Backend:
-- server.py (Haupt-API, 2400+ Zeilen)
-- tests/test_e2e.py (NEU)
-- tests/test_password_reset.py (NEU)
-- .github/workflows/ci.yml (NEU)
-
-Frontend:
-- src/features/auth/ResetPasswordPage.jsx
-- src/features/auth/ConfirmResetPasswordPage.jsx
-- src/features/auth/LoginPage.jsx (aktualisiert)
-- src/App.js (Routen hinzugefügt)
+SECRET_KEY=xxx (min 32 Zeichen)
+DATABASE_URL=sqlite:///./app.db
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=xxx
+SMTP_PASSWORD=xxx
+SMTP_FROM=noreply@welcome-link.de
+SENTRY_DSN=xxx (optional)
 ```
 
 ---
 
-## TODO für Morgen (07.03.2026)
+## Kontakte
 
-### Priorität 1 - Email Testing
-- [ ] SMTP Versand verifizieren (mit echtem SMTP-Server)
-- [ ] Password Reset E2E testen
-- [ ] Magic Link Flow testen
-- [ ] Booking Email bei echter Buchung testen
-
-### Priorität 2 - Payment Integration
-- [ ] PayPal Webhook handler
-- [ ] Payment Receipt Email bei Zahlung
-- [ ] Stripe Integration (optional)
-
-### Priorität 3 - Performance
-- [ ] Bundle Size optimieren
-- [ ] Lighthouse Score prüfen
-- [ ] Lazy Loading verbessern
-
-### Priorität 4 - Features
-- [ ] Guest Welcome Email bei Check-in
-- [ ] Booking Reminder Email (1 Tag vorher)
-- [ ] Checkout Email (nach Check-out)
-
----
-
-## Nächste Schritte
-
-1. **SMTP in Production testen** (echte E-Mails)
-2. **E2E Testing erweitern** (Playwright/Cypress)
-3. **Payment Webhooks** (PayPal, Stripe)
-4. **Performance Monitoring** (Sentry Dashboard)
-5. **User Documentation** (README.md erweitern)
+- **GitHub:** secgmbh/welcome-backend, secgmbh/welcome-frontend
+- **Render:** welcome-link-backend, welcome-frontend
+- **Support:** support@welcome-link.de
