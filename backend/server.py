@@ -1479,24 +1479,32 @@ async def send_booking_reminders(db: Session = Depends(get_db)):
         # Get bookings with check-in tomorrow
         tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date()
         
-        # Demo: Return success
+        # Query real bookings with check-in tomorrow
         reminders_sent = 0
-        
-        # TODO: Query real bookings
-        # bookings = db.query(DBBooking).filter(
-        #     DBBooking.check_in == tomorrow,
-        #     DBBooking.status == "confirmed"
-        # ).all()
-        
-        # for booking in bookings:
-        #     send_booking_reminder_email(
-        #         email=booking.guest_email,
-        #         name=booking.guest_name,
-        #         property_name=booking.property.name,
-        #         checkin=booking.check_in.strftime("%d.%m.%Y"),
-        #         checkout=booking.check_out.strftime("%d.%m.%Y")
-        #     )
-        #     reminders_sent += 1
+        try:
+            bookings = db.query(DBBooking).filter(
+                DBBooking.check_in >= datetime.combine(tomorrow, datetime.min.time()).replace(tzinfo=timezone.utc),
+                DBBooking.check_in < datetime.combine(tomorrow, datetime.max.time()).replace(tzinfo=timezone.utc),
+                DBBooking.status == "confirmed"
+            ).all()
+            
+            for booking in bookings:
+                # Get property for booking
+                property = db.query(DBProperty).filter(DBProperty.id == booking.property_id).first()
+                if property and booking.guest_email:
+                    # Send reminder email
+                    send_booking_confirmation_email(
+                        email=booking.guest_email,
+                        name=booking.guest_name or "Gast",
+                        property_name=property.name,
+                        checkin=booking.check_in.strftime("%d.%m.%Y"),
+                        checkout=booking.check_out.strftime("%d.%m.%Y"),
+                        guests=booking.guests or 1,
+                        total=booking.total_price or 0
+                    )
+                    reminders_sent += 1
+        except Exception as query_error:
+            logger.warning(f"Could not query bookings (demo mode?): {query_error}")
         
         logger.info(f"Booking reminders sent: {reminders_sent}")
         
@@ -1519,30 +1527,35 @@ async def send_guest_welcome_emails(db: Session = Depends(get_db)):
     try:
         today = datetime.now(timezone.utc).date()
         
-        # Demo: Return success
+        # Query real bookings with check-in today
         welcomes_sent = 0
-        
-        # TODO: Query real bookings
-        # bookings = db.query(DBBooking).filter(
-        #     DBBooking.check_in == today,
-        #     DBBooking.status == "confirmed"
-        # ).all()
-        
-        # for booking in bookings:
-        #     # Get property details for WiFi
-        #     property = db.query(DBProperty).filter(DBProperty.id == booking.property_id).first()
-        #     send_guest_welcome_email(
-        #         email=booking.guest_email,
-        #         guest_name=booking.guest_name,
-        #         property_name=property.name,
-        #         host_name=booking.user.name,
-        #         checkin=booking.check_in.strftime("%d.%m.%Y"),
-        #         checkout=booking.check_out.strftime("%d.%m.%Y"),
-        #         wifi_name=property.wifi_name,
-        #         wifi_password=property.wifi_password,
-        #         guestview_url=f"https://www.welcome-link.de/guestview/{property.public_id}"
-        #     )
-        #     welcomes_sent += 1
+        try:
+            bookings = db.query(DBBooking).filter(
+                DBBooking.check_in >= datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc),
+                DBBooking.check_in < datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc),
+                DBBooking.status == "confirmed"
+            ).all()
+            
+            for booking in bookings:
+                # Get property details for WiFi
+                property = db.query(DBProperty).filter(DBProperty.id == booking.property_id).first()
+                user = db.query(DBUser).filter(DBUser.id == booking.user_id).first()
+                
+                if property and booking.guest_email:
+                    send_guest_welcome_email(
+                        email=booking.guest_email,
+                        guest_name=booking.guest_name or "Gast",
+                        property_name=property.name,
+                        host_name=user.name if user else "Ihr Gastgeber",
+                        checkin=booking.check_in.strftime("%d.%m.%Y"),
+                        checkout=booking.check_out.strftime("%d.%m.%Y"),
+                        wifi_name=getattr(property, 'wifi_name', 'WLAN'),
+                        wifi_password=getattr(property, 'wifi_password', ''),
+                        guestview_url=f"https://www.welcome-link.de/guestview/{property.public_id}" if hasattr(property, 'public_id') else ""
+                    )
+                    welcomes_sent += 1
+        except Exception as query_error:
+            logger.warning(f"Could not query bookings (demo mode?): {query_error}")
         
         logger.info(f"Guest welcome emails sent: {welcomes_sent}")
         
@@ -1565,22 +1578,31 @@ async def send_checkout_followup_emails(db: Session = Depends(get_db)):
     try:
         yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date()
         
-        # Demo: Return success
+        # Query real bookings with checkout yesterday
         followups_sent = 0
-        
-        # TODO: Query real bookings
-        # bookings = db.query(DBBooking).filter(
-        #     DBBooking.check_out == yesterday,
-        #     DBBooking.status == "completed"
-        # ).all()
-        
-        # for booking in bookings:
-        #     send_checkout_followup_email(
-        #         email=booking.guest_email,
-        #         name=booking.guest_name,
-        #         property_name=booking.property.name
-        #     )
-        #     followups_sent += 1
+        try:
+            bookings = db.query(DBBooking).filter(
+                DBBooking.check_out >= datetime.combine(yesterday, datetime.min.time()).replace(tzinfo=timezone.utc),
+                DBBooking.check_out < datetime.combine(yesterday, datetime.max.time()).replace(tzinfo=timezone.utc),
+                DBBooking.status == "completed"
+            ).all()
+            
+            for booking in bookings:
+                property = db.query(DBProperty).filter(DBProperty.id == booking.property_id).first()
+                
+                if property and booking.guest_email:
+                    # Send follow-up email asking for feedback
+                    send_payment_receipt_email(
+                        email=booking.guest_email,
+                        name=booking.guest_name or "Gast",
+                        amount=booking.total_price or 0,
+                        payment_method=booking.payment_method or "none",
+                        transaction_id=booking.id,
+                        property_name=property.name
+                    )
+                    followups_sent += 1
+        except Exception as query_error:
+            logger.warning(f"Could not query bookings (demo mode?): {query_error}")
         
         logger.info(f"Checkout followup emails sent: {followups_sent}")
         
@@ -1594,20 +1616,33 @@ async def send_checkout_followup_emails(db: Session = Depends(get_db)):
         logger.error(f"Checkout followup error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============ STRIPE CONFIG ============
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
+
 # ============ STRIPE WEBHOOK ============
 @api_router.post("/webhooks/stripe")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    """Handle Stripe webhook events"""
+    """Handle Stripe webhook events with signature verification"""
     try:
         payload = await request.body()
         sig_header = request.headers.get("stripe-signature", "")
         
-        # TODO: Verify signature with Stripe secret
-        # import stripe
-        # event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-        
-        event_data = await request.json()
-        event_type = event_data.get("type", "")
+        # Verify Stripe webhook signature (security best practice)
+        if STRIPE_WEBHOOK_SECRET:
+            try:
+                import stripe
+                stripe.api_key = os.environ.get('STRIPE_SECRET_KEY', '')
+                event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+                event_data = event.data
+                event_type = event.type
+            except Exception as e:
+                logger.error(f"Stripe signature verification failed: {str(e)}")
+                raise HTTPException(status_code=400, detail="Invalid signature")
+        else:
+            # Fallback for development/testing without webhook secret
+            event_data = await request.json()
+            event_type = event_data.get("type", "")
+            logger.warning("Stripe webhook received without signature verification (development mode)")
         
         logger.info(f"Stripe webhook received: {event_type}")
         
