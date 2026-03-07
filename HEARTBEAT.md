@@ -1,6 +1,29 @@
 # Heartbeat Task List
 
-## 🎉 PRODUCTION READY! (07.03.2026 - 09:15)
+## 🎉 PRODUCTION READY! (07.03.2026 - 09:30)
+
+### 🔐 Zugangsdaten
+
+**Demo-Account (für Kunden):**
+- URL: https://www.welcome-link.de/login
+- E-Mail: demo@welcome-link.de
+- Passwort: Demo123!
+- ❌ KEINE Admin-Rechte
+
+**Admin-Account (nur für Oleg):**
+- URL: https://www.welcome-link.de/admin/login
+- E-Mail: admin@welcome-link.de
+- Passwort: (erst bei erstem Login selbst festlegen)
+- ✅ Volle Admin-Rechte
+
+### 🆕 Admin Panel (v2.7.3)
+- **Route:** `/admin/login` → Separater Admin-Login
+- **Route:** `/admin/panel` → Admin Dashboard
+- **Features:**
+  - Übersicht: Stats, Top Properties, Neuanmeldungen, Revenue by Plan
+  - Benutzerverwaltung: Alle Benutzer mit Plan/Status/Actions
+  - System Health: API, Database, SMTP, Payments Status
+  - Verbesserungen: Priorisierte Liste mit Setup-Schritten
 
 ### ✅ Frontend Bug Fixes
 - Guestview property.name Anzeige gefixt (API Response Array-Struktur)
@@ -9,21 +32,7 @@
 ### 🔧 Backend Improvements (v2.7.2)
 - Stripe Webhook Signatur-Verifikation implementiert
 - Cron Jobs mit echten Booking Queries aktiviert
-- STRIPE_WEBHOOK_SECRET Environment Variable hinzugefügt
-
-### 🆕 Admin Panel (v2.7.3)
-- **Neue Route:** `/admin/panel` - Comprehensive Admin Dashboard
-- **Features:**
-  - Übersicht: Stats, Top Properties, Neuanmeldungen, Revenue by Plan
-  - Benutzerverwaltung: Alle Benutzer mit Plan/Status/Actions
-  - System Health: API, Database, SMTP, Payments Status
-  - Verbesserungen: Priorisierte Liste mit Setup-Schritten
-- **Admin Login:** `POST /admin/login` - Admin-only Auth
-- **Admin Account Creation:** `POST /admin/create-admin`
-
-### Demo Credentials
-- **User:** demo@welcome-link.de / Demo123!
-- **Admin:** demo@welcome-link.de (hat Admin-Rechte)
+- Admin-only Login Endpoint
 
 ### ⏳ Noch offen (braucht Render-Zugang)
 - SMTP_PASSWORD setzen
