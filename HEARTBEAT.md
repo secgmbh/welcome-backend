@@ -1,13 +1,15 @@
 # Heartbeat Task List
 
-## 🎉 PRODUCTION READY! (01:00 Uhr)
+## 🎉 PRODUCTION READY! (02:11 Uhr)
 
-### ✅ API v2.7.0 - Webhook Integration!
+### ✅ API v2.7.1 - Cron Jobs + Scripts!
 - ✅ Email Integration (SMTP)
 - ✅ Password Reset API + Frontend
 - ✅ 6 Email Templates
 - ✅ CI/CD Pipeline (GitHub Actions)
 - ✅ PayPal & Stripe Webhooks
+- ✅ Cron Job Endpoints
+- ✅ Backup & Health Check Scripts
 
 ### Production URLs
 - **API:** https://api.welcome-link.de (v2.7.0)
@@ -20,7 +22,7 @@
 - **Email:** demo@welcome-link.de
 - **Password:** Demo123!
 
-## ✅ Phase 28-35 COMPLETE
+## ✅ Phase 28-36 COMPLETE
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -32,8 +34,9 @@
 | 33 | Email Integration + Password Reset | ✅ |
 | 34 | CI/CD Pipeline | ✅ |
 | 35 | Email Templates + Webhooks | ✅ |
+| 36 | Cron Jobs + Scripts + Docs | ✅ |
 
-## Neue Features (v2.6.x - v2.7.0)
+## Neue Features (v2.6.x - v2.7.1)
 
 ### Email Templates
 - `send_email()` - SMTP Basis-Funktion
@@ -46,6 +49,15 @@
 ### Webhooks
 - `POST /api/webhooks/paypal` - PayPal Events
 - `POST /api/webhooks/stripe` - Stripe Events
+
+### Cron Jobs
+- `POST /api/cron/booking-reminders` - Buchungs-Erinnerungen
+- `POST /api/cron/guest-welcome` - Gäste-Willkommens-Emails
+- `POST /api/cron/checkout-followup` - Check-out Follow-ups
+
+### Scripts
+- `scripts/backup.sh` - Tägliche Datenbank-Backups
+- `scripts/healthcheck.sh` - Health Monitoring
 
 ### Frontend
 - `/reset-password` - Passwort vergessen
