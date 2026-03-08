@@ -1548,10 +1548,21 @@ async def paypal_webhook(request: Request, db: Session = Depends(get_db)):
             amount = float(resource.get("amount", {}).get("value", 0))
             custom_id = resource.get("custom_id", "")
             
-            logger.info(f"PayPal payment completed: {transaction_id}, Amount: €{amount}")
+            # Extract customer info from custom_id or payload
+            # Format: "booking_id:user_email:user_name:property_name" or use default
+            customer_info = custom_id.split(":") if custom_id else []
+            email = customer_info[1] if len(customer_info) > 1 else "guest@welcome-link.de"
+            name = customer_info[2] if len(customer_info) > 2 else "Gast"
+            property_name = customer_info[3] if len(customer_info) > 3 else "Ihre Unterkunft"
             
-            # TODO: Update booking status and send confirmation email
-            # send_payment_receipt_email(email, name, amount, "PayPal", transaction_id, property_name)
+            logger.info(f"PayPal payment completed: {transaction_id}, Amount: €{amount}, Customer: {email}")
+            
+            # Send payment receipt email
+            try:
+                send_payment_receipt_email(email, name, amount, "PayPal", transaction_id, property_name)
+                logger.info(f"Payment receipt email sent to {email}")
+            except Exception as e:
+                logger.error(f"Failed to send payment receipt email: {e}")
             
         elif event_type == "PAYMENT.CAPTURE.DENIED":
             logger.warning(f"PayPal payment denied: {payload}")
@@ -1752,10 +1763,20 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             transaction_id = payment_intent.get("id", "")
             amount = payment_intent.get("amount", 0) / 100  # Convert cents to euros
             
-            logger.info(f"Stripe payment succeeded: {transaction_id}, Amount: €{amount}")
+            # Extract customer info from payment_intent metadata
+            metadata = payment_intent.get("metadata", {})
+            email = metadata.get("email", "guest@welcome-link.de")
+            name = metadata.get("name", "Gast")
+            property_name = metadata.get("property_name", "Ihre Unterkunft")
             
-            # TODO: Update booking status and send confirmation email
-            # send_payment_receipt_email(email, name, amount, "Stripe", transaction_id, property_name)
+            logger.info(f"Stripe payment succeeded: {transaction_id}, Amount: €{amount}, Customer: {email}")
+            
+            # Send payment receipt email
+            try:
+                send_payment_receipt_email(email, name, amount, "Stripe", transaction_id, property_name)
+                logger.info(f"Payment receipt email sent to {email}")
+            except Exception as e:
+                logger.error(f"Failed to send payment receipt email: {e}")
             
         elif event_type == "payment_intent.payment_failed":
             logger.warning(f"Stripe payment failed: {event_data}")
