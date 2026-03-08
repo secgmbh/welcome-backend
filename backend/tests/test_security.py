@@ -9,7 +9,7 @@ Run: curl -sI https://api.welcome-link.de/api/ | grep -E "X-Frame|X-Content|CSP"
 import pytest
 from fastapi.testclient import TestClient
 import sys
-sys.path.insert(0, '..')
+import os; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import app
 
 client = TestClient(app)
