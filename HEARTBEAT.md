@@ -28,16 +28,15 @@
 - ✅ Registration Welcome E-Mail funktioniert
 - ✅ Cron Jobs laufen (Booking Reminders, Guest Welcome, Checkout Followup)
 
-### ✅ Admin Panel (07.03.2026 - 21:30)
-- ✅ Admin-Account erstellt
-- ✅ Admin-Login `/admin/login` - funktioniert
-- ✅ Admin-Panel `/admin/panel` - alle Tabs funktionieren
-  - Übersicht: Stats, Top Properties, Revenue
-  - Benutzer: 5 User mit Plan/Status
-  - System: API/DB/SMTP/Payments Status
-  - Verbesserungen: 5 priorisierte Tasks
-- ✅ Health Data korrigiert (Database: healthy, SMTP: configured)
-- ✅ Verbesserungen-Liste aktualisiert (SMTP ✅ erledigt)
+### ✅ Admin Panel (08.03.2026 - komplett neu gestaltet)
+- **Neue Tabs:** Übersicht, Benutzer, Properties, Buchungen, System, Aktionen
+- **Übersicht:** Real-time Stats mit Trends, Letzte Aktivitäten, Top Properties
+- **Benutzer:** Verwaltung mit Plan/Status, Export-Funktion
+- **Properties:** Übersicht mit QR-Scans, Buchungen, Quick-Copy Links
+- **Buchungen:** Tabelle mit Gast-Details, Export CSV
+- **System:** API/DB/SMTP Status, Quick Links
+- **Aktionen:** E-Mail Test, Cron Job Trigger, Daten Export, Cache Leeren
+- **Toast Notifications** für Admin-Aktionen
 
 ### ✅ Frontend Tests (07.03.2026 - 21:30)
 | Seite | Status | Anmerkungen |
