@@ -23,6 +23,11 @@ FastAPI-based REST API for the Welcome Link property management platform.
 - Rate limiting on auth endpoints
 - Security headers (CSP, X-Frame-Options, etc.)
 - Admin panel with full CRUD operations
+- **Performance Monitoring** (v2.7.3):
+  - Request timing middleware (X-Process-Time-Ms header)
+  - Enhanced health check with system metrics
+  - Slow request logging (>500ms)
+  - CPU, memory, disk monitoring via psutil
 
 ## API Endpoints (60+)
 
@@ -56,6 +61,12 @@ FastAPI-based REST API for the Welcome Link property management platform.
 - `POST /api/cron/booking-reminders` - Send booking reminders
 - `POST /api/cron/guest-welcome` - Send guest welcome emails
 - `POST /api/cron/checkout-followup` - Send checkout follow-ups
+
+### Health & Monitoring
+- `GET /api/health` - Health check with system metrics (CPU, memory, disk)
+- `GET /api/stats/global` - Global statistics
+- `GET /api/admin/daily-stats` - Daily statistics for dashboard
+- `GET /api/admin/top-extras` - Top performing extras
 
 ## Getting Started
 
