@@ -1,0 +1,9 @@
+{
+  "lastChecks": {
+    "email": null,
+    "calendar": null,
+    "weather": null,
+    "project_status": 1741678200
+  },
+  "notes": "Project Welcome-Link is production ready. Pending: ENVIRONMENT=production, STRIPE_WEBHOOK_SECRET (needs Oleg's Render access). Agent-browser skill installed 2026-03-11."
+}

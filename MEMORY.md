@@ -1,11 +1,11 @@
 # MEMORY.md - Langzeit-Erinnerungen
 
-## Projekt: Welcome-Link MVP (Stand: 07.03.2026 - 06:30)
+## Projekt: Welcome-Link MVP (Stand: 12.03.2026 - 06:00)
 
 ### 🎉 PRODUCTION READY!
 
 **Live URLs:**
-- **API:** https://api.welcome-link.de (v2.7.1)
+- **API:** https://api.welcome-link.de (v2.7.3)
 - **Frontend:** https://www.welcome-link.de
 - **Dashboard:** https://www.welcome-link.de/dashboard
 - **Guestview:** https://www.welcome-link.de/guestview/QEJHEXP1QF
@@ -148,9 +148,19 @@ Component tests
 
 ---
 
-## Backend Commits (07.03.2026)
+## Backend Commits (12.03.2026)
 
-### v2.7.2 - Security & Cron Improvements
+### v2.7.3 - Performance Monitoring (12.03.2026)
+```
+feat: Add performance monitoring middleware and enhanced health check
+- RequestTimingMiddleware für Request Processing Time
+- Enhanced /health endpoint mit System Metrics
+- X-Process-Time-Ms Header für alle Responses
+- Slow Request Logging (>500ms)
+- Database Health Check mit SQLite Connection Test
+```
+
+### v2.7.2 - Security & Cron Improvements (07.03.2026)
 ```
 feat: Improve Stripe webhook security and activate real booking queries
 - Stripe webhook signature verification (security)

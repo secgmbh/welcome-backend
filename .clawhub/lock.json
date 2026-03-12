@@ -4,6 +4,10 @@
     "frontend-design-3": {
       "version": "0.1.0",
       "installedAt": 1772511426305
+    },
+    "e2e-testing-patterns": {
+      "version": "1.0.0",
+      "installedAt": 1773221461841
     }
   }
 }

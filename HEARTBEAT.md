@@ -69,6 +69,14 @@
 - ✅ Cron Job Endpoints
 - ✅ Backup & Health Check Scripts
 
+### ✅ API v2.7.3 - Performance Monitoring (12.03.2026)
+- ✅ RequestTimingMiddleware - Request Processing Time Tracking
+- ✅ Enhanced Health Check mit System Metrics (CPU, Memory, Disk)
+- ✅ X-Process-Time-Ms Header für alle Responses
+- ✅ Slow Request Logging (>500ms)
+- ✅ Database Health Check mit SQLite Connection Test
+- ✅ psutil Integration für System-Metriken
+
 ### Production URLs
 - **API:** https://api.welcome-link.de (v2.7.0)
 - **Frontend:** https://www.welcome-link.de
