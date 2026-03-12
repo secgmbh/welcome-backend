@@ -23,6 +23,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from slowapi.util import get_remote_address
 from slowapi.util import get_remote_address
+import time
+import psutil
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking
 
 ROOT_DIR = Path(__file__).parent
@@ -445,6 +447,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "camera=(), "
             "payment=()"
         )
+        
+        return response
+
+# ============ REQUEST TIMING MIDDLEWARE ============
+class RequestTimingMiddleware(BaseHTTPMiddleware):
+    """Track request timing for performance monitoring"""
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        response = await call_next(request)
+        process_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+        
+        # Add timing header for debugging
+        response.headers["X-Process-Time-Ms"] = f"{process_time:.2f}"
+        
+        # Log slow requests (>500ms)
+        if process_time > 500:
+            logger.warning(f"⚠️ Slow request: {request.method} {request.url.path} took {process_time:.2f}ms")
         
         return response
 
@@ -1319,6 +1338,9 @@ app.add_middleware(
 
 # Security Headers Middleware (nach CORS)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Request Timing Middleware für Performance Monitoring
+app.add_middleware(RequestTimingMiddleware)
 
 # Configure logging
 if ENVIRONMENT == "production":
@@ -2711,14 +2733,52 @@ def delete_scene(property_id: int, scene_id: str, user: DBUser = Depends(get_cur
 # ============ HEALTH CHECK ============
 @api_router.get("/health")
 def health_check():
-    """Health check endpoint for monitoring"""
+    """Health check endpoint for monitoring with performance metrics"""
+    import psutil
+    
+    # Get system metrics
+    cpu_percent = psutil.cpu_percent(interval=0.1)
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage('/')
+    
+    # Database health check
+    db_healthy = True
+    try:
+        db = next(get_db())
+        db.execute("SELECT 1")
+    except Exception as e:
+        db_healthy = False
+        logger.error(f"Database health check failed: {e}")
+    
     return {
-        "status": "healthy",
+        "status": "healthy" if db_healthy else "degraded",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.4.0",
+        "version": "2.7.2",
+        "environment": ENVIRONMENT,
         "services": {
-            "api": "ok",
-            "database": "ok"
+            "database": {
+                "status": "healthy" if db_healthy else "unhealthy",
+                "type": "sqlite"
+            },
+            "security": {
+                "status": "healthy",
+                "headers": ["X-Frame-Options", "X-Content-Type-Options", "CSP", "HSTS"]
+            },
+            "rate_limiting": {
+                "status": "healthy",
+                "limits": {
+                    "register": "5/minute",
+                    "login": "10/minute",
+                    "magic_link": "3/minute"
+                }
+            }
+        },
+        "performance": {
+            "cpu_percent": round(cpu_percent, 1),
+            "memory_percent": round(memory.percent, 1),
+            "memory_available_mb": round(memory.available / (1024 * 1024), 1),
+            "disk_percent": round(disk.percent, 1),
+            "disk_free_gb": round(disk.free / (1024 * 1024 * 1024), 2)
         }
     }
 
