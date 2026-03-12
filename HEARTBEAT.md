@@ -51,6 +51,21 @@
 | Resources | ✅ | Videos mit "Video folgt" |
 | Admin Panel | ✅ | Alle Tabs funktionieren |
 
+### ✅ E2E Tests (12.03.2026 - 22:16)
+| Test File | Status | Coverage |
+|-----------|--------|----------|
+| auth.spec.ts | ✅ | Login, Demo Login |
+| dashboard.spec.ts | ✅ | Navigation, Tabs |
+| homepage.spec.ts | ✅ | Navigation, CTAs |
+| admin.spec.ts | ✅ | Admin Login, Panel |
+| guestview.spec.ts | ✅ | Guest View |
+| performance.spec.ts | ✅ | Load Time, Core Web Vitals |
+| pricing.spec.ts | ✅ | Pricing Page |
+| features.spec.ts | ✅ | Features, Integrations |
+| checkout.spec.ts | ✅ | Checkout Flow, Guestview |
+| register.spec.ts | ✅ | Registration, Password Reset |
+| error-pages.spec.ts | ✅ | 404, Accessibility |
+
 ### 🐛 Behoben
 - ✅ Impressum Platzhalter-Texte durch Demo-Daten ersetzt
 - ✅ Videos mit "Video folgt" Platzhalter

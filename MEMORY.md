@@ -160,6 +160,43 @@ feat: Add performance monitoring middleware and enhanced health check
 - Database Health Check mit SQLite Connection Test
 ```
 
+### Frontend E2E Tests (12.03.2026)
+```
+test: Add comprehensive E2E test suite
+- auth.spec.ts: Login, Demo Login
+- dashboard.spec.ts: Navigation, Tabs
+- homepage.spec.ts: Navigation, CTAs
+- admin.spec.ts: Admin Login, Panel
+- guestview.spec.ts: Guest View
+- performance.spec.ts: Load Time, Core Web Vitals
+- pricing.spec.ts: Pricing Page
+- features.spec.ts: Features, Integrations
+- checkout.spec.ts: Checkout Flow, Guestview
+- register.spec.ts: Registration, Password Reset
+- error-pages.spec.ts: 404, Accessibility
+```
+
+---
+
+## Test Status (12.03.2026)
+
+### Frontend Bundle
+- Main Bundle: ~425KB
+- Total Build: ~9.1MB
+- Static JS: ~8.8MB
+
+### E2E Tests
+- Total Test Files: 11
+- Coverage: Auth, Dashboard, Admin, Guestview, Performance, Checkout, Register, Error Pages
+```
+feat: Add performance monitoring middleware and enhanced health check
+- RequestTimingMiddleware für Request Processing Time
+- Enhanced /health endpoint mit System Metrics
+- X-Process-Time-Ms Header für alle Responses
+- Slow Request Logging (>500ms)
+- Database Health Check mit SQLite Connection Test
+```
+
 ### v2.7.2 - Security & Cron Improvements (07.03.2026)
 ```
 feat: Improve Stripe webhook security and activate real booking queries
