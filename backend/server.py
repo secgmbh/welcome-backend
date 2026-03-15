@@ -167,7 +167,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="1.0.0",
+    version="2.7.4",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -732,7 +732,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "1.0.0"}
+    return {"message": "Welcome Link API", "version": "2.7.4"}
 
 @api_router.post("/status", response_model=StatusCheck)
 def create_status_check(input: StatusCheckCreate, db: Session = Depends(get_db)):
