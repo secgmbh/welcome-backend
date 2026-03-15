@@ -15,6 +15,9 @@ import jwt
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck
 
 ROOT_DIR = Path(__file__).parent
@@ -65,11 +68,105 @@ limiter = Limiter(key_func=get_remote_address)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+# ============ SMTP CONFIG ============
+SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.your-server.de')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
+
+# SMTP Validierung
+if not SMTP_PASSWORD:
+    import sys
+    print(f"⚠️  WARNING: SMTP_PASSWORD nicht gesetzt! E-Mails funktionieren nicht.", file=sys.stderr)
+
+# ============ EMAIL FUNCTIONS ============
+def send_email(to_email: str, subject: str, body: str, html_body: str = None) -> bool:
+    """Sende eine E-Mail über SMTP"""
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = SMTP_FROM
+        msg['To'] = to_email
+        msg['Subject'] = subject
+
+        # Text version
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        # HTML version (optional)
+        if html_body:
+            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+        # Connect to SMTP server
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, to_email, msg.as_string())
+
+        logger.info(f"✓ E-Mail gesendet an {to_email}: {subject}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ E-Mail Fehler: {str(e)}")
+        return False
+
+def send_welcome_email(email: str, name: str) -> bool:
+    """Sende Welcome-Email nach Registrierung"""
+    subject = "Willkommen bei Welcome Link! 🎉"
+    body = f"""
+Hallo {name}!
+
+Willkommen bei Welcome Link!
+
+Vielen Dank für Ihre Registrierung. Sie können sich jetzt einloggen und Ihre erste Property erstellen.
+
+Login: https://www.welcome-link.de/login
+
+Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen,
+Das Welcome Link Team
+"""
+    html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: #F27C2C; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+        .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px; }}
+        .button {{ display: inline-block; background: #F27C2C; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 15px; }}
+        .footer {{ margin-top: 20px; font-size: 12px; color: #666; text-align: center; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Willkommen bei Welcome Link!</h1>
+        </div>
+        <div class="content">
+            <p>Hallo {name},</p>
+            <p>Vielen Dank für Ihre Registrierung! Sie können sich jetzt einloggen und Ihre erste Property erstellen.</p>
+            <p style="text-align: center;">
+                <a href="https://www.welcome-link.de/login" class="button">Jetzt einloggen</a>
+            </p>
+            <p>Bei Fragen stehen wir Ihnen gerne zur Verfügung.</p>
+            <p>Mit freundlichen Grüßen,<br>Das Welcome Link Team</p>
+        </div>
+        <div class="footer">
+            <p>© 2026 Welcome Link - Gästekommunikation leicht gemacht</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    return send_email(email, subject, body, html_body)
+
 # Create the main app without a prefix
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="1.0.0",
+    version="2.7.4",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -265,6 +362,10 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
         
         # Erstelle Token
         token = create_token(user_id, db_user.email)
+
+        # Sende Welcome-Email
+        send_welcome_email(data.email, data.name or data.email.split("@")[0])
+
         logger.info(f"Neuer Benutzer registriert: {data.email}")
         
         return AuthResponse(
@@ -443,7 +544,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "1.0.0"}
+    return {"message": "Welcome Link API", "version": "2.7.4"}
 
 @api_router.post("/status", response_model=StatusCheck)
 def create_status_check(input: StatusCheckCreate, db: Session = Depends(get_db)):
