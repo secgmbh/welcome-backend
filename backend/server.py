@@ -54,7 +54,7 @@ if JWT_SECRET and len(JWT_SECRET) < 32:
 SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.your-server.de')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
 SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
-SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'td2dfTR87tFiw2Wg')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'q1/GtadF-x$?')
 SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
 
 # Warnung wenn Leeres Password (nur in Development)
