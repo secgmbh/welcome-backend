@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "accessibility-test-axe": {
+      "source": "dengineproblem/agents-monorepo",
+      "sourceType": "github",
+      "computedHash": "f02a3498bb118cd41cf20be94eab38e09abab7c99b699d280c70e21236e6731b"
+    },
+    "booking-notify": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "computedHash": "c0c7fe6f4ddce6c8ad41fff98424170acd94ad0016050aa684fc7fdbe11d6cf6"
+    },
+    "micro-saas-launcher": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "c2e13c619c60e6b1f388d4ca37a599374ec60f1de5758ac88aa08db9c625cc13"
+    },
+    "playwright-visual-testing": {
+      "source": "manutej/crush-mcp-server",
+      "sourceType": "github",
+      "computedHash": "c942ebb478c672f41d4dbf673d0a6b04584ba8bd7bdf2c5b1f42e0d2f59bc249"
+    },
+    "saas-metrics": {
+      "source": "claude-office-skills/skills",
+      "sourceType": "github",
+      "computedHash": "ef23572e0f6e8442f664e4bd318b80b444fefa0a3f07912b45b044965694cb99"
+    },
+    "testing-accessibility": {
+      "source": "wojons/skills",
+      "sourceType": "github",
+      "computedHash": "74c39e35970b658c4a1645d3e4ab7927983bc06cd5dfccc2fdbebdfa416baab6"
+    }
+  }
+}

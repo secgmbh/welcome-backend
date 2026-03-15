@@ -1,77 +1,75 @@
 # Learnings
 
-## [LRN-20260312-001] performance_monitoring
+## [LRN-20260314-002] bug_found
 
-**Logged**: 2026-03-12T05:00:00Z
-**Priority**: high
-**Status**: resolved
-**Area**: backend
+**Logged**: 2026-03-14T19:50:00+01:00
+**Priority**: medium
+**Status**: pending
+**Area**: frontend
 
 ### Summary
-Added performance monitoring middleware and enhanced health check endpoint to Welcome-Link API.
+Memory Leaks in useEffect - setTimeout/fetch ohne Cleanup
 
 ### Details
-- Added `RequestTimingMiddleware` to track request processing time
-- Added `X-Process-Time-Ms` header to all responses for debugging
-- Enhanced `/api/health` endpoint with system metrics (CPU, memory, disk)
-- Added database health check with SQLite connection test
-- Slow requests (>500ms) are logged with warning level
-- Version bump to 2.7.2
+Mehrere Komponenten haben useEffect Hooks ohne Cleanup-Funktionen:
+- `AdminPage.jsx` - showToast setTimeout ohne Cleanup
+- `DashboardPage.jsx` - fetch ohne AbortController
+- `LiveFeedPage.jsx` - potentielle Intervalle ohne Cleanup
 
-### Implementation
-```python
-# Request Timing Middleware
-class RequestTimingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        start_time = time.time()
-        response = await call_next(request)
-        process_time = (time.time() - start_time) * 1000
-        response.headers["X-Process-Time-Ms"] = f"{process_time:.2f}"
-        if process_time > 500:
-            logger.warning(f"⚠️ Slow request: {request.method} {request.url.path}")
-        return response
-
-# Enhanced Health Check with psutil
-@api_router.get("/health")
-def health_check():
-    cpu_percent = psutil.cpu_percent(interval=0.1)
-    memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
-    # ... returns detailed metrics
+### Suggested Action
+Cleanup-Funktionen in allen useEffect Hooks hinzufügen:
+```javascript
+useEffect(() => {
+  let isMounted = true;
+  const controller = new AbortController();
+  // ... async operations
+  return () => {
+    isMounted = false;
+    controller.abort();
+  };
+}, []);
 ```
 
 ### Metadata
-- Source: user_request
-- Related Files: welcome-backend/backend/server.py
-- Tags: performance, monitoring, backend, health-check
-- Pattern-Key: backend.performance_monitoring
+- Source: qa_review
+- Related Files: AdminPage.jsx, DashboardPage.jsx, LiveFeedPage.jsx
+- Tags: memory_leak, useEffect, cleanup
 
 ---
 
-## [LRN-20260312-002] git_workflow
+## [LRN-20260314-001] correction
 
-**Logged**: 2026-03-12T05:00:00Z
-**Priority**: medium
-**Status**: resolved
-**Area**: backend
+**Logged**: 2026-03-14T14:42:00+01:00
+**Priority**: high
+**Status**: fixed
+**Area**: frontend
 
 ### Summary
-Always check git status before making changes and commit with descriptive messages.
+Oberflächliche Browser-Checks übersehen visuelle Bugs
 
 ### Details
-When making improvements:
-1. Check `git status --short` to see current state
-2. Check `git log --oneline -10` to see recent commits
-3. Make changes incrementally
-4. Use `git add -A && git diff --cached --stat` to review before commit
-5. Write clear commit messages with feature prefix
+Ich habe mit `agent-browser snapshot` die Seiten schnell gecheckt und behauptet, alles sei okay. Aber ich habe NICHT:
+- Screenshots visuell analysiert
+- Mobile Viewport getestet
+- Tatsächliche Interaktionen durchgeführt
+- Nach duplizierten Elementen in der DOM-Tiefe gesucht
+
+Der User hat recht: Ich sehe viele Fehler nicht, weil ich nicht ordentlich schaue.
 
 ### Suggested Action
-Follow this workflow for all code changes.
+1. IMMER Screenshots machen und visuell prüfen
+2. Mobile Viewport testen (390x844)
+3. Nach unten scrollen und Footer prüfen
+4. Nach duplizierten Elementen suchen
+5. Interaktionen testen (Buttons klicken, Formulare ausfüllen)
 
 ### Metadata
-- Source: best_practice
-- Tags: git, workflow, commits
-- Pattern-Key: workflow.git_commit
+- Source: user_feedback
+- Related Files: Layout.jsx, MobileBottomNav.jsx
+- Tags: qa, testing, browser, mobile
+- Pattern-Key: qa.superficial_check
+- Recurrence-Count: 1
+- First-Seen: 2026-03-14
+- Last-Seen: 2026-03-14
 
 ---

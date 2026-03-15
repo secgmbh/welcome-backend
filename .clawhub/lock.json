@@ -8,6 +8,10 @@
     "e2e-testing-patterns": {
       "version": "1.0.0",
       "installedAt": 1773221461841
+    },
+    "calendar": {
+      "version": "1.0.0",
+      "installedAt": 1773419880900
     }
   }
 }
