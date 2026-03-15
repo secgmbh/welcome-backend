@@ -75,6 +75,31 @@
 - ENVIRONMENT=production setzen (derzeit "development")
 - STRIPE_WEBHOOK_SECRET für Payment-Verifikation
 
+### 🔧 In Progress: Email-Fix Deployment
+- ✅ `send_email()` und `send_welcome_email()` Funktionen hinzugefügt
+- ✅ Version zu 2.7.4 erhöht
+- ✅ Zu GitHub gepusht (Commit `34cbffa`)
+- ⏳ Warte auf Render Deploy (API zeigt noch 2.7.1)
+- ⚠️ **Registrierungs-Emails funktionieren erst nach Deploy!**
+
+### SMTP Config (15.03.2026)
+```
+SMTP_HOST=mail.your-server.de
+SMTP_PORT=587
+SMTP_USER=info@welcome-link.de
+SMTP_PASSWORD=q1/GtadF-x$?
+SMTP_FROM=info@welcome-link.de
+```
+
+### Commits heute (15.03.2026)
+| Commit | Beschreibung |
+|--------|--------------|
+| `3686218` | Memory Leaks in AdminPage/DashboardPage behoben |
+| `f454dd5` | Email-Funktionalität hinzugefügt (send_email, send_welcome_email) |
+| `df5dfcb` | SMTP_PASSWORD fallback (reverted - unsicher) |
+| `643945a` | Security fix: SMTP_PASSWORD nur via ENV var |
+| `34cbffa` | Version bump zu 2.7.4 für Deploy-Tracking |
+
 ### ✅ API v2.7.2 - Security & Cron Improvements!
 - ✅ Email Integration (SMTP)
 - ✅ Password Reset API + Frontend
