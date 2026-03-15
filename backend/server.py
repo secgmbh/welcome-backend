@@ -54,13 +54,13 @@ if JWT_SECRET and len(JWT_SECRET) < 32:
 SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.your-server.de')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
 SMTP_USER = os.environ.get('SMTP_USER', 'info@welcome-link.de')
-SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'q1/GtadF-x$?')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
 
-# Warnung wenn Leeres Password (nur in Development)
-if not SMTP_PASSWORD and ENVIRONMENT == 'development':
+# SMTP Validierung
+if not SMTP_PASSWORD:
     import sys
-    print(f"⚠️  WARNING: SMTP_PASSWORD ist leer! E-Mails funktionieren nicht.", file=sys.stderr)
+    print(f"⚠️  WARNING: SMTP_PASSWORD nicht gesetzt! E-Mails funktionieren nicht.", file=sys.stderr)
 
 # ============ EMAIL FUNCTIONS ============
 def send_email(to_email: str, subject: str, body: str, html_body: str = None) -> bool:
