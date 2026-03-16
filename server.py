@@ -660,9 +660,8 @@ def get_properties(user: DBUser = Depends(get_current_user), db: Session = Depen
 def create_property(data: PropertyCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Erstelle eine neue Property"""
     try:
-        prop_id = str(uuid.uuid4())
+        # ID wird automatisch generiert (Integer autoincrement)
         db_property = DBProperty(
-            id=prop_id,
             user_id=user.id,
             name=data.name.strip(),
             description=data.description.strip() if data.description else None,
