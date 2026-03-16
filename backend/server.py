@@ -400,7 +400,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.8.0",
+    version="2.8.1",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -750,6 +750,14 @@ async def register(request: Request, data: UserRegister, db: Session = Depends(g
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
+        
+        # Sende Welcome Email (im Hintergrund, blockiert nicht)
+        try:
+            send_welcome_email(db_user.email, db_user.name)
+            logger.info(f"Welcome E-Mail gesendet an: {db_user.email}")
+        except Exception as email_error:
+            # E-Mail-Fehler blockiert die Registrierung nicht
+            logger.warning(f"Welcome E-Mail konnte nicht gesendet werden: {email_error}")
         
         # Erstelle Token
         token = create_token(user_id, db_user.email)
