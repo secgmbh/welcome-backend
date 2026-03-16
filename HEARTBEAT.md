@@ -128,6 +128,37 @@ SMTP_FROM=info@welcome-link.de
 - **Email:** demo@welcome-link.de
 - **Password:** Demo123!
 
+## ✅ Option A, B, C (16.03.2026 - 16:50)
+
+### E2E Tests (Option A)
+| Test File | Coverage |
+|-----------|----------|
+| `subscription.spec.ts` | Registration, Login, Plan Limits |
+| `subscription.spec.ts` | Pricing Page, Checkout Flow |
+| `subscription.spec.ts` | API Demo Mode, Plan Features |
+
+### Frontend Polish (Option B)
+| Component | Status |
+|-----------|--------|
+| `lib/errors.js` | German error messages |
+| `hooks/useToast.jsx` | Toast hook for UX |
+| `components/ui/Toast.jsx` | Already exists |
+
+### API Documentation (Option C)
+| Doc | Content |
+|-----|---------|
+| `API.md` | All endpoints documented |
+| `API.md` | Postman collection |
+| `API.md` | Error responses, Rate limits |
+
+### Git Commits
+```
+Frontend: 43e659b - E2E subscription tests, error handling
+Backend: de23539 - API documentation
+```
+
+---
+
 ## ✅ PDF Downloads (16.03.2026 - 14:15)
 
 ### Neue Downloads auf Resources-Seite:
