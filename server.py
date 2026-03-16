@@ -18,6 +18,7 @@ from slowapi.util import get_remote_address
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import stripe
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck
 
 ROOT_DIR = Path(__file__).parent
@@ -79,6 +80,29 @@ SMTP_FROM = os.environ.get('SMTP_FROM', 'info@welcome-link.de')
 if not SMTP_PASSWORD:
     import sys
     print(f"⚠️  WARNING: SMTP_PASSWORD nicht gesetzt! E-Mails funktionieren nicht.", file=sys.stderr)
+
+# ============ STRIPE CONFIG ============
+STRIPE_API_KEY = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+if STRIPE_API_KEY:
+    stripe.api_key = STRIPE_API_KEY
+
+# Stripe Price IDs (per plan)
+STRIPE_PRICES = {
+    'starter_monthly': os.environ.get('STRIPE_PRICE_STARTER_MONTHLY', 'price_starter_monthly'),
+    'starter_yearly': os.environ.get('STRIPE_PRICE_STARTER_YEARLY', 'price_starter_yearly'),
+    'pro_monthly': os.environ.get('STRIPE_PRICE_PRO_MONTHLY', 'price_pro_monthly'),
+    'pro_yearly': os.environ.get('STRIPE_PRICE_PRO_YEARLY', 'price_pro_yearly'),
+    'enterprise_monthly': os.environ.get('STRIPE_PRICE_ENTERPRISE_MONTHLY', 'price_enterprise_monthly'),
+}
+
+# Plan Limits
+PLAN_LIMITS = {
+    'free': {'max_properties': 1, 'features': ['basic']},
+    'starter': {'max_properties': 3, 'features': ['basic', 'upselling', 'qr_codes']},
+    'pro': {'max_properties': 10, 'features': ['basic', 'upselling', 'qr_codes', 'analytics', 'api']},
+    'enterprise': {'max_properties': -1, 'features': ['basic', 'upselling', 'qr_codes', 'analytics', 'api', 'whitelabel', 'support']}
+}
 
 # ============ EMAIL FUNCTIONS ============
 def send_email(to_email: str, subject: str, body: str, html_body: str = None) -> bool:
@@ -1112,4 +1136,186 @@ def get_property_for_edit(property_id: int, user = Depends(get_current_user), db
         }
     
     return prop.to_dict() if hasattr(prop, 'to_dict') else {"id": property_id}
+
+# ============ STRIPE SUBSCRIPTION ENDPOINTS ============
+
+class CreateSubscriptionRequest(BaseModel):
+    plan: str = Field(..., description="Plan name: starter, pro, or enterprise")
+    billing_cycle: str = Field(default="monthly", description="monthly or yearly")
+    success_url: Optional[str] = Field(None, description="URL to redirect after success")
+    cancel_url: Optional[str] = Field(None, description="URL to redirect after cancel")
+
+class SubscriptionResponse(BaseModel):
+    checkout_url: str
+    session_id: str
+
+@api_router.post("/subscription/create", response_model=SubscriptionResponse)
+def create_subscription(data: CreateSubscriptionRequest, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a Stripe subscription checkout session"""
+    if not STRIPE_API_KEY:
+        # Demo mode - return mock URL
+        logger.info(f"Demo mode: Creating subscription for user {user.email}, plan {data.plan}")
+        mock_session_id = f"cs_test_{uuid.uuid4().hex[:24]}"
+        return SubscriptionResponse(
+            checkout_url=f"https://checkout.stripe.com/pay/{mock_session_id}",
+            session_id=mock_session_id
+        )
+    
+    # Validate plan
+    if data.plan not in ['starter', 'pro', 'enterprise']:
+        raise HTTPException(status_code=400, detail="Invalid plan. Choose starter, pro, or enterprise.")
+    
+    # Get price ID
+    price_key = f"{data.plan}_{data.billing_cycle}"
+    price_id = STRIPE_PRICES.get(price_key)
+    
+    if not price_id:
+        raise HTTPException(status_code=400, detail=f"Price not configured for {price_key}")
+    
+    # Create or get Stripe customer
+    customer_id = user.stripe_customer_id
+    if not customer_id:
+        try:
+            customer = stripe.Customer.create(
+                email=user.email,
+                name=user.name,
+                metadata={"user_id": user.id}
+            )
+            customer_id = customer.id
+            # Update user with Stripe customer ID
+            user.stripe_customer_id = customer_id
+            db.commit()
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe customer creation failed: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to create customer")
+    
+    # Create checkout session
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=['card', 'sepa_debit'],
+            line_items=[{
+                'price': price_id,
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=data.success_url or f"https://www.welcome-link.de/dashboard?subscription=success",
+            cancel_url=data.cancel_url or f"https://www.welcome-link.de/pricing?subscription=cancel",
+            metadata={
+                'user_id': user.id,
+                'plan': data.plan,
+                'billing_cycle': data.billing_cycle
+            },
+            subscription_data={
+                'metadata': {
+                    'user_id': user.id,
+                    'plan': data.plan
+                }
+            }
+        )
+        
+        logger.info(f"Created subscription checkout for user {user.email}, plan {data.plan}")
+        
+        return SubscriptionResponse(
+            checkout_url=checkout_session.url,
+            session_id=checkout_session.id
+        )
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe checkout session creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+@api_router.post("/subscription/portal")
+def create_customer_portal(user: DBUser = Depends(get_current_user)):
+    """Create a Stripe customer portal session for managing subscription"""
+    if not STRIPE_API_KEY:
+        # Demo mode
+        return {"portal_url": "https://billing.stripe.com/demo"}
+    
+    customer_id = user.stripe_customer_id
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="No Stripe customer found")
+    
+    try:
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url="https://www.welcome-link.de/dashboard"
+        )
+        
+        return {"portal_url": portal_session.url}
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe portal creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+@api_router.get("/subscription/status")
+def get_subscription_status(user: DBUser = Depends(get_current_user)):
+    """Get current subscription status"""
+    plan_limits = PLAN_LIMITS.get(user.plan or 'free', PLAN_LIMITS['free'])
+    
+    return {
+        "plan": user.plan or 'free',
+        "max_properties": plan_limits['max_properties'],
+        "features": plan_limits['features'],
+        "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
+        "is_active": user.is_active if user.is_active is not None else True,
+        "stripe_customer_id": user.stripe_customer_id
+    }
+
+@api_router.post("/webhooks/stripe")
+async def stripe_webhook(request, db: Session = Depends(get_db)):
+    """Handle Stripe webhooks for subscription events"""
+    payload = await request.body()
+    sig_header = request.headers.get('stripe-signature')
+    
+    if not STRIPE_WEBHOOK_SECRET:
+        logger.warning("Stripe webhook received but STRIPE_WEBHOOK_SECRET not configured")
+        return {"status": "skipped"}
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except stripe.error.SignatureVerificationError as e:
+        logger.error(f"Stripe webhook signature verification failed: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    
+    # Handle subscription events
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        user_id = session.get('metadata', {}).get('user_id')
+        plan = session.get('metadata', {}).get('plan', 'starter')
+        
+        if user_id:
+            user = db.query(DBUser).filter(DBUser.id == user_id).first()
+            if user:
+                user.plan = plan
+                user.stripe_customer_id = session.get('customer')
+                db.commit()
+                logger.info(f"Updated user {user_id} to plan {plan}")
+    
+    elif event['type'] == 'customer.subscription.updated':
+        subscription = event['data']['object']
+        customer_id = subscription.get('customer')
+        
+        if customer_id:
+            user = db.query(DBUser).filter(DBUser.stripe_customer_id == customer_id).first()
+            if user:
+                # Update plan based on subscription status
+                status = subscription.get('status')
+                if status == 'canceled':
+                    user.plan = 'free'
+                db.commit()
+                logger.info(f"Updated subscription for customer {customer_id}")
+    
+    elif event['type'] == 'customer.subscription.deleted':
+        subscription = event['data']['object']
+        customer_id = subscription.get('customer')
+        
+        if customer_id:
+            user = db.query(DBUser).filter(DBUser.stripe_customer_id == customer_id).first()
+            if user:
+                user.plan = 'free'
+                db.commit()
+                logger.info(f"Subscription canceled for customer {customer_id}, downgraded to free")
+    
+    return {"status": "success"}
 
