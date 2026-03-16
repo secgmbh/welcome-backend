@@ -1,8 +1,24 @@
 # MEMORY.md - Langzeit-Erinnerungen
 
-## Projekt: Welcome-Link MVP (Stand: 12.03.2026 - 06:00)
+## Projekt: Welcome-Link MVP (Stand: 16.03.2026 - 04:35)
 
-### 🎉 PRODUCTION READY!
+### ✅ NEU: User Management & Subscription (16.03.2026)
+
+**Neue Felder in User-Tabelle:**
+- `phone` - Telefonnummer
+- `company_name` - Firmenname
+- `plan` - Subscription Plan (free/starter/pro/enterprise)
+- `trial_ends_at` - Trial-Ende
+- `max_properties` - Max Properties je Plan
+- `stripe_customer_id` - Stripe Customer ID
+- `is_active` - Account Status
+
+**Neue API Endpoints:**
+- `PUT /api/auth/profile` - Profil aktualisieren
+
+---
+
+## 🎉 PRODUCTION READY!
 
 **Live URLs:**
 - **API:** https://api.welcome-link.de (v2.7.3)

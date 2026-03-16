@@ -128,6 +128,85 @@ SMTP_FROM=info@welcome-link.de
 - **Email:** demo@welcome-link.de
 - **Password:** Demo123!
 
+## ✅ User Management & Subscription (16.03.2026 - 04:35)
+
+### Neue Datenbank-Felder (User-Tabelle)
+| Feld | Typ | Default | Beschreibung |
+|------|-----|---------|---------------|
+| `phone` | VARCHAR(50) | NULL | Telefonnummer |
+| `company_name` | VARCHAR(200) | NULL | Firmenname (optional) |
+| `plan` | VARCHAR(20) | 'free' | Subscription Plan |
+| `trial_ends_at` | TIMESTAMP | NULL | Trial-Ende für Paid Plans |
+| `max_properties` | INTEGER | 1 | Max Properties je Plan |
+| `stripe_customer_id` | VARCHAR(100) | NULL | Stripe Customer ID |
+| `is_active` | BOOLEAN | TRUE | Account Status |
+
+### Subscription Plans
+| Plan | Preis | Properties | Features |
+|------|-------|------------|----------|
+| **Free** | €0 | 1 | Basis |
+| **Starter** | €9/Monat | 3 | + Extras, QR-Codes |
+| **Pro** | €29/Monat | 10 | + Analytics, API |
+| **Enterprise** | Custom | Unlimited | + White-Label, Support |
+
+### Neue API Endpoints
+```
+PUT /api/auth/profile           - Profil aktualisieren
+GET /api/admin/users            - Admin: Alle Benutzer mit Plan-Info
+PATCH /api/admin/users/{id}/plan - Admin: Plan aktualisieren
+```
+
+### Frontend Updates (16.03.2026)
+- **RegisterPage:** Phone & Company Felder
+- **ProfilePage:** API-Connected, Plan-Anzeige, Profil-Editing
+- **PricingPage:** 4-Tier Pricing mit Stripe-Integration
+- **AdminPage:** Benutzer-Verwaltung mit Plan-Stats
+
+### Git Commits
+```
+Backend:
+1cc1649 - feat: Add user management & subscription fields
+a5e768b - feat: Add admin routes for user plan management
+4d8526e - feat: Add Stripe subscription checkout integration
+
+Frontend:
+bc03d9b - feat: Add user management & subscription UI
+8f8cb1a - feat: Update PricingPage to use subscription API endpoint
+```
+
+---
+
+## ✅ Stripe Integration (16.03.2026 - 07:05)
+
+### Neue Backend Endpoints
+```
+POST /api/subscription/create   - Stripe Checkout Session erstellen
+POST /api/subscription/portal   - Stripe Customer Portal
+GET  /api/subscription/status   - Aktuelle Subscription-Info
+POST /api/webhooks/stripe       - Stripe Webhook Handler
+```
+
+### Stripe Events (Webhooks)
+- `checkout.session.completed` - Plan aktivieren
+- `customer.subscription.updated` - Plan aktualisieren
+- `customer.subscription.deleted` - Auf Free downgraden
+
+### Environment Variables (benötigt)
+```
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+STRIPE_PRICE_STARTER_MONTHLY=price_xxx
+STRIPE_PRICE_STARTER_YEARLY=price_xxx
+STRIPE_PRICE_PRO_MONTHLY=price_xxx
+STRIPE_PRICE_PRO_YEARLY=price_xxx
+```
+
+### Demo Mode
+- Wenn `STRIPE_SECRET_KEY` nicht gesetzt → Demo-Modus
+- Mock URLs für Test ohne Stripe Account
+
+---
+
 ## ✅ Phase 28-36 COMPLETE
 
 | Phase | Description | Status |
