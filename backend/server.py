@@ -25,7 +25,7 @@ from slowapi.util import get_remote_address
 from slowapi.util import get_remote_address
 import time
 import psutil
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking, Cleaner as DBCleaner, PropertyCleaner as DBPropertyCleaner
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -400,7 +400,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.7.1",
+    version="2.8.0",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -2753,7 +2753,7 @@ def health_check():
     return {
         "status": "healthy" if db_healthy else "degraded",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.7.2",
+        "version": "2.8.0",
         "environment": ENVIRONMENT,
         "services": {
             "database": {
@@ -2830,3 +2830,464 @@ def get_top_extras(user: DBUser = Depends(get_current_user), db: Session = Depen
             {"id": "extra-3", "name": "Fahrradverleih", "bookings": 34, "revenue": 408.00, "trend": -3}
         ]
     }
+
+
+# ============ CLEANER MANAGEMENT ============
+from database import Cleaner as DBCleaner, PropertyCleaner as DBPropertyCleaner
+
+class CleanerCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    email: EmailStr
+    phone: Optional[str] = Field(None, max_length=50)
+    notes: Optional[str] = None
+
+class CleanerUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(None, max_length=50)
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class PropertyCleanerAssign(BaseModel):
+    property_id: int
+    cleaner_id: str
+    notify_hours_before: int = Field(default=2, ge=1, le=24)
+    is_primary: bool = False
+
+def send_cleaning_notification_email(
+    cleaner_email: str,
+    cleaner_name: str,
+    property_name: str,
+    property_address: str,
+    guest_name: str,
+    checkout_date: str,
+    checkout_time: str,
+    notes: str = None
+):
+    """Sende Reinigungs-Benachrichtigung an Reinigungskraft"""
+    
+    html = f"""
+    <html>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #10B981 0%, #34D399 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">🧹 Reinigungsauftrag</h1>
+        </div>
+        <div style="background: #fff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hallo {cleaner_name}!</h2>
+            <p style="color: #666; font-size: 16px;">Es steht eine Reinigung an. Hier sind die Details:</p>
+            
+            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #10B981;">
+                <h3 style="color: #10B981; margin-top: 0;">📍 Unterkunft</h3>
+                <table style="width: 100%; color: #333;">
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Name:</strong></td>
+                        <td style="padding: 8px 0;">{property_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Adresse:</strong></td>
+                        <td style="padding: 8px 0;">{property_address}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #f59e0b;">
+                <h3 style="color: #d97706; margin-top: 0;">📅 Check-out</h3>
+                <table style="width: 100%; color: #333;">
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Datum:</strong></td>
+                        <td style="padding: 8px 0;">{checkout_date}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Uhrzeit:</strong></td>
+                        <td style="padding: 8px 0;">{checkout_time} Uhr</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0;"><strong>Gast:</strong></td>
+                        <td style="padding: 8px 0;">{guest_name}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            {"<div style='background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #ef4444;'><h4 style='color: #ef4444; margin-top: 0;'>📝 Hinweise</h4><p style='color: #666; margin: 0;'>" + notes + "</p></div>" if notes else ""}
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                Bitte bestätigen Sie die Reinigung nach Abschluss.<br>
+                Bei Fragen erreichen Sie den Gastgeber über Welcome Link.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text = f"""Reinigungsauftrag - Welcome Link
+
+Hallo {cleaner_name}!
+
+Unterkunft: {property_name}
+Adresse: {property_address}
+
+Check-out: {checkout_date} um {checkout_time} Uhr
+Gast: {guest_name}
+
+{"Hinweise: " + notes if notes else ""}
+
+Bitte bestätigen Sie die Reinigung nach Abschluss.
+"""
+    
+    return send_email(cleaner_email, f"🧹 Reinigungsauftrag - {property_name}", html, text)
+
+
+# ============ CLEANER CRUD ENDPOINTS ============
+@api_router.get("/cleaners")
+def get_cleaners(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Hole alle Reinigungskräfte des Benutzers"""
+    try:
+        cleaners = db.query(DBCleaner).filter(DBCleaner.user_id == user.id).all()
+        
+        result = []
+        for cleaner in cleaners:
+            # Get assigned properties
+            assignments = db.query(DBPropertyCleaner).filter(DBPropertyCleaner.cleaner_id == cleaner.id).all()
+            property_ids = [a.property_id for a in assignments]
+            
+            # Get property names
+            properties = []
+            for pid in property_ids:
+                prop = db.query(DBProperty).filter(DBProperty.id == pid).first()
+                if prop:
+                    properties.append({"id": pid, "name": prop.name})
+            
+            result.append({
+                "id": cleaner.id,
+                "name": cleaner.name,
+                "email": cleaner.email,
+                "phone": cleaner.phone,
+                "notes": cleaner.notes,
+                "is_active": cleaner.is_active,
+                "properties": properties,
+                "created_at": cleaner.created_at.isoformat() if cleaner.created_at else None
+            })
+        
+        return {"cleaners": result}
+    except Exception as e:
+        logger.error(f"Fehler beim Abrufen der Reinigungskräfte: {str(e)}")
+        # Return empty list for demo
+        return {"cleaners": []}
+
+
+@api_router.post("/cleaners")
+def create_cleaner(data: CleanerCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Erstelle neue Reinigungskraft"""
+    try:
+        cleaner_id = str(uuid.uuid4())
+        
+        cleaner = DBCleaner(
+            id=cleaner_id,
+            user_id=user.id,
+            name=data.name,
+            email=data.email.lower(),
+            phone=data.phone,
+            notes=data.notes,
+            is_active=True,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        db.add(cleaner)
+        db.commit()
+        db.refresh(cleaner)
+        
+        logger.info(f"Reinigungskraft erstellt: {cleaner.name} ({cleaner.email})")
+        
+        return {
+            "id": cleaner.id,
+            "name": cleaner.name,
+            "email": cleaner.email,
+            "phone": cleaner.phone,
+            "notes": cleaner.notes,
+            "is_active": cleaner.is_active,
+            "properties": [],
+            "created_at": cleaner.created_at.isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Fehler beim Erstellen der Reinigungskraft: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Erstellen der Reinigungskraft")
+
+
+@api_router.put("/cleaners/{cleaner_id}")
+def update_cleaner(cleaner_id: str, data: CleanerUpdate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Aktualisiere Reinigungskraft"""
+    try:
+        cleaner = db.query(DBCleaner).filter(
+            DBCleaner.id == cleaner_id,
+            DBCleaner.user_id == user.id
+        ).first()
+        
+        if not cleaner:
+            raise HTTPException(status_code=404, detail="Reinigungskraft nicht gefunden")
+        
+        update_data = data.model_dump(exclude_none=True)
+        for key, value in update_data.items():
+            if hasattr(cleaner, key):
+                setattr(cleaner, key, value)
+        
+        db.commit()
+        db.refresh(cleaner)
+        
+        return {
+            "id": cleaner.id,
+            "name": cleaner.name,
+            "email": cleaner.email,
+            "phone": cleaner.phone,
+            "notes": cleaner.notes,
+            "is_active": cleaner.is_active
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Aktualisieren der Reinigungskraft: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren")
+
+
+@api_router.delete("/cleaners/{cleaner_id}")
+def delete_cleaner(cleaner_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Lösche Reinigungskraft"""
+    try:
+        cleaner = db.query(DBCleaner).filter(
+            DBCleaner.id == cleaner_id,
+            DBCleaner.user_id == user.id
+        ).first()
+        
+        if not cleaner:
+            raise HTTPException(status_code=404, detail="Reinigungskraft nicht gefunden")
+        
+        # Remove property assignments first
+        db.query(DBPropertyCleaner).filter(DBPropertyCleaner.cleaner_id == cleaner_id).delete()
+        
+        # Delete cleaner
+        db.delete(cleaner)
+        db.commit()
+        
+        logger.info(f"Reinigungskraft gelöscht: {cleaner_id}")
+        
+        return {"success": True, "message": "Reinigungskraft gelöscht"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Löschen der Reinigungskraft: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Löschen")
+
+
+# ============ PROPERTY-CLEANER ASSIGNMENT ============
+@api_router.post("/properties/{property_id}/cleaners")
+def assign_cleaner_to_property(
+    property_id: int,
+    data: PropertyCleanerAssign,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Weise Reinigungskraft einer Property zu"""
+    try:
+        # Verify property belongs to user
+        property = db.query(DBProperty).filter(
+            DBProperty.id == property_id,
+            DBProperty.user_id == user.id
+        ).first()
+        
+        if not property:
+            raise HTTPException(status_code=404, detail="Property nicht gefunden")
+        
+        # Verify cleaner belongs to user
+        cleaner = db.query(DBCleaner).filter(
+            DBCleaner.id == data.cleaner_id,
+            DBCleaner.user_id == user.id
+        ).first()
+        
+        if not cleaner:
+            raise HTTPException(status_code=404, detail="Reinigungskraft nicht gefunden")
+        
+        # Check if assignment already exists
+        existing = db.query(DBPropertyCleaner).filter(
+            DBPropertyCleaner.property_id == property_id,
+            DBPropertyCleaner.cleaner_id == data.cleaner_id
+        ).first()
+        
+        if existing:
+            # Update existing assignment
+            existing.notify_hours_before = data.notify_hours_before
+            existing.is_primary = data.is_primary
+        else:
+            # Create new assignment
+            assignment = DBPropertyCleaner(
+                id=str(uuid.uuid4()),
+                property_id=property_id,
+                cleaner_id=data.cleaner_id,
+                notify_hours_before=data.notify_hours_before,
+                is_primary=data.is_primary,
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(assignment)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "property_id": property_id,
+            "cleaner_id": data.cleaner_id,
+            "cleaner_name": cleaner.name,
+            "notify_hours_before": data.notify_hours_before,
+            "is_primary": data.is_primary
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Zuweisen der Reinigungskraft: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Zuweisen")
+
+
+@api_router.delete("/properties/{property_id}/cleaners/{cleaner_id}")
+def remove_cleaner_from_property(
+    property_id: int,
+    cleaner_id: str,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Entferne Reinigungskraft von Property"""
+    try:
+        assignment = db.query(DBPropertyCleaner).filter(
+            DBPropertyCleaner.property_id == property_id,
+            DBPropertyCleaner.cleaner_id == cleaner_id
+        ).first()
+        
+        if not assignment:
+            raise HTTPException(status_code=404, detail="Zuweisung nicht gefunden")
+        
+        db.delete(assignment)
+        db.commit()
+        
+        return {"success": True, "message": "Zuweisung entfernt"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler beim Entfernen der Reinigungskraft: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Entfernen")
+
+
+@api_router.get("/properties/{property_id}/cleaners")
+def get_property_cleaners(
+    property_id: int,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Hole alle Reinigungskräfte einer Property"""
+    try:
+        assignments = db.query(DBPropertyCleaner).filter(
+            DBPropertyCleaner.property_id == property_id
+        ).all()
+        
+        result = []
+        for assignment in assignments:
+            cleaner = db.query(DBCleaner).filter(DBCleaner.id == assignment.cleaner_id).first()
+            if cleaner:
+                result.append({
+                    "id": cleaner.id,
+                    "name": cleaner.name,
+                    "email": cleaner.email,
+                    "phone": cleaner.phone,
+                    "notes": cleaner.notes,
+                    "is_primary": assignment.is_primary,
+                    "notify_hours_before": assignment.notify_hours_before
+                })
+        
+        return {"cleaners": result}
+    except Exception as e:
+        logger.error(f"Fehler beim Abrufen der Property-Reinigungskräfte: {str(e)}")
+        return {"cleaners": []}
+
+
+# ============ CLEANING NOTIFICATION CRON ============
+@api_router.post("/cron/cleaning-notifications")
+async def send_cleaning_notifications(db: Session = Depends(get_db)):
+    """
+    Sende Reinigungs-Benachrichtigungen für bevorstehende Check-outs.
+    Dieser Endpoint sollte von einem Cron-Job aufgerufen werden.
+    
+    Benachrichtigt Reinigungskräfte X Stunden vor Checkout.
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        notifications_sent = 0
+        errors = []
+        
+        # Get all property-cleaner assignments
+        assignments = db.query(DBPropertyCleaner).all()
+        
+        for assignment in assignments:
+            # Find bookings ending within the notification window
+            notify_hours = assignment.notify_hours_before or 2
+            window_start = now + timedelta(hours=notify_hours - 1)
+            window_end = now + timedelta(hours=notify_hours + 1)
+            
+            try:
+                # Get property info
+                property = db.query(DBProperty).filter(DBProperty.id == assignment.property_id).first()
+                if not property:
+                    continue
+                
+                # Get cleaner info
+                cleaner = db.query(DBCleaner).filter(DBCleaner.id == assignment.cleaner_id).first()
+                if not cleaner or not cleaner.email:
+                    continue
+                
+                # Find bookings with checkout in the notification window
+                bookings = db.query(DBBooking).filter(
+                    DBBooking.property_id == str(assignment.property_id),
+                    DBBooking.check_out >= window_start,
+                    DBBooking.check_out <= window_end,
+                    DBBooking.status.in_(["confirmed", "active"])
+                ).all()
+                
+                for booking in bookings:
+                    # Check if notification already sent (would need a tracking table in production)
+                    # For now, send notification
+                    
+                    guest_name = booking.guest_name or "Gast"
+                    checkout_date = booking.check_out.strftime("%d.%m.%Y") if booking.check_out else "Unbekannt"
+                    checkout_time = property.checkout_time or "11:00"
+                    
+                    # Send notification email
+                    email_sent = send_cleaning_notification_email(
+                        cleaner_email=cleaner.email,
+                        cleaner_name=cleaner.name,
+                        property_name=property.name,
+                        property_address=property.address or "Adresse nicht angegeben",
+                        guest_name=guest_name,
+                        checkout_date=checkout_date,
+                        checkout_time=checkout_time,
+                        notes=cleaner.notes
+                    )
+                    
+                    if email_sent:
+                        notifications_sent += 1
+                        logger.info(f"Reinigungs-Benachrichtigung gesendet: {cleaner.email} für {property.name}")
+                    else:
+                        errors.append(f"E-Mail fehlgeschlagen für {cleaner.email}")
+                        
+            except Exception as e:
+                logger.error(f"Fehler bei Property {assignment.property_id}: {str(e)}")
+                errors.append(str(e))
+        
+        return {
+            "status": "success",
+            "notifications_sent": notifications_sent,
+            "errors": errors,
+            "checked_at": now.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Reinigungs-Benachrichtigung Fehler: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

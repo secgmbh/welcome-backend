@@ -229,6 +229,32 @@ class Task(Base):
     priority = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+
+class Cleaner(Base):
+    """Reinigungskraft für Properties"""
+    __tablename__ = "cleaners"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Owner (User)
+    name = Column(String(200), nullable=False)
+    email = Column(String(255), nullable=False)
+    phone = Column(String(50))
+    notes = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PropertyCleaner(Base):
+    """Zuweisung: Reinigungskraft <-> Property"""
+    __tablename__ = "property_cleaners"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(Integer, nullable=False, index=True)
+    cleaner_id = Column(String(36), nullable=False, index=True)
+    notify_hours_before = Column(Integer, default=2)  # Stunden vor Checkout benachrichtigen
+    is_primary = Column(Boolean, default=False)  # Haupt-Reinigungskraft
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)
