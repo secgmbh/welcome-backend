@@ -194,6 +194,9 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, description="Mindestens 6 Zeichen")
     name: Optional[str] = Field(None, max_length=100)
+    # === NEU: Optionale Felder ===
+    phone: Optional[str] = Field(None, max_length=50)
+    company_name: Optional[str] = Field(None, max_length=200)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -209,6 +212,13 @@ class User(BaseModel):
     name: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_demo: bool = False
+    # === NEU: User Management Felder ===
+    phone: Optional[str] = None
+    company_name: Optional[str] = None
+    plan: str = "free"
+    is_email_verified: bool = False
+    max_properties: int = 1
+    is_active: bool = True
 
 class AuthResponse(BaseModel):
     token: str
@@ -345,7 +355,7 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
             logger.warning(f"Registrierungsversuch mit existierender E-Mail: {data.email}")
             raise HTTPException(status_code=400, detail="E-Mail bereits registriert")
         
-        # Erstelle Benutzer
+        # Erstelle Benutzer mit neuen Feldern
         user_id = str(uuid.uuid4())
         db_user = DBUser(
             id=user_id,
@@ -353,7 +363,13 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
             password_hash=hash_password(data.password),
             name=data.name or data.email.split("@")[0],
             created_at=datetime.now(timezone.utc),
-            is_demo=False
+            is_demo=False,
+            # === NEU: User Management Felder ===
+            phone=data.phone,
+            company_name=data.company_name,
+            plan='free',
+            max_properties=1,
+            is_active=True
         )
         
         db.add(db_user)
@@ -374,7 +390,12 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
                 id=user_id,
                 email=db_user.email,
                 name=db_user.name,
-                is_demo=False
+                is_demo=False,
+                phone=db_user.phone,
+                company_name=db_user.company_name,
+                plan='free',
+                max_properties=1,
+                is_active=True
             )
         )
     except HTTPException:
@@ -410,7 +431,13 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
                 id=user.id,
                 email=user.email,
                 name=user.name,
-                is_demo=user.is_demo
+                is_demo=user.is_demo,
+                phone=user.phone,
+                company_name=user.company_name,
+                plan=user.plan or 'free',
+                is_email_verified=user.is_email_verified or False,
+                max_properties=user.max_properties or 1,
+                is_active=user.is_active if user.is_active is not None else True
             )
         )
     except HTTPException:
@@ -435,8 +462,65 @@ def get_me(user: DBUser = Depends(get_current_user)):
         email=user.email,
         name=user.name,
         created_at=user.created_at,
-        is_demo=user.is_demo
+        is_demo=user.is_demo,
+        phone=user.phone,
+        company_name=user.company_name,
+        plan=user.plan or 'free',
+        is_email_verified=user.is_email_verified or False,
+        max_properties=user.max_properties or 1,
+        is_active=user.is_active if user.is_active is not None else True
     )
+
+# ============ USER PROFILE UPDATE ===
+
+class UserProfileUpdate(BaseModel):
+    """Model für Profil-Updates"""
+    name: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=50)
+    company_name: Optional[str] = Field(None, max_length=200)
+    brand_color: Optional[str] = Field(None, max_length=7)
+    logo_url: Optional[str] = Field(None, max_length=500)
+    # Invoice / Rechnungsdaten
+    invoice_name: Optional[str] = Field(None, max_length=200)
+    invoice_address: Optional[str] = Field(None, max_length=500)
+    invoice_zip: Optional[str] = Field(None, max_length=20)
+    invoice_city: Optional[str] = Field(None, max_length=100)
+    invoice_country: Optional[str] = Field(None, max_length=100)
+    invoice_vat_id: Optional[str] = Field(None, max_length=50)
+
+@api_router.put("/auth/profile", response_model=User)
+def update_profile(data: UserProfileUpdate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Aktualisiere Benutzerprofil"""
+    try:
+        # Update nur übergebene Felder
+        update_data = data.model_dump(exclude_none=True)
+        
+        for key, value in update_data.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+        
+        db.commit()
+        db.refresh(user)
+        
+        logger.info(f"Profil aktualisiert für: {user.email}")
+        
+        return User(
+            id=user.id,
+            email=user.email,
+            name=user.name,
+            created_at=user.created_at,
+            is_demo=user.is_demo,
+            phone=user.phone,
+            company_name=user.company_name,
+            plan=user.plan or 'free',
+            is_email_verified=user.is_email_verified or False,
+            max_properties=user.max_properties or 1,
+            is_active=user.is_active if user.is_active is not None else True
+        )
+    except Exception as e:
+        logger.error(f"Fehler beim Aktualisieren des Profils: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren des Profils")
 
 # ============ PROPERTY ROUTES ============
 

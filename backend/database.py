@@ -23,7 +23,10 @@ class User(Base):
             'email_verification_token_expires', 'brand_color', 'logo_url',
             'invoice_name', 'invoice_address', 'invoice_zip', 'invoice_city',
             'invoice_country', 'invoice_vat_id', 'keysafe_location', 
-            'keysafe_code', 'keysafe_instructions'
+            'keysafe_code', 'keysafe_instructions',
+            # === NEU: User Management & Subscription ===
+            'phone', 'company_name', 'plan', 'trial_ends_at', 
+            'max_properties', 'stripe_customer_id', 'is_active'
         ]
     }
     
@@ -50,6 +53,14 @@ class User(Base):
     keysafe_location = Column(String(500))
     keysafe_code = Column(String(50))
     keysafe_instructions = Column(Text)
+    # === NEU: User Management & Subscription ===
+    phone = Column(String(50))  # Telefonnummer
+    company_name = Column(String(200))  # Firmenname (optional)
+    plan = Column(String(20), default='free')  # free, starter, pro, enterprise
+    trial_ends_at = Column(DateTime)  # Trial-Ende (für paid plans)
+    max_properties = Column(Integer, default=1)  # Max Properties je nach Plan
+    stripe_customer_id = Column(String(100))  # Stripe Customer ID für Payments
+    is_active = Column(Boolean, default=True)  # Account aktiv/deaktiviert
 
 class Property(Base):
     __tablename__ = "properties"
@@ -308,6 +319,14 @@ def init_db():
                         ('keysafe_location', 'VARCHAR(500)'),
                         ('keysafe_code', 'VARCHAR(50)'),
                         ('keysafe_instructions', 'TEXT'),
+                        # === NEU: User Management & Subscription ===
+                        ('phone', 'VARCHAR(50)'),
+                        ('company_name', 'VARCHAR(200)'),
+                        ('plan', 'VARCHAR(20) DEFAULT \'free\''),
+                        ('trial_ends_at', 'TIMESTAMP'),
+                        ('max_properties', 'INTEGER DEFAULT 1'),
+                        ('stripe_customer_id', 'VARCHAR(100)'),
+                        ('is_active', 'BOOLEAN DEFAULT TRUE'),
                     ]
                     
                     added = []
