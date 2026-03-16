@@ -128,6 +128,28 @@ SMTP_FROM=info@welcome-link.de
 - **Email:** demo@welcome-link.de
 - **Password:** Demo123!
 
+## ✅ PDF Downloads (16.03.2026 - 14:15)
+
+### Neue Downloads auf Resources-Seite:
+| PDF | Inhalt |
+|-----|--------|
+| `faq-vorlage-hotels.pdf` | 50+ Gästefragen mit Antworten |
+| `upsell-texte-sammlung.pdf` | Upselling-Formulierungen |
+| `email-templates.pdf` | Buchungs-, Willkommens-, Check-out Emails |
+| `onboarding-guide.pdf` | 5-Schritt Schnellstart Guide |
+
+### Speicherort:
+```
+/public/pdfs/*.pdf
+```
+
+### Git Commit:
+```
+a5bf510 - feat: Add downloadable PDF resources
+```
+
+---
+
 ## ✅ User Management & Subscription (16.03.2026 - 04:35)
 
 ### Neue Datenbank-Felder (User-Tabelle)
