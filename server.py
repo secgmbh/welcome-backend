@@ -522,6 +522,97 @@ def update_profile(data: UserProfileUpdate, user: DBUser = Depends(get_current_u
         db.rollback()
         raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren des Profils")
 
+# ============ ADMIN ROUTES ============
+
+class AdminUserUpdate(BaseModel):
+    """Model for admin user updates"""
+    plan: Optional[str] = None
+    is_active: Optional[bool] = None
+    max_properties: Optional[int] = None
+
+def verify_admin(user: DBUser = Depends(get_current_user)):
+    """Verify user is admin"""
+    if user.email != "admin@welcome-link.de":
+        raise HTTPException(status_code=403, detail="Admin-Zugriff erforderlich")
+    return user
+
+@api_router.get("/admin/users")
+def admin_get_users(user: DBUser = Depends(verify_admin), db: Session = Depends(get_db)):
+    """Admin: Get all users with plan info"""
+    try:
+        users = db.query(DBUser).all()
+        result = []
+        for u in users:
+            # Count properties for each user
+            prop_count = db.query(DBProperty).filter(DBProperty.user_id == u.id).count()
+            result.append({
+                "id": u.id,
+                "email": u.email,
+                "name": u.name,
+                "phone": u.phone,
+                "company_name": u.company_name,
+                "plan": u.plan or "free",
+                "is_active": u.is_active if u.is_active is not None else True,
+                "is_demo": u.is_demo,
+                "max_properties": u.max_properties or 1,
+                "properties_count": prop_count,
+                "created_at": u.created_at.isoformat() if u.created_at else None
+            })
+        return result
+    except Exception as e:
+        logger.error(f"Admin error getting users: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Benutzer")
+
+@api_router.patch("/admin/users/{user_id}/plan")
+def admin_update_user_plan(
+    user_id: str,
+    data: AdminUserUpdate,
+    user: DBUser = Depends(verify_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin: Update user plan"""
+    try:
+        target_user = db.query(DBUser).filter(DBUser.id == user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+        
+        # Plan limits mapping
+        plan_limits = {
+            "free": 1,
+            "starter": 3,
+            "pro": 10,
+            "enterprise": 999999
+        }
+        
+        if data.plan:
+            target_user.plan = data.plan
+            target_user.max_properties = plan_limits.get(data.plan, 1)
+        
+        if data.is_active is not None:
+            target_user.is_active = data.is_active
+        
+        if data.max_properties is not None:
+            target_user.max_properties = data.max_properties
+        
+        db.commit()
+        db.refresh(target_user)
+        
+        logger.info(f"Admin {user.email} updated user {user_id}: plan={data.plan}")
+        
+        return {
+            "id": target_user.id,
+            "email": target_user.email,
+            "plan": target_user.plan,
+            "max_properties": target_user.max_properties,
+            "is_active": target_user.is_active
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Admin error updating user: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren des Benutzers")
+
 # ============ PROPERTY ROUTES ============
 
 @api_router.get("/properties", response_model=List[Property])
