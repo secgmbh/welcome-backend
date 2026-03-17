@@ -91,7 +91,12 @@ SMTP_PASSWORD=q1/GtadF-x$?
 SMTP_FROM=info@welcome-link.de
 ```
 
-### Commits heute (15.03.2026)
+### Commits heute (16.03.2026)
+| Commit | Beschreibung |
+|--------|--------------|
+| `8ba7150` | Mobile Responsiveness: Search Overlay, User Avatar, Modal Fixes, Admin Tabs |
+
+### Commits (15.03.2026)
 | Commit | Beschreibung |
 |--------|--------------|
 | `3686218` | Memory Leaks in AdminPage/DashboardPage behoben |
@@ -273,6 +278,84 @@ STRIPE_PRICE_PRO_YEARLY=price_xxx
 | 34 | CI/CD Pipeline | ✅ |
 | 35 | Email Templates + Webhooks | ✅ |
 | 36 | Cron Jobs + Scripts + Docs | ✅ |
+
+## ✅ Mobile Responsiveness (16.03.2026 - 18:25)
+
+### Verbesserte Komponenten
+| Komponente | Fix |
+|-----------|-----|
+| Dashboard Search | Mobile Search Overlay mit Toggle-Button |
+| User Avatar | Zeigt Vornamen zusätzlich zu Initialen |
+| Smart Rules Modal | Responsive Breite, größere Touch-Targets (py-3) |
+| Demo Banner | Flex-Column Layout auf Mobile |
+| Admin Tabs | Horizontales Scrollen, abgekürzte Labels |
+| Admin Header | Kleinere Icons, "Abmelden" verkürzt |
+
+### Git Commit
+```
+8ba7150 - fix: Mobile responsiveness improvements
+```
+
+---
+
+## ✅ Reinigungs-Feature (16.03.2026 - 19:30)
+
+### Neue Backend-Modelle (v2.8.0)
+| Modell | Beschreibung |
+|--------|---------------|
+| `Cleaner` | Reinigungskraft (Name, E-Mail, Telefon, Notizen) |
+| `PropertyCleaner` | Zuweisung Cleaner ↔ Property mit Notify-Stunden |
+
+### Neue API Endpoints
+```
+GET    /api/cleaners                      - Alle Reinigungskräfte
+POST   /api/cleaners                      - Neue Reinigungskraft
+PUT    /api/cleaners/{id}                 - Reinigungskraft bearbeiten
+DELETE /api/cleaners/{id}                 - Reinigungskraft löschen
+POST   /api/properties/{id}/cleaners      - Cleaner zuweisen
+DELETE /api/properties/{id}/cleaners/{id} - Zuweisung entfernen
+GET    /api/properties/{id}/cleaners      - Cleaner der Property
+POST   /api/cron/cleaning-notifications   - Cron: Checkout-Benachrichtigung
+```
+
+### E-Mail Template
+- `send_cleaning_notification_email()` - Benachrichtigt Reinigungskraft bei Checkout
+
+### Git Commit
+```
+feat: Add cleaner management and cleaning notifications (v2.8.0)
+```
+
+---
+
+## ✅ Welcome Email Fix (16.03.2026 - 20:17)
+
+### Problem
+- Registrierung hat keine Welcome-Email gesendet
+- `send_welcome_email()` existierte, wurde aber nie aufgerufen
+
+### Lösung (v2.8.1)
+- `send_welcome_email()` in `/api/auth/register` Endpunkt integriert
+- E-Mail wird nach User-Erstellung gesendet
+- Fehler blockiert nicht die Registrierung (nur Logging)
+
+### Git Commits (16.03.2026)
+```
+57fdd61 - fix: Add psutil to requirements.txt (fixes ModuleNotFoundError)
+5512ca6 - fix: Send welcome email on registration (v2.8.1)
+```
+
+---
+
+## ⏳ Deploy Status (16.03.2026 - 20:17)
+
+| Version | Status | Beschreibung |
+|---------|--------|---------------|
+| v2.8.0 | ⏳ Pending | Cleaner Management |
+| v2.8.1 | ⏳ Pending | Welcome Email Fix |
+| API Current | 2.7.1 | Production |
+
+### Warte auf Render Auto-Deploy
 
 ## Neue Features (v2.6.x - v2.7.1)
 
