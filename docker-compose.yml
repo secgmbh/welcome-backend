@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Frontend (Vite Dev Server)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  # Backend (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://welcome:welcome@db:5432/welcome
+      - SECRET_KEY=dev-secret-key-do-not-use-in-production
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+      - STRIPE_SECRET_KEY=sk_test_xxx
+      - PAYPAL_CLIENT_ID=xxx
+      - PAYPAL_CLIENT_SECRET=xxx
+    depends_on:
+      - db
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=welcome
+      - POSTGRES_PASSWORD=welcome
+      - POSTGRES_DB=welcome
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis (for caching, rate limiting)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

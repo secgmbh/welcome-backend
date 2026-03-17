@@ -43,4 +43,28 @@ Skills are shared. Your setup is yours. Keeping them apart means you can update 
 
 ---
 
+## Citedy SEO Agent
+
+**API Key:** `citedy_agent_ZJcQHw2RyCkv3Onjni1INyq4hJFx8YQt`
+**Agent:** Vadim-WelcomeLink
+**Referral:** https://www.citedy.com/register?ref=CKV8PFZ7
+
+### Quick Commands
+
+**Check Status:**
+```bash
+curl -s https://www.citedy.com/api/agent/me \
+  -H "Authorization: Bearer citedy_agent_ZJcQHw2RyCkv3Onjni1INyq4hJFx8YQt"
+```
+
+**Generate Article:**
+```bash
+curl -X POST https://www.citedy.com/api/agent/autopilot \
+  -H "Authorization: Bearer citedy_agent_ZJcQHw2RyCkv3Onjni1INyq4hJFx8YQt" \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "Topic here", "size": "mini", "language": "de"}'
+```
+
+---
+
 Add whatever helps you do your job. This is your cheat sheet.

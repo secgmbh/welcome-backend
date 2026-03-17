@@ -1,117 +1,126 @@
-# Welcome Link Backend
+# Welcome Link
 
-FastAPI-based REST API for the Welcome Link property management platform.
-
-## Tech Stack
-
-- **FastAPI 0.135.1** - Modern Python Web Framework
-- **SQLAlchemy 2.0** - ORM for Database Operations
-- **SQLite** - Development Database (PostgreSQL for Production)
-- **PyJWT** - JWT Authentication
-- **SlowAPI** - Rate Limiting
-- **SMTP** - Email Integration
-- **Sentry** - Error Tracking (Optional)
+**Digitale Gästemappe für Ferienunterkünfte**
 
 ## Features
 
-- JWT-based authentication with magic link support
-- Property management with QR code generation
-- Booking system with calendar integration
-- Email templates for guest communication
-- PayPal and Stripe webhook integration
-- Cron job endpoints for automated tasks
-- Rate limiting on auth endpoints
-- Security headers (CSP, X-Frame-Options, etc.)
-- Admin panel with full CRUD operations
-- **Performance Monitoring** (v2.7.3):
-  - Request timing middleware (X-Process-Time-Ms header)
-  - Enhanced health check with system metrics
-  - Slow request logging (>500ms)
-  - CPU, memory, disk monitoring via psutil
+- **QR-Code Check-in** - Gäste scannen QR-Code und erhalten alle Informationen
+- **Premium Design** - Glass Morphism, Animationen, Dark Mode
+- **PWA Support** - Offline-fähig, installierbar
+- **Multi-Language** - Deutsch und Englisch
+- **Extras & Buchungen** - Zusatzleistungen direkt buchen
+- **Analytics** - QR-Scans, Buchungen, Umsatz
+- **Payment** - Stripe und PayPal Integration
 
-## API Endpoints (60+)
+## Tech Stack
 
-### Auth
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `GET /api/auth/me` - Get current user
-- `POST /api/auth/magic-link` - Magic link login
-- `POST /api/auth/password-reset/request` - Request password reset
-- `POST /api/auth/password-reset/confirm` - Confirm password reset
+### Frontend
+- React 18 mit Vite
+- TailwindCSS für Styling
+- React Router für Navigation
+- React Query für Data Fetching
+- PWA mit Service Worker
 
-### Properties
-- `GET /api/properties` - List properties
-- `POST /api/properties` - Create property
-- `GET /api/properties/{id}` - Get property
-- `PUT /api/properties/{id}` - Update property
-- `DELETE /api/properties/{id}` - Delete property
-- `GET /api/properties/{id}/extras` - Get property extras
+### Backend
+- Python FastAPI
+- PostgreSQL Datenbank
+- Stripe & PayPal Payments
+- JWT Authentication
 
-### Bookings
-- `GET /api/bookings` - List bookings
-- `POST /api/bookings` - Create booking
-- `GET /api/bookings/{id}` - Get booking
-- `GET /api/bookings/feed` - Live booking feed
-
-### Webhooks
-- `POST /api/webhooks/paypal` - PayPal webhook
-- `POST /api/webhooks/stripe` - Stripe webhook
-
-### Cron Jobs
-- `POST /api/cron/booking-reminders` - Send booking reminders
-- `POST /api/cron/guest-welcome` - Send guest welcome emails
-- `POST /api/cron/checkout-followup` - Send checkout follow-ups
-
-### Health & Monitoring
-- `GET /api/health` - Health check with system metrics (CPU, memory, disk)
-- `GET /api/stats/global` - Global statistics
-- `GET /api/admin/daily-stats` - Daily statistics for dashboard
-- `GET /api/admin/top-extras` - Top performing extras
-
-## Getting Started
+## Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Clone repository
+git clone https://github.com/secgmbh/welcome-link.git
+cd welcome-link
 
-# Set environment variables
-export SECRET_KEY="your-secret-key-min-32-chars"
-export DATABASE_URL="sqlite:///./app.db"
-export SMTP_HOST="smtp.example.com"
-export SMTP_PORT="587"
-export SMTP_USER="your-smtp-user"
-export SMTP_PASSWORD="your-smtp-password"
-export SMTP_FROM="noreply@welcome-link.de"
+# Start with Docker
+docker-compose up -d
 
-# Run development server
-uvicorn server:app --reload
-
-# Run tests
-pytest
+# Frontend: http://localhost:5173
+# Backend: http://localhost:8000
 ```
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `SECRET_KEY` | JWT secret key (min 32 chars) | Yes |
-| `DATABASE_URL` | Database connection string | Yes |
-| `SMTP_HOST` | SMTP server host | Yes |
-| `SMTP_PORT` | SMTP server port | Yes |
-| `SMTP_USER` | SMTP username | Yes |
-| `SMTP_PASSWORD` | SMTP password | Yes |
-| `SMTP_FROM` | Sender email address | Yes |
-| `SENTRY_DSN` | Sentry error tracking | No |
-| `ENVIRONMENT` | Environment (development/production) | No |
+### Frontend (.env)
+```env
+VITE_API_URL=http://localhost:8000
+VITE_POSTHOG_KEY=phc_xxx
+VITE_SENTRY_DSN=https://xxx@sentry.io/xxx
+```
+
+### Backend (.env)
+```env
+DATABASE_URL=postgresql://welcome:welcome@db:5432/welcome
+SECRET_KEY=your-secret-key-min-32-chars
+STRIPE_SECRET_KEY=sk_xxx
+PAYPAL_CLIENT_ID=xxx
+PAYPAL_CLIENT_SECRET=xxx
+```
+
+## Project Structure
+
+```
+welcome-link/
+├── frontend/           # React Frontend
+│   ├── src/
+│   │   ├── components/ # Reusable Components
+│   │   ├── features/   # Feature Modules
+│   │   ├── hooks/      # Custom Hooks
+│   │   ├── lib/        # Utilities
+│   │   └── pages/      # Page Components
+│   └── public/         # Static Assets
+├── backend/            # FastAPI Backend
+│   ├── server.py       # Main Application
+│   ├── models.py       # Database Models
+│   ├── webhooks.py     # Webhook Handlers
+│   └── tests/          # Test Suite
+└── memory/             # Documentation
+```
+
+## API Endpoints
+
+### Public
+- `GET /api/public/properties/:public_id` - Gästeseite Daten
+
+### Auth
+- `POST /api/auth/register` - Registrierung
+- `POST /api/auth/login` - Login
+- `GET /api/auth/me` - Aktueller User
+
+### Properties
+- `GET /api/properties` - Eigene Unterkünfte
+- `POST /api/properties` - Neue Unterkunft
+- `PUT /api/properties/:id` - Unterkunft bearbeiten
+
+### Extras
+- `GET /api/properties/:id/extras` - Extras auflisten
+- `POST /api/properties/:id/extras` - Extra erstellen
+
+### Checkout
+- `POST /api/checkout` - Neue Bestellung
+- `GET /api/checkout/:id/invoice` - PDF Rechnung
 
 ## Deployment
 
-The backend is deployed to Render with automatic deploys on push to main branch.
+### Frontend (Vercel)
+```bash
+cd frontend
+vercel --prod
+```
+
+### Backend (Render)
+1. GitHub Repository verbinden
+2. Environment Variables setzen
+3. Deploy
+
+## Demo
+
+- **Frontend:** https://www.welcome-link.de
+- **Gästeseite:** https://www.welcome-link.de/guestview/QEJHEXP1QF
+- **Login:** demo@welcome-link.de / Demo123!
 
 ## License
 
-Private - All rights reserved
-
-## Support
-
-For support, contact support@welcome-link.de
+MIT License - (c) 2026 SEC GmbH

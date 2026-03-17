@@ -2,10 +2,6 @@ from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, I
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timezone
 import os
-import logging
-
-# Logger für database module
-logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -15,20 +11,6 @@ engine = None
 
 class User(Base):
     __tablename__ = "users"
-    # Ignoriere die problematische is_ Spalte falls sie existiert
-    __mapper_args__ = {
-        'include_properties': [
-            'id', 'email', 'password_hash', 'name', 'created_at',
-            'is_demo', 'is_email_verified', 'email_verification_token', 
-            'email_verification_token_expires', 'brand_color', 'logo_url',
-            'invoice_name', 'invoice_address', 'invoice_zip', 'invoice_city',
-            'invoice_country', 'invoice_vat_id', 'keysafe_location', 
-            'keysafe_code', 'keysafe_instructions',
-            # === NEU: User Management & Subscription ===
-            'phone', 'company_name', 'plan', 'trial_ends_at', 
-            'max_properties', 'stripe_customer_id', 'is_active'
-        ]
-    }
     
     id = Column(String(36), primary_key=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
@@ -37,6 +19,7 @@ class User(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_demo = Column(Boolean, default=False)
     is_email_verified = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)  # Admin-Rechte für Nutzerverwaltung
     email_verification_token = Column(String(64), unique=True, index=True)
     email_verification_token_expires = Column(DateTime)
     # Branding
@@ -53,36 +36,19 @@ class User(Base):
     keysafe_location = Column(String(500))
     keysafe_code = Column(String(50))
     keysafe_instructions = Column(Text)
-    # === NEU: User Management & Subscription ===
-    phone = Column(String(50))  # Telefonnummer
-    company_name = Column(String(200))  # Firmenname (optional)
-    plan = Column(String(20), default='free')  # free, starter, pro, enterprise
-    trial_ends_at = Column(DateTime)  # Trial-Ende (für paid plans)
-    max_properties = Column(Integer, default=1)  # Max Properties je nach Plan
-    stripe_customer_id = Column(String(100))  # Stripe Customer ID für Payments
-    is_active = Column(Boolean, default=True)  # Account aktiv/deaktiviert
 
 class Property(Base):
     __tablename__ = "properties"
     
-    id = Column(Integer, primary_key=True, autoincrement=True)  # Integer ID (kompatibel mit existierender DB)
+    id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False, index=True)
     name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    address = Column(String(500), nullable=True)
-    public_id = Column(String(20), nullable=True, index=True)  # Öffentliche ID für QR-Codes
-    # Gästeseite Features
-    image_url = Column(String(500), nullable=True)  # Hauptbild
-    wifi_name = Column(String(100), nullable=True)  # WLAN Name
-    wifi_password = Column(String(100), nullable=True)  # WLAN Passwort
-    keysafe_location = Column(String(200), nullable=True)  # KeySafe Standort
-    keysafe_code = Column(String(50), nullable=True)  # KeySafe Code/PIN
-    keysafe_instructions = Column(Text, nullable=True)  # Anleitung
-    checkin_time = Column(String(10), default="15:00")  # Check-in Zeit
-    checkout_time = Column(String(10), default="11:00")  # Check-out Zeit
-    host_phone = Column(String(50), nullable=True)  # Gastgeber Telefon
-    host_email = Column(String(100), nullable=True)  # Gastgeber Email
-    host_whatsapp = Column(String(50), nullable=True)  # WhatsApp Nummer
+    description = Column(Text)
+    address = Column(String(500))
+    # Key-Safe Info
+    keysafe_location = Column(String(500))
+    keysafe_code = Column(String(50))
+    keysafe_instructions = Column(Text)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class StatusCheck(Base):
@@ -229,142 +195,6 @@ class Task(Base):
     priority = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-
-class Cleaner(Base):
-    """Reinigungskraft für Properties"""
-    __tablename__ = "cleaners"
-    
-    id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), nullable=False, index=True)  # Owner (User)
-    name = Column(String(200), nullable=False)
-    email = Column(String(255), nullable=False)
-    phone = Column(String(50))
-    notes = Column(Text)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-
-class PropertyCleaner(Base):
-    """Zuweisung: Reinigungskraft <-> Property"""
-    __tablename__ = "property_cleaners"
-    
-    id = Column(String(36), primary_key=True)
-    property_id = Column(Integer, nullable=False, index=True)
-    cleaner_id = Column(String(36), nullable=False, index=True)
-    notify_hours_before = Column(Integer, default=2)  # Stunden vor Checkout benachrichtigen
-    is_primary = Column(Boolean, default=False)  # Haupt-Reinigungskraft
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-
-class Review(Base):
-    """Gästebewertungen"""
-    __tablename__ = "reviews"
-    
-    id = Column(String(36), primary_key=True)
-    property_id = Column(Integer, nullable=False, index=True)
-    booking_id = Column(String(36), index=True)
-    guest_name = Column(String(200))
-    guest_email = Column(String(200))
-    rating = Column(Integer, nullable=False)  # 1-5 Sterne
-    title = Column(String(200))
-    comment = Column(Text)
-    reply = Column(Text)  # Antwort vom Host
-    reply_at = Column(DateTime)  # Zeitpunkt der Antwort
-    is_approved = Column(Boolean, default=True)  # Freigeschaltet
-    is_visible = Column(Boolean, default=True)  # Sichtbar auf Gästeseite
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-
-class NotificationPreference(Base):
-    """Benachrichtigungseinstellungen pro User"""
-    __tablename__ = "notification_preferences"
-    
-    id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), nullable=False, unique=True, index=True)
-    # E-Mail Benachrichtigungen
-    email_booking_new = Column(Boolean, default=True)
-    email_booking_confirmed = Column(Boolean, default=True)
-    email_booking_cancelled = Column(Boolean, default=True)
-    email_review_new = Column(Boolean, default=True)
-    email_cleaning_reminder = Column(Boolean, default=True)
-    email_marketing = Column(Boolean, default=False)
-    # Push Benachrichtigungen (für zukünftige Mobile App)
-    push_booking_new = Column(Boolean, default=True)
-    push_booking_confirmed = Column(Boolean, default=True)
-    push_review_new = Column(Boolean, default=True)
-    push_cleaning_reminder = Column(Boolean, default=True)
-    # Timing
-    reminder_hours_before = Column(Integer, default=24)  # Stunden vor Check-in/Check-out
-    cleaning_notify_hours = Column(Integer, default=2)  # Stunden vor Checkout für Reinigung
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
-
-class AnalyticsEvent(Base):
-    """Analytics Events für Tracking"""
-    __tablename__ = "analytics_events"
-    
-    id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), index=True)
-    property_id = Column(Integer, index=True)
-    event_type = Column(String(50), nullable=False)  # page_view, qr_scan, booking_created, etc.
-    event_data = Column(Text)  # JSON für zusätzliche Daten
-    guest_token = Column(String(36), index=True)  # Für Guest-Analytics
-    ip_address = Column(String(50))
-    user_agent = Column(String(500))
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
-
-
-class PropertyAnalytics(Base):
-    """Täglich aggregierte Property-Statistiken"""
-    __tablename__ = "property_analytics"
-    
-    id = Column(String(36), primary_key=True)
-    property_id = Column(Integer, nullable=False, index=True)
-    date = Column(DateTime, nullable=False, index=True)
-    # Buchungen
-    bookings_created = Column(Integer, default=0)
-    bookings_confirmed = Column(Integer, default=0)
-    bookings_cancelled = Column(Integer, default=0)
-    # Umsatz
-    revenue_total = Column(Float, default=0)
-    revenue_extras = Column(Float, default=0)
-    # Gäste
-    guests_total = Column(Integer, default=0)
-    nights_total = Column(Integer, default=0)
-    # Occupancy
-    occupancy_rate = Column(Float, default=0)  # 0.0 - 1.0
-    # Views & Scans
-    qr_scans = Column(Integer, default=0)
-    guest_views = Column(Integer, default=0)
-    # Extras
-    extras_sold = Column(Integer, default=0)
-    extras_revenue = Column(Float, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-
-class Translation(Base):
-    """i18n Übersetzungen"""
-    __tablename__ = "translations"
-    
-    id = Column(String(36), primary_key=True)
-    language = Column(String(5), nullable=False, index=True)  # de, en, fr, etc.
-    key = Column(String(200), nullable=False, index=True)  # translation key
-    value = Column(Text, nullable=False)  # translated text
-    context = Column(String(50))  # context (guestview, dashboard, email)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
-
-class UserLanguage(Base):
-    """User-Spracheinstellung"""
-    __tablename__ = "user_languages"
-    
-    id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), nullable=False, unique=True, index=True)
-    language = Column(String(5), default='de')  # de, en, fr, etc.
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)
@@ -390,181 +220,50 @@ def init_db():
     global SessionLocal, engine
     
     database_url = get_database_url()
-    logger.info(f"[DB] Verbinde zu: {database_url[:50]}...")
+    print(f"[DB] Verbinde zu: {database_url[:50]}...")
     
     try:
         engine = create_engine(database_url, pool_pre_ping=True, echo=False)
-        logger.info(f"[DB] Engine erstellt")
+        print(f"[DB] Engine erstellt")
         
         # Teste Connection
         with engine.connect() as conn:
-            logger.info(f"[DB] ✓ Connection erfolgreich")
+            print(f"[DB] ✓ Connection erfolgreich")
         
-        # WICHTIG: Fehlende Spalten VOR create_all() hinzufügen (für bestehende Datenbanken)
-        # Dies muss VOR create_all() passieren, damit neue Spalten verfügbar sind
-        logger.info(f"[DB] Prüfe und füge fehlende Spalten hinzu...")
-        try:
-            with engine.connect() as conn:
-                # Prüfe welche Tabellen existieren
-                result = conn.execute(text("""
-                    SELECT table_name FROM information_schema.tables 
-                    WHERE table_schema = 'public'
-                """))
-                existing_tables = [row[0] for row in result.fetchall()]
-                logger.info(f"[DB] Existierende Tabellen: {existing_tables}")
-                
-                # Wenn users Tabelle existiert, füge fehlende Spalten hinzu
-                if 'users' in existing_tables:
-                    result = conn.execute(text("""
-                        SELECT column_name FROM information_schema.columns 
-                        WHERE table_name = 'users'
-                    """))
-                    existing_columns = [row[0] for row in result.fetchall()]
-                    logger.info(f"[DB] Existierende users Spalten: {existing_columns}")
-                    
-                    # BEREINIGUNG: Lösche die problematische 'is_' Spalte falls vorhanden
-                    # Diese Spalte wurde versehentlich erstellt und verursacht Fehler
-                    if 'is_' in existing_columns:
-                        try:
-                            # DROP COLUMN benötigt explizites Commit in PostgreSQL
-                            conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_"))
-                            logger.info(f"[DB] ✓ Executed DROP COLUMN is_")
-                        except Exception as e:
-                            logger.warning(f"[DB] ⚠️ Could not drop column is_: {e}")
-                    # Commit außerhalb des try blocks um sicherzustellen dass es ausgeführt wird
-                    try:
-                        conn.commit()
-                        logger.info(f"[DB] ✓ Schema changes committed")
-                    except Exception as e:
-                        logger.warning(f"[DB] ⚠️ Commit failed: {e}")
-                    
-                    # Fehlende Spalten hinzufügen
-                    columns_to_add = [
-                        ('is_demo', 'BOOLEAN DEFAULT FALSE'),
-                        ('is_email_verified', 'BOOLEAN DEFAULT FALSE'),
-                        ('email_verification_token', 'VARCHAR(64)'),
-                        ('email_verification_token_expires', 'TIMESTAMP'),
-                        ('brand_color', 'VARCHAR(7)'),
-                        ('logo_url', 'VARCHAR(500)'),
-                        ('invoice_name', 'VARCHAR(200)'),
-                        ('invoice_address', 'VARCHAR(500)'),
-                        ('invoice_zip', 'VARCHAR(20)'),
-                        ('invoice_city', 'VARCHAR(100)'),
-                        ('invoice_country', 'VARCHAR(100)'),
-                        ('invoice_vat_id', 'VARCHAR(50)'),
-                        ('keysafe_location', 'VARCHAR(500)'),
-                        ('keysafe_code', 'VARCHAR(50)'),
-                        ('keysafe_instructions', 'TEXT'),
-                        # === NEU: User Management & Subscription ===
-                        ('phone', 'VARCHAR(50)'),
-                        ('company_name', 'VARCHAR(200)'),
-                        ('plan', 'VARCHAR(20) DEFAULT \'free\''),
-                        ('trial_ends_at', 'TIMESTAMP'),
-                        ('max_properties', 'INTEGER DEFAULT 1'),
-                        ('stripe_customer_id', 'VARCHAR(100)'),
-                        ('is_active', 'BOOLEAN DEFAULT TRUE'),
-                    ]
-                    
-                    added = []
-                    for col_name, col_type in columns_to_add:
-                        if col_name not in existing_columns:
-                            try:
-                                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
-                                conn.commit()
-                                added.append(col_name)
-                                logger.info(f"[DB] ✓ Added column to users: {col_name}")
-                            except Exception as e:
-                                logger.info(f"[DB] ✗ Failed to add {col_name}: {e}")
-                                conn.rollback()
-                    
-                    if added:
-                        logger.info(f"[DB] ✓ Added {len(added)} missing columns to users table")
-                
-                # Wenn properties Tabelle existiert, prüfe user_id Typ und füge fehlende Spalten hinzu
-                if 'properties' in existing_tables:
-                    result = conn.execute(text("""
-                        SELECT column_name FROM information_schema.columns 
-                        WHERE table_name = 'properties'
-                    """))
-                    existing_prop_columns = [row[0] for row in result.fetchall()]
-                    
-                    # Fehlende Spalten für properties
-                    prop_columns_to_add = [
-                        ('is_active', 'BOOLEAN DEFAULT TRUE'),
-                        ('description', 'TEXT'),
-                        ('address', 'VARCHAR(500)'),
-                        ('keysafe_location', 'VARCHAR(500)'),
-                        ('keysafe_code', 'VARCHAR(50)'),
-                        ('keysafe_instructions', 'TEXT'),
-                    ]
-                    
-                    for col_name, col_type in prop_columns_to_add:
-                        if col_name not in existing_prop_columns:
-                            try:
-                                conn.execute(text(f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}"))
-                                conn.commit()
-                                logger.info(f"[DB] ✓ Added column to properties: {col_name}")
-                            except Exception as e:
-                                logger.info(f"[DB] ✗ Failed to add {col_name} to properties: {e}")
-                                conn.rollback()
-                    
-                    # Prüfe user_id Typ
-                    result = conn.execute(text("""
-                        SELECT data_type 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'properties' AND column_name = 'user_id'
-                    """))
-                    row = result.fetchone()
-                    if row and 'int' in str(row[0]).lower():
-                        logger.info(f"[DB] ⚠️  properties.user_id ist Integer - ändere zu VARCHAR(36)...")
-                        conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
-                        conn.commit()
-                        logger.info(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
-                        
-        except Exception as e:
-            logger.info(f"[DB] ⚠️  Konnte Migrationen nicht ausführen: {e}")
-        
-        # Erstelle fehlende Tabellen (für neue Installationen)
-        logger.info(f"[DB] Erstelle fehlende Tables (falls nötig)...")
+        # Erstelle fehlende Tabellen (Fallback für neue Installationen)
+        # Schema-Änderungen werden über Alembic Migrations verwaltet
+        print(f"[DB] Erstelle fehlende Tables (falls nötig)...")
         Base.metadata.create_all(bind=engine)
-        logger.info(f"[DB] ✓ Tables erstellt/geprüft")
+        print(f"[DB] ✓ Tables erstellt/geprüft")
         
         # Überprüfe ob Tables existieren
         insp = inspect(engine)
         tables = insp.get_table_names()
-        logger.info(f"[DB] ✓ Existierende Tabellen: {tables}")
+        print(f"[DB] ✓ Existierende Tabellen: {tables}")
+        
+        # Prüfe ob properties.user_id VARCHAR ist (für UUIDs)
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'properties' AND column_name = 'user_id'
+                """)).fetchone()
+                if result and 'int' in result[0].lower():
+                    print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - ändere Spalte zu VARCHAR(36)...")
+                    conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
+                    conn.commit()
+                    print(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
+        except Exception as e:
+            print(f"[DB] ⚠️  Konnte user_id Spalte nicht prüfen/ändern: {e}")
         
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        logger.info(f"[DB] ✓ SessionLocal initialisiert")
-        
-        # Erstelle Demo-Benutzer wenn nicht vorhanden
-        try:
-            logger.info(f"[DB] Prüfe Demo-Benutzer...")
-            with engine.connect() as conn:
-                result = conn.execute(text("SELECT id, email FROM users WHERE email = 'demo@welcome-link.de'"))
-                existing = result.fetchone()
-                
-                if not existing:
-                    import uuid
-                    from datetime import datetime
-                    demo_id = str(uuid.uuid4())
-                    # Einfacher Password Hash für Demo (in Production sollte bcrypt verwendet werden)
-                    import hashlib
-                    password_hash = hashlib.sha256("Demo123!".encode()).hexdigest()
-                    
-                    conn.execute(text("""
-                        INSERT INTO users (id, email, password_hash, name, created_at)
-                        VALUES (:id, 'demo@welcome-link.de', :hash, 'Demo Benutzer', NOW())
-                    """), {"id": demo_id, "hash": password_hash})
-                    conn.commit()
-                    logger.info(f"[DB] ✓ Demo-Benutzer erstellt")
-        except Exception as e:
-            logger.info(f"[DB] ⚠️  Konnte Demo-Benutzer nicht erstellen: {e}")
+        print(f"[DB] ✓ SessionLocal initialisiert")
         
         return engine, SessionLocal
     except Exception as e:
-        logger.info(f"[DB] ❌ ERROR: {str(e)}")
+        print(f"[DB] ❌ ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         raise
@@ -576,5 +275,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
