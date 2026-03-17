@@ -255,6 +255,116 @@ class PropertyCleaner(Base):
     is_primary = Column(Boolean, default=False)  # Haupt-Reinigungskraft
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+
+class Review(Base):
+    """Gästebewertungen"""
+    __tablename__ = "reviews"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(Integer, nullable=False, index=True)
+    booking_id = Column(String(36), index=True)
+    guest_name = Column(String(200))
+    guest_email = Column(String(200))
+    rating = Column(Integer, nullable=False)  # 1-5 Sterne
+    title = Column(String(200))
+    comment = Column(Text)
+    reply = Column(Text)  # Antwort vom Host
+    reply_at = Column(DateTime)  # Zeitpunkt der Antwort
+    is_approved = Column(Boolean, default=True)  # Freigeschaltet
+    is_visible = Column(Boolean, default=True)  # Sichtbar auf Gästeseite
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class NotificationPreference(Base):
+    """Benachrichtigungseinstellungen pro User"""
+    __tablename__ = "notification_preferences"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, unique=True, index=True)
+    # E-Mail Benachrichtigungen
+    email_booking_new = Column(Boolean, default=True)
+    email_booking_confirmed = Column(Boolean, default=True)
+    email_booking_cancelled = Column(Boolean, default=True)
+    email_review_new = Column(Boolean, default=True)
+    email_cleaning_reminder = Column(Boolean, default=True)
+    email_marketing = Column(Boolean, default=False)
+    # Push Benachrichtigungen (für zukünftige Mobile App)
+    push_booking_new = Column(Boolean, default=True)
+    push_booking_confirmed = Column(Boolean, default=True)
+    push_review_new = Column(Boolean, default=True)
+    push_cleaning_reminder = Column(Boolean, default=True)
+    # Timing
+    reminder_hours_before = Column(Integer, default=24)  # Stunden vor Check-in/Check-out
+    cleaning_notify_hours = Column(Integer, default=2)  # Stunden vor Checkout für Reinigung
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class AnalyticsEvent(Base):
+    """Analytics Events für Tracking"""
+    __tablename__ = "analytics_events"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), index=True)
+    property_id = Column(Integer, index=True)
+    event_type = Column(String(50), nullable=False)  # page_view, qr_scan, booking_created, etc.
+    event_data = Column(Text)  # JSON für zusätzliche Daten
+    guest_token = Column(String(36), index=True)  # Für Guest-Analytics
+    ip_address = Column(String(50))
+    user_agent = Column(String(500))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class PropertyAnalytics(Base):
+    """Täglich aggregierte Property-Statistiken"""
+    __tablename__ = "property_analytics"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(Integer, nullable=False, index=True)
+    date = Column(DateTime, nullable=False, index=True)
+    # Buchungen
+    bookings_created = Column(Integer, default=0)
+    bookings_confirmed = Column(Integer, default=0)
+    bookings_cancelled = Column(Integer, default=0)
+    # Umsatz
+    revenue_total = Column(Float, default=0)
+    revenue_extras = Column(Float, default=0)
+    # Gäste
+    guests_total = Column(Integer, default=0)
+    nights_total = Column(Integer, default=0)
+    # Occupancy
+    occupancy_rate = Column(Float, default=0)  # 0.0 - 1.0
+    # Views & Scans
+    qr_scans = Column(Integer, default=0)
+    guest_views = Column(Integer, default=0)
+    # Extras
+    extras_sold = Column(Integer, default=0)
+    extras_revenue = Column(Float, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Translation(Base):
+    """i18n Übersetzungen"""
+    __tablename__ = "translations"
+    
+    id = Column(String(36), primary_key=True)
+    language = Column(String(5), nullable=False, index=True)  # de, en, fr, etc.
+    key = Column(String(200), nullable=False, index=True)  # translation key
+    value = Column(Text, nullable=False)  # translated text
+    context = Column(String(50))  # context (guestview, dashboard, email)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class UserLanguage(Base):
+    """User-Spracheinstellung"""
+    __tablename__ = "user_languages"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, unique=True, index=True)
+    language = Column(String(5), default='de')  # de, en, fr, etc.
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)

@@ -3299,3 +3299,683 @@ async def send_cleaning_notifications(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Reinigungs-Benachrichtigung Fehler: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ NOTIFICATION PREFERENCES API ============
+class NotificationPreferenceUpdate(BaseModel):
+    email_booking_new: Optional[bool] = None
+    email_booking_confirmed: Optional[bool] = None
+    email_booking_cancelled: Optional[bool] = None
+    email_review_new: Optional[bool] = None
+    email_cleaning_reminder: Optional[bool] = None
+    email_marketing: Optional[bool] = None
+    push_booking_new: Optional[bool] = None
+    push_booking_confirmed: Optional[bool] = None
+    push_review_new: Optional[bool] = None
+    push_cleaning_reminder: Optional[bool] = None
+    reminder_hours_before: Optional[int] = None
+    cleaning_notify_hours: Optional[int] = None
+
+@api_router.get("/notifications/preferences")
+def get_notification_preferences(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get user's notification preferences"""
+    from database import NotificationPreference as DBNotificationPreference
+    
+    prefs = db.query(DBNotificationPreference).filter(
+        DBNotificationPreference.user_id == user.id
+    ).first()
+    
+    if not prefs:
+        # Create default preferences
+        prefs = DBNotificationPreference(
+            id=str(uuid.uuid4()),
+            user_id=user.id
+        )
+        db.add(prefs)
+        db.commit()
+        db.refresh(prefs)
+    
+    return {
+        "id": prefs.id,
+        "user_id": prefs.user_id,
+        "email_booking_new": prefs.email_booking_new,
+        "email_booking_confirmed": prefs.email_booking_confirmed,
+        "email_booking_cancelled": prefs.email_booking_cancelled,
+        "email_review_new": prefs.email_review_new,
+        "email_cleaning_reminder": prefs.email_cleaning_reminder,
+        "email_marketing": prefs.email_marketing,
+        "push_booking_new": prefs.push_booking_new,
+        "push_booking_confirmed": prefs.push_booking_confirmed,
+        "push_review_new": prefs.push_review_new,
+        "push_cleaning_reminder": prefs.push_cleaning_reminder,
+        "reminder_hours_before": prefs.reminder_hours_before,
+        "cleaning_notify_hours": prefs.cleaning_notify_hours,
+        "created_at": prefs.created_at.isoformat() if prefs.created_at else None,
+        "updated_at": prefs.updated_at.isoformat() if prefs.updated_at else None
+    }
+
+@api_router.put("/notifications/preferences")
+def update_notification_preferences(
+    update: NotificationPreferenceUpdate,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user's notification preferences"""
+    from database import NotificationPreference as DBNotificationPreference
+    
+    prefs = db.query(DBNotificationPreference).filter(
+        DBNotificationPreference.user_id == user.id
+    ).first()
+    
+    if not prefs:
+        prefs = DBNotificationPreference(
+            id=str(uuid.uuid4()),
+            user_id=user.id
+        )
+        db.add(prefs)
+    
+    # Update only provided fields
+    if update.email_booking_new is not None:
+        prefs.email_booking_new = update.email_booking_new
+    if update.email_booking_confirmed is not None:
+        prefs.email_booking_confirmed = update.email_booking_confirmed
+    if update.email_booking_cancelled is not None:
+        prefs.email_booking_cancelled = update.email_booking_cancelled
+    if update.email_review_new is not None:
+        prefs.email_review_new = update.email_review_new
+    if update.email_cleaning_reminder is not None:
+        prefs.email_cleaning_reminder = update.email_cleaning_reminder
+    if update.email_marketing is not None:
+        prefs.email_marketing = update.email_marketing
+    if update.push_booking_new is not None:
+        prefs.push_booking_new = update.push_booking_new
+    if update.push_booking_confirmed is not None:
+        prefs.push_booking_confirmed = update.push_booking_confirmed
+    if update.push_review_new is not None:
+        prefs.push_review_new = update.push_review_new
+    if update.push_cleaning_reminder is not None:
+        prefs.push_cleaning_reminder = update.push_cleaning_reminder
+    if update.reminder_hours_before is not None:
+        prefs.reminder_hours_before = update.reminder_hours_before
+    if update.cleaning_notify_hours is not None:
+        prefs.cleaning_notify_hours = update.cleaning_notify_hours
+    
+    db.commit()
+    db.refresh(prefs)
+    
+    return {"status": "success", "message": "Benachrichtigungseinstellungen aktualisiert"}
+
+
+# ============ REVIEWS API ============
+class ReviewCreate(BaseModel):
+    property_id: int
+    booking_id: Optional[str] = None
+    guest_name: str
+    guest_email: Optional[str] = None
+    rating: int = Field(..., ge=1, le=5)
+    title: Optional[str] = None
+    comment: Optional[str] = None
+
+class ReviewReply(BaseModel):
+    reply: str
+
+@api_router.get("/reviews")
+def get_reviews(
+    property_id: Optional[int] = None,
+    approved_only: bool = True,
+    limit: int = 50,
+    offset: int = 0,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get reviews (optionally filtered by property)"""
+    from database import Review as DBReview
+    
+    query = db.query(DBReview)
+    
+    if property_id:
+        query = query.filter(DBReview.property_id == property_id)
+    
+    if approved_only:
+        query = query.filter(DBReview.is_approved == True, DBReview.is_visible == True)
+    
+    reviews = query.order_by(DBReview.created_at.desc()).offset(offset).limit(limit).all()
+    
+    return {
+        "reviews": [
+            {
+                "id": r.id,
+                "property_id": r.property_id,
+                "guest_name": r.guest_name,
+                "rating": r.rating,
+                "title": r.title,
+                "comment": r.comment,
+                "reply": r.reply,
+                "reply_at": r.reply_at.isoformat() if r.reply_at else None,
+                "is_approved": r.is_approved,
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            }
+            for r in reviews
+        ],
+        "total": query.count()
+    }
+
+@api_router.post("/reviews")
+def create_review(review: ReviewCreate, db: Session = Depends(get_db)):
+    """Create a new review (public endpoint for guests)"""
+    from database import Review as DBReview
+    
+    new_review = DBReview(
+        id=str(uuid.uuid4()),
+        property_id=review.property_id,
+        booking_id=review.booking_id,
+        guest_name=review.guest_name,
+        guest_email=review.guest_email,
+        rating=review.rating,
+        title=review.title,
+        comment=review.comment,
+        is_approved=True  # Auto-approve for now
+    )
+    
+    db.add(new_review)
+    db.commit()
+    db.refresh(new_review)
+    
+    return {"status": "success", "review_id": new_review.id}
+
+@api_router.post("/reviews/{review_id}/reply")
+def reply_to_review(
+    review_id: str,
+    reply: ReviewReply,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Host replies to a review"""
+    from database import Review as DBReview
+    
+    review = db.query(DBReview).filter(DBReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Bewertung nicht gefunden")
+    
+    # Verify ownership (property belongs to user)
+    property = db.query(DBProperty).filter(DBProperty.id == review.property_id).first()
+    if not property or property.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    review.reply = reply.reply
+    review.reply_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    
+    return {"status": "success", "message": "Antwort gespeichert"}
+
+@api_router.delete("/reviews/{review_id}")
+def delete_review(
+    review_id: str,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a review (host only)"""
+    from database import Review as DBReview
+    
+    review = db.query(DBReview).filter(DBReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Bewertung nicht gefunden")
+    
+    # Verify ownership
+    property = db.query(DBProperty).filter(DBProperty.id == review.property_id).first()
+    if not property or property.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    db.delete(review)
+    db.commit()
+    
+    return {"status": "success", "message": "Bewertung gelöscht"}
+
+
+# ============ ANALYTICS API (Enhanced) ============
+class AnalyticsFilter(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    property_id: Optional[int] = None
+    group_by: Optional[str] = "day"  # day, week, month
+
+@api_router.post("/analytics/dashboard")
+def get_analytics_dashboard(
+    filter: AnalyticsFilter,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get comprehensive analytics data for dashboard"""
+    from database import PropertyAnalytics as DBPropertyAnalytics
+    from database import AnalyticsEvent as DBAnalyticsEvent
+    
+    # Parse dates
+    if filter.start_date:
+        start = datetime.fromisoformat(filter.start_date.replace('Z', '+00:00'))
+    else:
+        start = datetime.now(timezone.utc) - timedelta(days=30)
+    
+    if filter.end_date:
+        end = datetime.fromisoformat(filter.end_date.replace('Z', '+00:00'))
+    else:
+        end = datetime.now(timezone.utc)
+    
+    # Get user's properties
+    properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+    property_ids = [p.id for p in properties]
+    
+    # Get bookings for the period
+    bookings_query = db.query(DBBooking).filter(
+        DBBooking.user_id == user.id,
+        DBBooking.created_at >= start,
+        DBBooking.created_at <= end
+    )
+    
+    if filter.property_id:
+        bookings_query = bookings_query.filter(DBBooking.property_id == filter.property_id)
+    
+    bookings = bookings_query.all()
+    
+    # Calculate stats
+    total_bookings = len(bookings)
+    confirmed_bookings = len([b for b in bookings if b.status == 'confirmed'])
+    completed_bookings = len([b for b in bookings if b.status == 'completed'])
+    cancelled_bookings = len([b for b in bookings if b.status == 'cancelled'])
+    
+    total_revenue = sum(b.total_price or 0 for b in bookings if b.status in ['confirmed', 'completed'])
+    avg_booking_value = total_revenue / confirmed_bookings if confirmed_bookings > 0 else 0
+    
+    # Occupancy calculation
+    total_nights = 0
+    for b in bookings:
+        if b.check_in and b.check_out and b.status in ['confirmed', 'completed']:
+            nights = (b.check_out - b.check_in).days
+            total_nights += max(0, nights)
+    
+    # Get reviews for average rating
+    from database import Review as DBReview
+    reviews = db.query(DBReview).filter(
+        DBReview.property_id.in_(property_ids) if property_ids else DBReview.property_id == -1
+    ).all()
+    
+    avg_rating = 0
+    if reviews:
+        avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1)
+    
+    # Group bookings by date for chart
+    bookings_by_date = {}
+    revenue_by_date = {}
+    
+    for b in bookings:
+        if b.created_at:
+            if filter.group_by == "day":
+                key = b.created_at.strftime("%Y-%m-%d")
+            elif filter.group_by == "week":
+                key = b.created_at.strftime("%Y-W%W")
+            else:  # month
+                key = b.created_at.strftime("%Y-%m")
+            
+            bookings_by_date[key] = bookings_by_date.get(key, 0) + 1
+            revenue_by_date[key] = revenue_by_date.get(key, 0) + (b.total_price or 0)
+    
+    # Generate labels and data
+    sorted_keys = sorted(bookings_by_date.keys())
+    
+    return {
+        "summary": {
+            "total_bookings": total_bookings,
+            "confirmed_bookings": confirmed_bookings,
+            "completed_bookings": completed_bookings,
+            "cancelled_bookings": cancelled_bookings,
+            "total_revenue": round(total_revenue, 2),
+            "avg_booking_value": round(avg_booking_value, 2),
+            "total_nights": total_nights,
+            "avg_rating": avg_rating,
+            "total_reviews": len(reviews)
+        },
+        "charts": {
+            "bookings_by_date": {
+                "labels": sorted_keys,
+                "data": [bookings_by_date.get(k, 0) for k in sorted_keys]
+            },
+            "revenue_by_date": {
+                "labels": sorted_keys,
+                "data": [round(revenue_by_date.get(k, 0), 2) for k in sorted_keys]
+            }
+        },
+        "properties": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "bookings_count": len([b for b in bookings if str(b.property_id) == str(p.id)])
+            }
+            for p in properties
+        ],
+        "period": {
+            "start": start.isoformat(),
+            "end": end.isoformat()
+        }
+    }
+
+@api_router.get("/analytics/occupancy")
+def get_occupancy_analytics(
+    property_id: Optional[int] = None,
+    months: int = 12,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get occupancy rate analytics"""
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+    
+    # Get user's properties
+    properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+    
+    if property_id:
+        properties = [p for p in properties if p.id == property_id]
+    
+    if not properties:
+        return {"occupancy": [], "avg_occupancy": 0}
+    
+    property_ids = [p.id for p in properties]
+    
+    # Calculate occupancy for each month
+    now = datetime.now(timezone.utc)
+    occupancy_data = []
+    total_occupancy = 0
+    
+    for i in range(months):
+        month_start = now - relativedelta(months=months - 1 - i)
+        month_start = month_start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Days in month
+        if month_start.month == 12:
+            month_end = month_start.replace(year=month_start.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            month_end = month_start.replace(month=month_start.month + 1, day=1) - timedelta(days=1)
+        
+        days_in_month = month_end.day
+        
+        # Get bookings for this month
+        bookings = db.query(DBBooking).filter(
+            DBBooking.property_id.in_(property_ids),
+            DBBooking.status.in_(['confirmed', 'completed']),
+            DBBooking.check_out >= month_start,
+            DBBooking.check_in <= month_end
+        ).all()
+        
+        # Count occupied nights
+        occupied_nights = 0
+        for b in bookings:
+            check_in = max(b.check_in, month_start) if b.check_in else month_start
+            check_out = min(b.check_out, month_end + timedelta(days=1)) if b.check_out else month_end
+            
+            if check_out > check_in:
+                nights = (check_out - check_in).days
+                occupied_nights += max(0, nights)
+        
+        # Total possible nights (properties * days)
+        max_nights = len(property_ids) * days_in_month
+        occupancy_rate = (occupied_nights / max_nights * 100) if max_nights > 0 else 0
+        
+        occupancy_data.append({
+            "month": month_start.strftime("%Y-%m"),
+            "month_name": month_start.strftime("%b %Y"),
+            "occupied_nights": occupied_nights,
+            "max_nights": max_nights,
+            "occupancy_rate": round(occupancy_rate, 1)
+        })
+        
+        total_occupancy += occupancy_rate
+    
+    avg_occupancy = total_occupancy / months if months > 0 else 0
+    
+    return {
+        "occupancy": occupancy_data,
+        "avg_occupancy": round(avg_occupancy, 1),
+        "properties_count": len(properties)
+    }
+
+@api_router.post("/analytics/track")
+def track_analytics_event(
+    event_type: str,
+    property_id: Optional[int] = None,
+    event_data: Optional[dict] = None,
+    guest_token: Optional[str] = None,
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """Track an analytics event"""
+    from database import AnalyticsEvent as DBAnalyticsEvent
+    
+    # Get IP and user agent
+    ip_address = None
+    user_agent = None
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "")[:500]
+    
+    event = DBAnalyticsEvent(
+        id=str(uuid.uuid4()),
+        event_type=event_type,
+        property_id=property_id,
+        event_data=json.dumps(event_data) if event_data else None,
+        guest_token=guest_token,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    
+    db.add(event)
+    db.commit()
+    
+    return {"status": "success", "event_id": event.id}
+
+
+# ============ SMART RULES API (Enhanced) ============
+class SmartRuleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    trigger_type: str  # time_based, booking_created, booking_confirmed, check_in, check_out, guest_action
+    condition: dict  # JSON conditions
+    action: dict  # JSON actions
+    priority: int = 0
+
+class SmartRuleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    condition: Optional[dict] = None
+    action: Optional[dict] = None
+    priority: Optional[int] = None
+    is_active: Optional[bool] = None
+
+@api_router.get("/smart-rules")
+def get_smart_rules(
+    property_id: Optional[int] = None,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all smart rules for user (optionally filtered by property)"""
+    from database import SmartRule as DBSmartRule
+    
+    query = db.query(DBSmartRule).filter(DBSmartRule.user_id == user.id)
+    
+    if property_id:
+        # Filter by property_id in condition JSON
+        query = query.filter(DBSmartRule.condition.contains(f'"property_id": {property_id}'))
+    
+    rules = query.order_by(DBSmartRule.priority.desc(), DBSmartRule.created_at.desc()).all()
+    
+    return {
+        "rules": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "description": r.description,
+                "trigger_type": r.trigger_type,
+                "condition": json.loads(r.condition) if r.condition else {},
+                "action": json.loads(r.action) if r.action else {},
+                "priority": r.priority,
+                "is_active": r.is_active,
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            }
+            for r in rules
+        ]
+    }
+
+@api_router.post("/smart-rules")
+def create_smart_rule(
+    rule: SmartRuleCreate,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new smart rule"""
+    from database import SmartRule as DBSmartRule
+    
+    new_rule = DBSmartRule(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        name=rule.name,
+        description=rule.description,
+        trigger_type=rule.trigger_type,
+        condition=json.dumps(rule.condition),
+        action=json.dumps(rule.action),
+        priority=rule.priority,
+        is_active=True
+    )
+    
+    db.add(new_rule)
+    db.commit()
+    db.refresh(new_rule)
+    
+    return {
+        "status": "success",
+        "rule_id": new_rule.id,
+        "message": "Smart Rule erstellt"
+    }
+
+@api_router.put("/smart-rules/{rule_id}")
+def update_smart_rule(
+    rule_id: str,
+    update: SmartRuleUpdate,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a smart rule"""
+    from database import SmartRule as DBSmartRule
+    
+    rule = db.query(DBSmartRule).filter(
+        DBSmartRule.id == rule_id,
+        DBSmartRule.user_id == user.id
+    ).first()
+    
+    if not rule:
+        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
+    
+    if update.name is not None:
+        rule.name = update.name
+    if update.description is not None:
+        rule.description = update.description
+    if update.condition is not None:
+        rule.condition = json.dumps(update.condition)
+    if update.action is not None:
+        rule.action = json.dumps(update.action)
+    if update.priority is not None:
+        rule.priority = update.priority
+    if update.is_active is not None:
+        rule.is_active = update.is_active
+    
+    db.commit()
+    
+    return {"status": "success", "message": "Smart Rule aktualisiert"}
+
+@api_router.delete("/smart-rules/{rule_id}")
+def delete_smart_rule(
+    rule_id: str,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a smart rule"""
+    from database import SmartRule as DBSmartRule
+    
+    rule = db.query(DBSmartRule).filter(
+        DBSmartRule.id == rule_id,
+        DBSmartRule.user_id == user.id
+    ).first()
+    
+    if not rule:
+        raise HTTPException(status_code=404, detail="Smart Rule nicht gefunden")
+    
+    db.delete(rule)
+    db.commit()
+    
+    return {"status": "success", "message": "Smart Rule gelöscht"}
+
+
+# ============ I18N / TRANSLATIONS API ============
+class TranslationCreate(BaseModel):
+    language: str
+    key: str
+    value: str
+    context: Optional[str] = None
+
+@api_router.get("/translations/{language}")
+def get_translations(
+    language: str,
+    context: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get translations for a language"""
+    from database import Translation as DBTranslation
+    
+    query = db.query(DBTranslation).filter(DBTranslation.language == language)
+    
+    if context:
+        query = query.filter(DBTranslation.context == context)
+    
+    translations = query.all()
+    
+    return {
+        "language": language,
+        "translations": {t.key: t.value for t in translations}
+    }
+
+@api_router.get("/user/language")
+def get_user_language(
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's preferred language"""
+    from database import UserLanguage as DBUserLanguage
+    
+    user_lang = db.query(DBUserLanguage).filter(DBUserLanguage.user_id == user.id).first()
+    
+    return {"language": user_lang.language if user_lang else "de"}
+
+@api_router.put("/user/language")
+def set_user_language(
+    language: str,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Set user's preferred language"""
+    from database import UserLanguage as DBUserLanguage
+    
+    if language not in ['de', 'en', 'fr', 'es', 'it']:
+        raise HTTPException(status_code=400, detail="Unsupported language")
+    
+    user_lang = db.query(DBUserLanguage).filter(DBUserLanguage.user_id == user.id).first()
+    
+    if not user_lang:
+        user_lang = DBUserLanguage(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            language=language
+        )
+        db.add(user_lang)
+    else:
+        user_lang.language = language
+    
+    db.commit()
+    
+    return {"status": "success", "language": language}
