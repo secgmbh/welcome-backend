@@ -24,7 +24,16 @@ from email.mime.multipart import MIMEMultipart
 from slowapi.util import get_remote_address
 from slowapi.util import get_remote_address
 import time
-import psutil
+# psutil is optional - used for system metrics in health check
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None
+    PSUTIL_AVAILABLE = False
+    import sys
+    print("⚠️  psutil not available - system metrics disabled", file=sys.stderr)
+
 from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking, Cleaner as DBCleaner, PropertyCleaner as DBPropertyCleaner
 
 ROOT_DIR = Path(__file__).parent
@@ -2742,12 +2751,21 @@ def delete_scene(property_id: int, scene_id: str, user: DBUser = Depends(get_cur
 @api_router.get("/health")
 def health_check():
     """Health check endpoint for monitoring with performance metrics"""
-    import psutil
     
-    # Get system metrics
-    cpu_percent = psutil.cpu_percent(interval=0.1)
-    memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
+    # Get system metrics (if psutil is available)
+    cpu_percent = None
+    memory_percent = None
+    disk_percent = None
+    
+    if PSUTIL_AVAILABLE and psutil:
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            memory_percent = memory.percent
+            disk_percent = disk.percent
+        except Exception as e:
+            logger.warning(f"Could not get system metrics: {e}")
     
     # Database health check
     db_healthy = True
@@ -2758,10 +2776,10 @@ def health_check():
         db_healthy = False
         logger.error(f"Database health check failed: {e}")
     
-    return {
+    health_response = {
         "status": "healthy" if db_healthy else "degraded",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.8.0",
+        "version": "2.8.2",
         "environment": ENVIRONMENT,
         "services": {
             "database": {
@@ -2780,15 +2798,18 @@ def health_check():
                     "magic_link": "3/minute"
                 }
             }
-        },
-        "performance": {
-            "cpu_percent": round(cpu_percent, 1),
-            "memory_percent": round(memory.percent, 1),
-            "memory_available_mb": round(memory.available / (1024 * 1024), 1),
-            "disk_percent": round(disk.percent, 1),
-            "disk_free_gb": round(disk.free / (1024 * 1024 * 1024), 2)
         }
     }
+    
+    # Add performance metrics if available
+    if cpu_percent is not None:
+        health_response["performance"] = {
+            "cpu_percent": round(cpu_percent, 1),
+            "memory_percent": round(memory_percent, 1),
+            "disk_percent": round(disk_percent, 1)
+        }
+    
+    return health_response
 
 # Include the router in the main app AFTER all routes are defined
 app.include_router(api_router)
