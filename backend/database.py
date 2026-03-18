@@ -16,12 +16,20 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     name = Column(String(100))
+    phone = Column(String(50))
+    company_name = Column(String(200))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_demo = Column(Boolean, default=False)
     is_email_verified = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)  # Admin-Rechte für Nutzerverwaltung
     email_verification_token = Column(String(64), unique=True, index=True)
     email_verification_token_expires = Column(DateTime)
+    # Subscription
+    plan = Column(String(20), default='free')  # free, starter, pro, enterprise
+    trial_ends_at = Column(DateTime)
+    max_properties = Column(Integer, default=1)
+    stripe_customer_id = Column(String(100))
+    is_active = Column(Boolean, default=True)
     # Branding
     brand_color = Column(String(7), default='#F27C2C')  # Hex Farbe
     logo_url = Column(String(500))

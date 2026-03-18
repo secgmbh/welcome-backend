@@ -409,7 +409,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.8.3",
+    version="2.8.4",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -592,8 +592,18 @@ class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: str
     name: Optional[str] = None
+    phone: Optional[str] = None
+    company_name: Optional[str] = None
+    plan: Optional[str] = "free"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_demo: bool = False
+    # Invoice data
+    invoice_name: Optional[str] = None
+    invoice_address: Optional[str] = None
+    invoice_zip: Optional[str] = None
+    invoice_city: Optional[str] = None
+    invoice_country: Optional[str] = None
+    invoice_vat_id: Optional[str] = None
 
 class AuthResponse(BaseModel):
     token: str
@@ -854,8 +864,17 @@ def get_me(user: DBUser = Depends(get_current_user)):
         id=user.id,
         email=user.email,
         name=user.name,
+        phone=getattr(user, 'phone', None),
+        company_name=getattr(user, 'company_name', None),
+        plan=getattr(user, 'plan', 'free'),
         created_at=user.created_at,
-        is_demo=user.is_demo
+        is_demo=user.is_demo,
+        invoice_name=getattr(user, 'invoice_name', None),
+        invoice_address=getattr(user, 'invoice_address', None),
+        invoice_zip=getattr(user, 'invoice_zip', None),
+        invoice_city=getattr(user, 'invoice_city', None),
+        invoice_country=getattr(user, 'invoice_country', None),
+        invoice_vat_id=getattr(user, 'invoice_vat_id', None)
     )
 
 # ============ ADMIN LOGIN ============
@@ -1161,7 +1180,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.8.3", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.8.4", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -1172,7 +1191,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.8.3",
+        "version": "2.8.4",
         "environment": ENVIRONMENT,
         "services": {}
     }
@@ -2630,14 +2649,46 @@ def get_user_profile(user: DBUser = Depends(get_current_user), db: Session = Dep
 
 @api_router.put("/auth/profile")
 def update_user_profile(data: dict, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Update user profile"""
+    """Update user profile - name, phone, company_name, invoice data"""
+    # Update allowed fields
+    if "name" in data:
+        user.name = data["name"]
+    if "phone" in data:
+        user.phone = data["phone"]
+    if "company_name" in data:
+        user.company_name = data["company_name"]
+    if "invoice_name" in data:
+        user.invoice_name = data["invoice_name"]
+    if "invoice_address" in data:
+        user.invoice_address = data["invoice_address"]
+    if "invoice_zip" in data:
+        user.invoice_zip = data["invoice_zip"]
+    if "invoice_city" in data:
+        user.invoice_city = data["invoice_city"]
+    if "invoice_country" in data:
+        user.invoice_country = data["invoice_country"]
+    if "invoice_vat_id" in data:
+        user.invoice_vat_id = data["invoice_vat_id"]
+    
+    db.commit()
+    db.refresh(user)
+    
     return {
         "success": True,
         "message": "Profile updated",
         "user": {
             "id": user.id,
             "email": user.email,
-            "name": data.get("name", user.email.split("@")[0])
+            "name": user.name or user.email.split("@")[0],
+            "phone": user.phone,
+            "company_name": user.company_name,
+            "plan": user.plan if hasattr(user, 'plan') else "free",
+            "invoice_name": user.invoice_name,
+            "invoice_address": user.invoice_address,
+            "invoice_zip": user.invoice_zip,
+            "invoice_city": user.invoice_city,
+            "invoice_country": user.invoice_country,
+            "invoice_vat_id": user.invoice_vat_id
         }
     }
 
@@ -2779,7 +2830,7 @@ def health_check():
     health_response = {
         "status": "healthy" if db_healthy else "degraded",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.8.2",
+        "version": "2.8.4",
         "environment": ENVIRONMENT,
         "services": {
             "database": {
