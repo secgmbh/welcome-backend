@@ -376,6 +376,38 @@ class AgreementTemplate(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
+class ApiKey(Base):
+    """API Keys für externe Integrationen"""
+    __tablename__ = "api_keys"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    key = Column(String(100), unique=True, nullable=False, index=True)  # wl_xxx format
+    name = Column(String(100))  # Friendly name
+    permissions = Column(Text)  # JSON: ['read', 'write', 'admin']
+    rate_limit = Column(Integer, default=100)  # Requests per minute
+    last_used = Column(DateTime)
+    is_active = Column(Boolean, default=True)
+    expires_at = Column(DateTime)  # Optional expiration
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class AuditLog(Base):
+    """Audit Logging für Sicherheitsereignisse"""
+    __tablename__ = "audit_logs"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), index=True)
+    action = Column(String(50), nullable=False)  # login, logout, api_call, data_access, etc.
+    resource = Column(String(100))  # property, booking, user, etc.
+    resource_id = Column(String(36))
+    ip_address = Column(String(50))
+    user_agent = Column(String(500))
+    details = Column(Text)  # JSON für zusätzliche Details
+    status = Column(String(20), default='success')  # success, failed, blocked
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)

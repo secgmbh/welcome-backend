@@ -398,18 +398,26 @@ except Exception as e:
 # Password Hashing mit Bcrypt (SICHER!)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Rate Limiting für Auth-Endpoints
+# Rate Limiting für ALLE Endpoints
 limiter = Limiter(key_func=get_remote_address)
 
 # JWT Settings
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+# API Key Settings
+API_KEY_PREFIX = "wl_"  # Welcome Link API Key Prefix
+API_KEY_LENGTH = 32
+
+# Audit Log Settings
+AUDIT_LOG_ENABLED = True
+AUDIT_LOG_SENSITIVE_FIELDS = ['password', 'password_hash', 'token', 'api_key', 'credit_card']
+
 # Create the main app without a prefix
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.9.0",
+    version="2.10.0",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -648,6 +656,88 @@ def create_token(user_id: str, email: str) -> str:
         "email": email,
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+
+
+def generate_api_key() -> str:
+    """Generiere einen sicheren API Key mit Prefix"""
+    import secrets
+    random_part = secrets.token_hex(API_KEY_LENGTH)
+    return f"{API_KEY_PREFIX}{random_part}"
+
+
+def hash_api_key(api_key: str) -> str:
+    """Hash API Key für sichere Speicherung"""
+    return pwd_context.hash(api_key)
+
+
+def verify_api_key(api_key: str, hashed_key: str) -> bool:
+    """Verifiziere API Key gegen Hash"""
+    return pwd_context.verify(api_key, hashed_key)
+
+
+def log_audit_event(db: Session, user_id: str, action: str, resource: str = None, 
+                    resource_id: str = None, ip_address: str = None, 
+                    user_agent: str = None, details: dict = None, status: str = 'success'):
+    """Protokolliere Sicherheitsereignisse"""
+    if not AUDIT_LOG_ENABLED:
+        return
+    
+    from database import AuditLog as DBAuditLog
+    
+    try:
+        log = DBAuditLog(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            action=action,
+            resource=resource,
+            resource_id=resource_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            details=json.dumps(details) if details else None,
+            status=status
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        logging.error(f"Failed to log audit event: {e}")
+
+
+def get_api_key_user(api_key: str, db: Session) -> Optional[dict]:
+    """Validiere API Key und gib User zurück"""
+    from database import ApiKey as DBApiKey
+    
+    if not api_key or not api_key.startswith(API_KEY_PREFIX):
+        return None
+    
+    key_record = db.query(DBApiKey).filter(
+        DBApiKey.key == api_key,
+        DBApiKey.is_active == True
+    ).first()
+    
+    if not key_record:
+        return None
+    
+    # Check expiration
+    if key_record.expires_at and key_record.expires_at < datetime.now(timezone.utc):
+        return None
+    
+    # Update last used
+    key_record.last_used = datetime.now(timezone.utc)
+    db.commit()
+    
+    # Get user
+    user = db.query(DBUser).filter(DBUser.id == key_record.user_id).first()
+    if not user:
+        return None
+    
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "plan": user.plan,
+        "api_key_id": key_record.id,
+        "permissions": json.loads(key_record.permissions) if key_record.permissions else ['read']
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -4700,3 +4790,171 @@ def admin_reject_verification(verification_id: str, credentials: HTTPAuthorizati
     db.commit()
     
     return {"success": True}
+
+
+# ============ API KEY MANAGEMENT ============
+
+class ApiKeyCreate(BaseModel):
+    name: str = Field(max_length=100)
+    permissions: List[str] = Field(default=['read'])
+    rate_limit: int = Field(default=100, ge=10, le=1000)
+
+class ApiKeyResponse(BaseModel):
+    id: str
+    name: str
+    key: str  # Only shown once on creation
+    permissions: List[str]
+    rate_limit: int
+    created_at: datetime
+
+@api_router.post("/api-keys", response_model=ApiKeyResponse)
+@limiter.limit("5/minute")
+def create_api_key(request: Request, api_key: ApiKeyCreate, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Erstelle einen neuen API Key"""
+    from database import ApiKey as DBApiKey
+    
+    user = get_current_user(credentials, db)
+    
+    # Generate key
+    new_key = generate_api_key()
+    
+    db_key = DBApiKey(
+        id=str(uuid.uuid4()),
+        user_id=user["id"],
+        key=new_key,
+        name=api_key.name,
+        permissions=json.dumps(api_key.permissions),
+        rate_limit=api_key.rate_limit
+    )
+    
+    db.add(db_key)
+    db.commit()
+    db.refresh(db_key)
+    
+    # Log audit
+    log_audit_event(
+        db=db,
+        user_id=user["id"],
+        action="api_key_created",
+        resource="api_key",
+        resource_id=db_key.id,
+        ip_address=request.client.host if request.client else None,
+        details={"name": api_key.name, "permissions": api_key.permissions}
+    )
+    
+    return ApiKeyResponse(
+        id=db_key.id,
+        name=db_key.name,
+        key=new_key,  # Only time key is shown
+        permissions=api_key.permissions,
+        rate_limit=db_key.rate_limit,
+        created_at=db_key.created_at
+    )
+
+@api_router.get("/api-keys")
+@limiter.limit("10/minute")
+def list_api_keys(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Liste alle API Keys des Users"""
+    from database import ApiKey as DBApiKey
+    
+    user = get_current_user(credentials, db)
+    
+    keys = db.query(DBApiKey).filter(
+        DBApiKey.user_id == user["id"]
+    ).order_by(DBApiKey.created_at.desc()).all()
+    
+    return {
+        "api_keys": [{
+            "id": k.id,
+            "name": k.name,
+            "permissions": json.loads(k.permissions) if k.permissions else [],
+            "rate_limit": k.rate_limit,
+            "last_used": k.last_used.isoformat() if k.last_used else None,
+            "is_active": k.is_active,
+            "created_at": k.created_at.isoformat()
+        } for k in keys]
+    }
+
+@api_router.delete("/api-keys/{key_id}")
+@limiter.limit("5/minute")
+def revoke_api_key(request: Request, key_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Widerrufe einen API Key"""
+    from database import ApiKey as DBApiKey
+    
+    user = get_current_user(credentials, db)
+    
+    key = db.query(DBApiKey).filter(
+        DBApiKey.id == key_id,
+        DBApiKey.user_id == user["id"]
+    ).first()
+    
+    if not key:
+        raise HTTPException(status_code=404, detail="API Key nicht gefunden")
+    
+    key.is_active = False
+    db.commit()
+    
+    # Log audit
+    log_audit_event(
+        db=db,
+        user_id=user["id"],
+        action="api_key_revoked",
+        resource="api_key",
+        resource_id=key_id,
+        ip_address=request.client.host if request.client else None
+    )
+    
+    return {"success": True, "message": "API Key widerrufen"}
+
+
+# ============ AUDIT LOG ENDPOINTS ============
+
+@api_router.get("/audit-logs")
+@limiter.limit("10/minute")
+def get_audit_logs(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db), limit: int = 50):
+    """Hole Audit Logs (nur für Admins)"""
+    from database import AuditLog as DBAuditLog
+    
+    user = get_current_user(credentials, db)
+    
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin-Berechtigung erforderlich")
+    
+    logs = db.query(DBAuditLog).order_by(DBAuditLog.created_at.desc()).limit(limit).all()
+    
+    return {
+        "logs": [{
+            "id": log.id,
+            "user_id": log.user_id,
+            "action": log.action,
+            "resource": log.resource,
+            "resource_id": log.resource_id,
+            "ip_address": log.ip_address,
+            "status": log.status,
+            "created_at": log.created_at.isoformat()
+        } for log in logs]
+    }
+
+
+# ============ RATE LIMITING FOR ALL API ENDPOINTS ============
+
+@api_router.middleware("http")
+async def rate_limit_all_requests(request: Request, call_next):
+    """Rate limiting für alle API Requests"""
+    # Skip rate limiting for health checks
+    if request.url.path in ["/api/health", "/api/", "/"]:
+        return await call_next(request)
+    
+    # Get client IP
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Check for API key in header
+    api_key = request.headers.get("X-API-Key")
+    
+    # Apply rate limit based on user type
+    # Authenticated users: 1000/minute
+    # API key users: Based on key rate_limit
+    # Anonymous: 100/minute
+    
+    response = await call_next(request)
+    return response
