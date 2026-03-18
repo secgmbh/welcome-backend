@@ -34,7 +34,7 @@ except ImportError:
     import sys
     print("⚠️  psutil not available - system metrics disabled", file=sys.stderr)
 
-from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking, Cleaner as DBCleaner, PropertyCleaner as DBPropertyCleaner
+from database import init_db, get_db, User as DBUser, Property as DBProperty, StatusCheck as DBStatusCheck, GuestView as DBGuestView, Booking as DBBooking
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
