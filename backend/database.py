@@ -229,6 +229,153 @@ class PropertyCleaner(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+# === NEW FEATURES (v2.9.0) ===
+
+class CustomQuestion(Base):
+    """Benutzerdefinierte Fragen für Gast-Intake"""
+    __tablename__ = "custom_questions"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    question = Column(String(500), nullable=False)
+    question_type = Column(String(20), default='text')  # text, multiple_choice, checkbox, number
+    options = Column(Text)  # JSON für Multiple Choice Optionen
+    required = Column(Boolean, default=False)
+    order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class GuestAnswer(Base):
+    """Antworten auf benutzerdefinierte Fragen"""
+    __tablename__ = "guest_answers"
+    
+    id = Column(String(36), primary_key=True)
+    question_id = Column(String(36), nullable=False, index=True)
+    booking_id = Column(String(36), nullable=False, index=True)
+    guest_id = Column(String(36), index=True)
+    answer = Column(Text)  # Text oder JSON für Multiple Choice
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class RentalAgreement(Base):
+    """Digitale Mietverträge"""
+    __tablename__ = "rental_agreements"
+    
+    id = Column(String(36), primary_key=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    booking_id = Column(String(36), index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    
+    # Agreement Content
+    title = Column(String(200), nullable=False)
+    content = Column(Text)  # Markdown/HTML template
+    terms = Column(Text)  # JSON für strukturierte Terms
+    
+    # Custom Rules
+    house_rules = Column(Text)  # JSON für Rules mit Penalties
+    cancellation_policy = Column(Text)
+    deposit_terms = Column(Text)
+    
+    # Signatures
+    host_signature_url = Column(String(500))
+    host_signed_at = Column(DateTime)
+    guest_signature_url = Column(String(500))
+    guest_signed_at = Column(DateTime)
+    
+    # Status
+    status = Column(String(20), default='pending')  # pending, signed, cancelled
+    
+    # Legal
+    ip_address_guest = Column(String(50))
+    user_agent_guest = Column(String(500))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class SecurityDeposit(Base):
+    """Kaution-Management"""
+    __tablename__ = "security_deposits"
+    
+    id = Column(String(36), primary_key=True)
+    booking_id = Column(String(36), nullable=False, index=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    
+    amount = Column(Float, nullable=False)
+    currency = Column(String(3), default='EUR')
+    status = Column(String(20), default='pending')  # pending, collected, returned, claimed
+    
+    # Payment
+    payment_method = Column(String(50))  # stripe, paypal, etc.
+    payment_id = Column(String(100))  # Stripe/PayPal ID
+    payment_intent_id = Column(String(100))  # Stripe Payment Intent
+    
+    # Claims
+    claim_amount = Column(Float)
+    claim_reason = Column(Text)
+    claim_status = Column(String(20))  # pending, approved, rejected
+    claim_evidence = Column(Text)  # JSON für Photos, Documentation
+    
+    # Timestamps
+    collected_at = Column(DateTime)
+    returned_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class GuestVerification(Base):
+    """Gast-Identitätsverifizierung"""
+    __tablename__ = "guest_verifications"
+    
+    id = Column(String(36), primary_key=True)
+    booking_id = Column(String(36), nullable=False, index=True)
+    property_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    
+    guest_name = Column(String(200), nullable=False)
+    guest_email = Column(String(255), nullable=False)
+    guest_phone = Column(String(50))
+    
+    # ID Document
+    id_type = Column(String(50))  # passport, id_card, drivers_license
+    id_document_url = Column(String(500))  # S3/Storage URL
+    id_document_status = Column(String(20), default='pending')  # pending, verified, rejected
+    
+    # Selfie
+    selfie_url = Column(String(500))
+    selfie_status = Column(String(20), default='pending')
+    
+    # Verification Result
+    verification_score = Column(Float)  # 0-100 confidence
+    verification_notes = Column(Text)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    verified_at = Column(DateTime)
+    verified_by = Column(String(36))  # Admin user ID
+    
+    # GDPR
+    retention_days = Column(Integer, default=90)  # Auto-delete after 90 days
+    delete_at = Column(DateTime)
+
+
+class AgreementTemplate(Base):
+    """Vorlagen für Mietverträge"""
+    __tablename__ = "agreement_templates"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    content = Column(Text, nullable=False)  # Markdown/HTML template
+    variables = Column(Text)  # JSON für Template-Variablen
+    is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
 def get_database_url():
     """Erstelle Database URL aus Umgebungsvariablen"""
     # Bevorzuge DATABASE_URL (PostgreSQL Connection String von Render)

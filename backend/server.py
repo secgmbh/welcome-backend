@@ -409,7 +409,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(
     title="Welcome Link API",
     description="Sichere API für Welcome Link",
-    version="2.8.4",
+    version="2.9.0",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
 )
@@ -4051,3 +4051,652 @@ def set_user_language(
     db.commit()
     
     return {"status": "success", "language": language}
+
+
+# ============ NEW FEATURES (v2.9.0) ============
+
+# --- Custom Questions ---
+
+class CustomQuestionCreate(BaseModel):
+    property_id: str
+    question: str
+    question_type: str = "text"  # text, multiple_choice, checkbox, number
+    options: Optional[List[str]] = None
+    required: bool = False
+    order: int = 0
+
+class CustomQuestionUpdate(BaseModel):
+    question: Optional[str] = None
+    question_type: Optional[str] = None
+    options: Optional[List[str]] = None
+    required: Optional[bool] = None
+    order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class GuestAnswerSubmit(BaseModel):
+    booking_id: str
+    answers: List[dict]  # [{question_id, answer}]
+
+@api_router.get("/questions/{property_id}")
+def get_questions(property_id: str, db: Session = Depends(get_db)):
+    """Hole alle Fragen für eine Property"""
+    from database import CustomQuestion as DBCustomQuestion
+    
+    questions = db.query(DBCustomQuestion).filter(
+        DBCustomQuestion.property_id == property_id,
+        DBCustomQuestion.is_active == True
+    ).order_by(DBCustomQuestion.order).all()
+    
+    return {
+        "questions": [{
+            "id": q.id,
+            "question": q.question,
+            "question_type": q.question_type,
+            "options": json.loads(q.options) if q.options else None,
+            "required": q.required,
+            "order": q.order
+        } for q in questions]
+    }
+
+@api_router.post("/questions")
+def create_question(question: CustomQuestionCreate, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Erstelle eine neue Frage"""
+    from database import CustomQuestion as DBCustomQuestion
+    
+    user = get_current_user(credentials, db)
+    
+    # Verify property ownership
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == question.property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    db_question = DBCustomQuestion(
+        id=str(uuid.uuid4()),
+        property_id=question.property_id,
+        question=question.question,
+        question_type=question.question_type,
+        options=json.dumps(question.options) if question.options else None,
+        required=question.required,
+        order=question.order
+    )
+    
+    db.add(db_question)
+    db.commit()
+    db.refresh(db_question)
+    
+    return {"success": True, "id": db_question.id}
+
+@api_router.put("/questions/{question_id}")
+def update_question(question_id: str, question: CustomQuestionUpdate, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Aktualisiere eine Frage"""
+    from database import CustomQuestion as DBCustomQuestion
+    
+    user = get_current_user(credentials, db)
+    
+    db_question = db.query(DBCustomQuestion).filter(DBCustomQuestion.id == question_id).first()
+    
+    if not db_question:
+        raise HTTPException(status_code=404, detail="Frage nicht gefunden")
+    
+    # Verify ownership via property
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == db_question.property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    if question.question is not None:
+        db_question.question = question.question
+    if question.question_type is not None:
+        db_question.question_type = question.question_type
+    if question.options is not None:
+        db_question.options = json.dumps(question.options)
+    if question.required is not None:
+        db_question.required = question.required
+    if question.order is not None:
+        db_question.order = question.order
+    if question.is_active is not None:
+        db_question.is_active = question.is_active
+    
+    db.commit()
+    
+    return {"success": True}
+
+@api_router.delete("/questions/{question_id}")
+def delete_question(question_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Lösche eine Frage"""
+    from database import CustomQuestion as DBCustomQuestion
+    
+    user = get_current_user(credentials, db)
+    
+    db_question = db.query(DBCustomQuestion).filter(DBCustomQuestion.id == question_id).first()
+    
+    if not db_question:
+        raise HTTPException(status_code=404, detail="Frage nicht gefunden")
+    
+    # Verify ownership
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == db_question.property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    db.delete(db_question)
+    db.commit()
+    
+    return {"success": True}
+
+@api_router.post("/questions/answers")
+def submit_answers(answers: GuestAnswerSubmit, db: Session = Depends(get_db)):
+    """Speichere Antworten auf Fragen"""
+    from database import GuestAnswer as DBGuestAnswer
+    
+    for answer in answers.answers:
+        db_answer = DBGuestAnswer(
+            id=str(uuid.uuid4()),
+            question_id=answer.get("question_id"),
+            booking_id=answers.booking_id,
+            guest_id=answer.get("guest_id"),
+            answer=json.dumps(answer.get("answer")) if isinstance(answer.get("answer"), (list, dict)) else answer.get("answer")
+        )
+        db.add(db_answer)
+    
+    db.commit()
+    
+    return {"success": True, "message": "Antworten gespeichert"}
+
+@api_router.get("/questions/answers/{booking_id}")
+def get_answers(booking_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Hole Antworten für eine Buchung"""
+    from database import GuestAnswer as DBGuestAnswer, CustomQuestion as DBCustomQuestion
+    
+    user = get_current_user(credentials, db)
+    
+    # Verify booking belongs to user's property
+    booking = db.query(DBBooking).filter(DBBooking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == booking.property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    answers = db.query(DBGuestAnswer).filter(DBGuestAnswer.booking_id == booking_id).all()
+    
+    return {
+        "answers": [{
+            "id": a.id,
+            "question_id": a.question_id,
+            "answer": a.answer
+        } for a in answers]
+    }
+
+
+# --- Rental Agreements ---
+
+class AgreementCreate(BaseModel):
+    property_id: str
+    booking_id: Optional[str] = None
+    title: str
+    content: str
+    house_rules: Optional[List[dict]] = None
+    cancellation_policy: Optional[str] = None
+    deposit_terms: Optional[str] = None
+
+class AgreementSign(BaseModel):
+    signature_url: str
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+
+@api_router.get("/agreements/templates")
+def get_agreement_templates(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Hole alle Vertrag-Vorlagen"""
+    from database import AgreementTemplate as DBAgreementTemplate
+    
+    user = get_current_user(credentials, db)
+    
+    templates = db.query(DBAgreementTemplate).filter(
+        DBAgreementTemplate.user_id == user["id"],
+        DBAgreementTemplate.is_active == True
+    ).all()
+    
+    return {
+        "templates": [{
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "content": t.content,
+            "variables": json.loads(t.variables) if t.variables else [],
+            "is_default": t.is_default
+        } for t in templates]
+    }
+
+@api_router.post("/agreements")
+def create_agreement(agreement: AgreementCreate, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Erstelle einen neuen Mietvertrag"""
+    from database import RentalAgreement as DBRentalAgreement
+    
+    user = get_current_user(credentials, db)
+    
+    # Verify property ownership
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == agreement.property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    db_agreement = DBRentalAgreement(
+        id=str(uuid.uuid4()),
+        property_id=agreement.property_id,
+        booking_id=agreement.booking_id,
+        user_id=user["id"],
+        title=agreement.title,
+        content=agreement.content,
+        house_rules=json.dumps(agreement.house_rules) if agreement.house_rules else None,
+        cancellation_policy=agreement.cancellation_policy,
+        deposit_terms=agreement.deposit_terms,
+        status='pending'
+    )
+    
+    db.add(db_agreement)
+    db.commit()
+    db.refresh(db_agreement)
+    
+    return {"success": True, "id": db_agreement.id}
+
+@api_router.get("/agreements/{agreement_id}")
+def get_agreement(agreement_id: str, db: Session = Depends(get_db)):
+    """Hole einen Mietvertrag"""
+    from database import RentalAgreement as DBRentalAgreement
+    
+    agreement = db.query(DBRentalAgreement).filter(DBRentalAgreement.id == agreement_id).first()
+    
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Vertrag nicht gefunden")
+    
+    return {
+        "id": agreement.id,
+        "property_id": agreement.property_id,
+        "booking_id": agreement.booking_id,
+        "title": agreement.title,
+        "content": agreement.content,
+        "house_rules": json.loads(agreement.house_rules) if agreement.house_rules else None,
+        "cancellation_policy": agreement.cancellation_policy,
+        "deposit_terms": agreement.deposit_terms,
+        "status": agreement.status,
+        "host_signed_at": agreement.host_signed_at.isoformat() if agreement.host_signed_at else None,
+        "guest_signed_at": agreement.guest_signed_at.isoformat() if agreement.guest_signed_at else None
+    }
+
+@api_router.post("/agreements/{agreement_id}/sign")
+def sign_agreement(agreement_id: str, sign: AgreementSign, db: Session = Depends(get_db)):
+    """Gast unterschreibt den Vertrag"""
+    from database import RentalAgreement as DBRentalAgreement
+    
+    agreement = db.query(DBRentalAgreement).filter(DBRentalAgreement.id == agreement_id).first()
+    
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Vertrag nicht gefunden")
+    
+    agreement.guest_signature_url = sign.signature_url
+    agreement.guest_signed_at = datetime.now(timezone.utc)
+    agreement.ip_address_guest = sign.ip_address
+    agreement.user_agent_guest = sign.user_agent
+    agreement.status = 'signed'
+    
+    db.commit()
+    
+    return {"success": True, "message": "Vertrag unterschrieben"}
+
+@api_router.post("/agreements/{agreement_id}/cancel")
+def cancel_agreement(agreement_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Storniere einen Vertrag"""
+    from database import RentalAgreement as DBRentalAgreement
+    
+    user = get_current_user(credentials, db)
+    
+    agreement = db.query(DBRentalAgreement).filter(DBRentalAgreement.id == agreement_id).first()
+    
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Vertrag nicht gefunden")
+    
+    # Verify ownership
+    if agreement.user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    agreement.status = 'cancelled'
+    db.commit()
+    
+    return {"success": True}
+
+
+# --- Security Deposits ---
+
+class DepositCreate(BaseModel):
+    booking_id: str
+    property_id: str
+    amount: float
+    currency: str = "EUR"
+
+class DepositClaim(BaseModel):
+    claim_amount: float
+    claim_reason: str
+    claim_evidence: Optional[List[dict]] = None
+
+@api_router.post("/deposits")
+def create_deposit(deposit: DepositCreate, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Erstelle eine Kaution"""
+    from database import SecurityDeposit as DBSecurityDeposit
+    
+    user = get_current_user(credentials, db)
+    
+    # Verify property ownership
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == deposit.property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    db_deposit = DBSecurityDeposit(
+        id=str(uuid.uuid4()),
+        booking_id=deposit.booking_id,
+        property_id=deposit.property_id,
+        user_id=user["id"],
+        amount=deposit.amount,
+        currency=deposit.currency,
+        status='pending'
+    )
+    
+    db.add(db_deposit)
+    db.commit()
+    db.refresh(db_deposit)
+    
+    return {"success": True, "id": db_deposit.id}
+
+@api_router.post("/deposits/{deposit_id}/collect")
+def collect_deposit(deposit_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Kaution einziehen (via Payment Provider)"""
+    from database import SecurityDeposit as DBSecurityDeposit
+    
+    user = get_current_user(credentials, db)
+    
+    deposit = db.query(DBSecurityDeposit).filter(DBSecurityDeposit.id == deposit_id).first()
+    
+    if not deposit:
+        raise HTTPException(status_code=404, detail="Kaution nicht gefunden")
+    
+    if deposit.user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    # In production: Integrate with Stripe/PayPal
+    deposit.status = 'collected'
+    deposit.collected_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    
+    return {"success": True, "message": "Kaution eingezogen"}
+
+@api_router.post("/deposits/{deposit_id}/claim")
+def claim_deposit(deposit_id: str, claim: DepositClaim, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Kaution einbehalten mit Begründung"""
+    from database import SecurityDeposit as DBSecurityDeposit
+    
+    user = get_current_user(credentials, db)
+    
+    deposit = db.query(DBSecurityDeposit).filter(DBSecurityDeposit.id == deposit_id).first()
+    
+    if not deposit:
+        raise HTTPException(status_code=404, detail="Kaution nicht gefunden")
+    
+    if deposit.user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    deposit.claim_amount = claim.claim_amount
+    deposit.claim_reason = claim.claim_reason
+    deposit.claim_evidence = json.dumps(claim.claim_evidence) if claim.claim_evidence else None
+    deposit.claim_status = 'pending'
+    
+    db.commit()
+    
+    return {"success": True, "message": "Anspruch eingereicht"}
+
+@api_router.post("/deposits/{deposit_id}/return")
+def return_deposit(deposit_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Kaution an Gast zurückgeben"""
+    from database import SecurityDeposit as DBSecurityDeposit
+    
+    user = get_current_user(credentials, db)
+    
+    deposit = db.query(DBSecurityDeposit).filter(DBSecurityDeposit.id == deposit_id).first()
+    
+    if not deposit:
+        raise HTTPException(status_code=404, detail="Kaution nicht gefunden")
+    
+    if deposit.user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Keine Berechtigung")
+    
+    deposit.status = 'returned'
+    deposit.returned_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    
+    return {"success": True, "message": "Kaution zurückgegeben"}
+
+@api_router.get("/deposits/property/{property_id}")
+def list_deposits(property_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Liste alle Kautionen für eine Property"""
+    from database import SecurityDeposit as DBSecurityDeposit
+    
+    user = get_current_user(credentials, db)
+    
+    # Verify property ownership
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    deposits = db.query(DBSecurityDeposit).filter(
+        DBSecurityDeposit.property_id == property_id
+    ).order_by(DBSecurityDeposit.created_at.desc()).all()
+    
+    return {
+        "deposits": [{
+            "id": d.id,
+            "booking_id": d.booking_id,
+            "amount": d.amount,
+            "currency": d.currency,
+            "status": d.status,
+            "claim_amount": d.claim_amount,
+            "claim_reason": d.claim_reason,
+            "collected_at": d.collected_at.isoformat() if d.collected_at else None,
+            "returned_at": d.returned_at.isoformat() if d.returned_at else None,
+            "created_at": d.created_at.isoformat()
+        } for d in deposits]
+    }
+
+
+# --- Guest Verification (ID Check) ---
+
+class VerificationCreate(BaseModel):
+    booking_id: str
+    property_id: str
+    guest_name: str
+    guest_email: str
+    guest_phone: Optional[str] = None
+
+class VerificationUpload(BaseModel):
+    id_type: Optional[str] = None  # passport, id_card, drivers_license
+    document_url: Optional[str] = None
+    selfie_url: Optional[str] = None
+
+@api_router.post("/verifications")
+def create_verification(verification: VerificationCreate, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Erstelle eine Verifizierungsanfrage"""
+    from database import GuestVerification as DBGuestVerification
+    
+    user = get_current_user(credentials, db)
+    
+    # Verify property ownership
+    property_exists = db.query(DBProperty).filter(
+        DBProperty.id == verification.property_id,
+        DBProperty.user_id == user["id"]
+    ).first()
+    
+    if not property_exists:
+        raise HTTPException(status_code=404, detail="Property nicht gefunden")
+    
+    db_verification = DBGuestVerification(
+        id=str(uuid.uuid4()),
+        booking_id=verification.booking_id,
+        property_id=verification.property_id,
+        user_id=user["id"],
+        guest_name=verification.guest_name,
+        guest_email=verification.guest_email,
+        guest_phone=verification.guest_phone,
+        retention_days=90,
+        delete_at=datetime.now(timezone.utc) + timedelta(days=90)
+    )
+    
+    db.add(db_verification)
+    db.commit()
+    db.refresh(db_verification)
+    
+    return {"success": True, "id": db_verification.id}
+
+@api_router.post("/verifications/{verification_id}/upload")
+def upload_verification(verification_id: str, upload: VerificationUpload, db: Session = Depends(get_db)):
+    """Lade Dokument oder Selfie hoch"""
+    from database import GuestVerification as DBGuestVerification
+    
+    verification = db.query(DBGuestVerification).filter(DBGuestVerification.id == verification_id).first()
+    
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verifizierung nicht gefunden")
+    
+    if upload.id_type:
+        verification.id_type = upload.id_type
+    if upload.document_url:
+        verification.id_document_url = upload.document_url
+        verification.id_document_status = 'pending'
+    if upload.selfie_url:
+        verification.selfie_url = upload.selfie_url
+        verification.selfie_status = 'pending'
+    
+    db.commit()
+    
+    return {"success": True}
+
+@api_router.get("/verifications/{verification_id}/status")
+def get_verification_status(verification_id: str, db: Session = Depends(get_db)):
+    """Prüfe Verifizierungsstatus"""
+    from database import GuestVerification as DBGuestVerification
+    
+    verification = db.query(DBGuestVerification).filter(DBGuestVerification.id == verification_id).first()
+    
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verifizierung nicht gefunden")
+    
+    return {
+        "id": verification.id,
+        "guest_name": verification.guest_name,
+        "id_document_status": verification.id_document_status,
+        "selfie_status": verification.selfie_status,
+        "verification_score": verification.verification_score,
+        "status": "verified" if (verification.id_document_status == 'verified' and verification.selfie_status == 'verified') else "pending"
+    }
+
+@api_router.get("/admin/verifications")
+def admin_list_verifications(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Admin: Liste alle Verifizierungen"""
+    from database import GuestVerification as DBGuestVerification
+    
+    user = get_current_user(credentials, db)
+    
+    # Check admin
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin-Berechtigung erforderlich")
+    
+    verifications = db.query(DBGuestVerification).order_by(DBGuestVerification.created_at.desc()).all()
+    
+    return {
+        "verifications": [{
+            "id": v.id,
+            "booking_id": v.booking_id,
+            "guest_name": v.guest_name,
+            "guest_email": v.guest_email,
+            "id_type": v.id_type,
+            "id_document_status": v.id_document_status,
+            "selfie_status": v.selfie_status,
+            "verification_score": v.verification_score,
+            "created_at": v.created_at.isoformat()
+        } for v in verifications]
+    }
+
+@api_router.post("/admin/verifications/{verification_id}/approve")
+def admin_approve_verification(verification_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Admin: Verifizierung genehmigen"""
+    from database import GuestVerification as DBGuestVerification
+    
+    user = get_current_user(credentials, db)
+    
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin-Berechtigung erforderlich")
+    
+    verification = db.query(DBGuestVerification).filter(DBGuestVerification.id == verification_id).first()
+    
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verifizierung nicht gefunden")
+    
+    verification.id_document_status = 'verified'
+    verification.selfie_status = 'verified'
+    verification.verification_score = 100
+    verification.verified_at = datetime.now(timezone.utc)
+    verification.verified_by = user["id"]
+    
+    db.commit()
+    
+    return {"success": True}
+
+@api_router.post("/admin/verifications/{verification_id}/reject")
+def admin_reject_verification(verification_id: str, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db), reason: str = ""):
+    """Admin: Verifizierung ablehnen"""
+    from database import GuestVerification as DBGuestVerification
+    
+    user = get_current_user(credentials, db)
+    
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin-Berechtigung erforderlich")
+    
+    verification = db.query(DBGuestVerification).filter(DBGuestVerification.id == verification_id).first()
+    
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verifizierung nicht gefunden")
+    
+    verification.id_document_status = 'rejected'
+    verification.selfie_status = 'rejected'
+    verification.verification_notes = reason
+    verification.verified_at = datetime.now(timezone.utc)
+    verification.verified_by = user["id"]
+    
+    db.commit()
+    
+    return {"success": True}
