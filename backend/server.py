@@ -4937,24 +4937,5 @@ def get_audit_logs(request: Request, credentials: HTTPAuthorizationCredentials =
 
 
 # ============ RATE LIMITING FOR ALL API ENDPOINTS ============
-
-@api_router.middleware("http")
-async def rate_limit_all_requests(request: Request, call_next):
-    """Rate limiting für alle API Requests"""
-    # Skip rate limiting for health checks
-    if request.url.path in ["/api/health", "/api/", "/"]:
-        return await call_next(request)
-    
-    # Get client IP
-    client_ip = request.client.host if request.client else "unknown"
-    
-    # Check for API key in header
-    api_key = request.headers.get("X-API-Key")
-    
-    # Apply rate limit based on user type
-    # Authenticated users: 1000/minute
-    # API key users: Based on key rate_limit
-    # Anonymous: 100/minute
-    
-    response = await call_next(request)
-    return response
+# Note: Rate limiting is handled by SecurityHeadersMiddleware and per-endpoint limits
+# API key rate limiting is done in the endpoint handlers themselves
