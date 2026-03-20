@@ -657,6 +657,7 @@ def create_token(user_id: str, email: str) -> str:
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
 def generate_api_key() -> str:
