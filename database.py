@@ -215,7 +215,7 @@ def get_database_url():
     return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 def init_db():
-    """Initialisiere Datenbank und erstelle Tabellen"""
+    """Initialisiere Datenbank - PRODUKTIONSSICHER (kein Datenverlust)"""
     global SessionLocal, engine
     
     database_url = get_database_url()
@@ -229,83 +229,76 @@ def init_db():
         with engine.connect() as conn:
             print(f"[DB] ✓ Connection erfolgreich")
         
-        # Zwinge Tabellen-Reset (behebt alte/kaputte Schemas)
-        print(f"[DB] ⚠️  Lösche alte Tabellen für sauberen Reset...")
-        try:
-            # Drop alle Tabellen mit CASCADE
-            with engine.begin() as conn:
-                for table in reversed(Base.metadata.sorted_tables):
-                    conn.execute(table.drop(engine))
-            print(f"[DB] ✓ Alte Tabellen gelöscht")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte Tabellen nicht löschen (Ignoriert): {e}")
-        
-        # Erstelle alle Tabellen
-        print(f"[DB] Erstelle Tables...")
+        # NICHT Tabellen löschen in Production!
+        # Base.metadata.create_all() ist sicher - fügt nur fehlende Tabellen hinzu
+        print(f"[DB] Erstelle/aktualisiere Tables...")
         Base.metadata.create_all(bind=engine)
         print(f"[DB] ✓ Tables erstellt")
         
-        # Überprüfe ob users-Tabelle korrekt ist
+        # Füge fehlende Spalten zu existierenden Tabellen hinzu (sicher)
+        # WICHTIG: ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+        missing_columns = [
+            # User Management & Subscription Felder (v2.9.0+)
+            ("users", "phone", "VARCHAR(50)"),
+            ("users", "company_name", "VARCHAR(200)"),
+            ("users", "plan", "VARCHAR(20) DEFAULT 'free'"),
+            ("users", "trial_ends_at", "TIMESTAMP"),
+            ("users", "max_properties", "INTEGER DEFAULT 1"),
+            ("users", "stripe_customer_id", "VARCHAR(100)"),
+            ("users", "is_active", "BOOLEAN DEFAULT TRUE"),
+            ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
+            # Invoice Felder
+            ("users", "invoice_name", "VARCHAR(200)"),
+            ("users", "invoice_address", "VARCHAR(500)"),
+            ("users", "invoice_zip", "VARCHAR(20)"),
+            ("users", "invoice_city", "VARCHAR(100)"),
+            ("users", "invoice_country", "VARCHAR(100)"),
+            ("users", "invoice_vat_id", "VARCHAR(50)"),
+            # Branding Felder
+            ("users", "brand_color", "VARCHAR(20)"),
+            ("users", "logo_url", "VARCHAR(500)"),
+            # Keysafe Felder
+            ("users", "keysafe_location", "VARCHAR(500)"),
+            ("users", "keysafe_code", "VARCHAR(100)"),
+            ("users", "keysafe_instructions", "TEXT"),
+            # Email verification
+            ("users", "is_email_verified", "BOOLEAN DEFAULT FALSE"),
+            ("users", "email_verification_token", "VARCHAR(64)"),
+            ("users", "email_verification_token_expires", "TIMESTAMP"),
+        ]
+        
+        for table, column, col_type in missing_columns:
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(f"""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = '{table}' AND column_name = '{column}'
+                    """).fetchone()
+                    if not result:
+                        print(f"[DB] + Füge {table}.{column} hinzu...")
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+                        conn.commit()
+                        print(f"[DB] ✓ {table}.{column} hinzugefügt")
+            except Exception as e:
+                print(f"[DB] ⚠️  Konnte {table}.{column} nicht prüfen/hinzufügen: {e}")
+        
+        # Erstelle Index für email_verification_token falls nicht vorhanden
         try:
             with engine.connect() as conn:
-                # Prüfe ob password_hash Spalte existiert
-                result = conn.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'users' AND column_name = 'password_hash'
-                """).fetchone()
-                if not result:
-                    print(f"[DB] ⚠️  password_hash Spalte fehlt in users-Tabelle - versuche ALTER TABLE...")
-                    conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)")
-                    conn.commit()
-                    print(f"[DB] ✓ password_hash Spalte hinzugefügt")
+                conn.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_verification_token 
+                    ON users (email_verification_token)
+                """)
+                conn.commit()
+                print(f"[DB] ✓ Index erstellt")
         except Exception as e:
-            print(f"[DB] ⚠️  Konnte users-Tabelle nicht prüfen/ändern: {e}")
+            print(f"[DB] ⚠️  Index konnte nicht erstellt werden: {e}")
         
         # Überprüfe ob Tables existieren
         insp = inspect(engine)
         tables = insp.get_table_names()
-        print(f"[DB] ✓ Existierende Tabellen: {tables}")
-        
-        # Überprüfe ob properties description Spalte existiert
-        try:
-            with engine.connect() as conn:
-                result = conn.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'description'
-                """).fetchone()
-                if not result:
-                    print(f"[DB] ⚠️  description Spalte fehlt in properties-Tabelle - füge hinzu...")
-                    conn.execute("ALTER TABLE properties ADD COLUMN IF NOT EXISTS description TEXT")
-                    conn.commit()
-                    print(f"[DB] ✓ description Spalte hinzugefügt")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte properties-Tabelle nicht prüfen/ändern: {e}")
-        
-        # Prüfe ob properties.user_id korrekt ist (muss VARCHAR/TEXT sein für UUIDs)
-        # Falls Integer -> Tabellen neu erstellen (Daten gehen verloren!)
-        try:
-            with engine.connect() as conn:
-                result = conn.execute("""
-                    SELECT data_type 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'user_id'
-                """).fetchone()
-                if result and 'int' in result[0].lower():
-                    print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - Tabelle muss neu erstellt werden!")
-                    # Lösche alle Tabellen und erstelle neu
-                    from sqlalchemy import inspect as sa_inspect
-                    inspector = sa_inspect(engine)
-                    tables = inspector.get_table_names()
-                    print(f"[DB] 🗑️  Lösche alle Tabellen für Reset: {tables}")
-                    for table in reversed(Base.metadata.sorted_tables):
-                        conn.execute(table.drop(engine))
-                    print(f"[DB] Erstelle alle Tabellen neu...")
-                    Base.metadata.create_all(bind=engine)
-                    print(f"[DB] ✓ Tabellen neu erstellt")
-        except Exception as e:
-            print(f"[DB] ⚠️  Konnte user_id Spalte nicht prüfen: {e}")
+        print(f"[DB] ✓ Tabellen: {tables}")
         
         # Erstelle Session Factory
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
