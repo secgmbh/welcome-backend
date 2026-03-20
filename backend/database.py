@@ -454,6 +454,66 @@ def init_db():
         tables = insp.get_table_names()
         print(f"[DB] ✓ Existierende Tabellen: {tables}")
         
+        # === FEHLENDE SPALTEN HINZUFÜGEN (Safe Migration) ===
+        # Diese Spalten fehlen in Production und werden automatisch hinzugefügt
+        missing_columns = [
+            # User Management & Subscription (v2.9.0+)
+            ("users", "phone", "VARCHAR(50)"),
+            ("users", "company_name", "VARCHAR(200)"),
+            ("users", "plan", "VARCHAR(20) DEFAULT 'free'"),
+            ("users", "trial_ends_at", "TIMESTAMP"),
+            ("users", "max_properties", "INTEGER DEFAULT 1"),
+            ("users", "stripe_customer_id", "VARCHAR(100)"),
+            ("users", "is_active", "BOOLEAN DEFAULT TRUE"),
+            ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
+            # Invoice Felder
+            ("users", "invoice_name", "VARCHAR(200)"),
+            ("users", "invoice_address", "VARCHAR(500)"),
+            ("users", "invoice_zip", "VARCHAR(20)"),
+            ("users", "invoice_city", "VARCHAR(100)"),
+            ("users", "invoice_country", "VARCHAR(100)"),
+            ("users", "invoice_vat_id", "VARCHAR(50)"),
+            # Branding Felder
+            ("users", "brand_color", "VARCHAR(20)"),
+            ("users", "logo_url", "VARCHAR(500)"),
+            # Keysafe Felder
+            ("users", "keysafe_location", "VARCHAR(500)"),
+            ("users", "keysafe_code", "VARCHAR(100)"),
+            ("users", "keysafe_instructions", "TEXT"),
+            # Email verification
+            ("users", "is_email_verified", "BOOLEAN DEFAULT FALSE"),
+            ("users", "email_verification_token", "VARCHAR(64)"),
+            ("users", "email_verification_token_expires", "TIMESTAMP"),
+        ]
+        
+        for table, column, col_type in missing_columns:
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(text(f"""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = '{table}' AND column_name = '{column}'
+                    """)).fetchone()
+                    if not result:
+                        print(f"[DB] + Füge {table}.{column} hinzu...")
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+                        conn.commit()
+                        print(f"[DB] ✓ {table}.{column} hinzugefügt")
+            except Exception as e:
+                print(f"[DB] ⚠️  Konnte {table}.{column} nicht prüfen/hinzufügen: {e}")
+        
+        # Erstelle Index für email_verification_token falls nicht vorhanden
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_verification_token 
+                    ON users (email_verification_token)
+                """))
+                conn.commit()
+                print(f"[DB] ✓ Index erstellt")
+        except Exception as e:
+            print(f"[DB] ⚠️  Index konnte nicht erstellt werden: {e}")
+        
         # Prüfe ob properties.user_id VARCHAR ist (für UUIDs)
         try:
             with engine.connect() as conn:
