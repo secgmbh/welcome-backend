@@ -456,6 +456,7 @@ def init_db():
         
         # === FEHLENDE SPALTEN HINZUFÜGEN (Safe Migration) ===
         # Diese Spalten fehlen in Production und werden automatisch hinzugefügt
+        # Nutzt SQLAlchemy inspect() für DB-unabhängige Column-Erkennung
         missing_columns = [
             # User Management & Subscription (v2.9.0+)
             ("users", "phone", "VARCHAR(50)"),
@@ -486,21 +487,18 @@ def init_db():
             ("users", "email_verification_token_expires", "TIMESTAMP"),
         ]
         
-        for table, column, col_type in missing_columns:
+        for table_name, column, col_type in missing_columns:
             try:
-                with engine.connect() as conn:
-                    result = conn.execute(text(f"""
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = '{table}' AND column_name = '{column}'
-                    """)).fetchone()
-                    if not result:
-                        print(f"[DB] + Füge {table}.{column} hinzu...")
-                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+                # DB-unabhängige Column-Erkennung mit SQLAlchemy inspect()
+                existing_columns = [col['name'] for col in insp.get_columns(table_name)]
+                if column not in existing_columns:
+                    print(f"[DB] + Füge {table_name}.{column} hinzu...")
+                    with engine.connect() as conn:
+                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column} {col_type}"))
                         conn.commit()
-                        print(f"[DB] ✓ {table}.{column} hinzugefügt")
+                    print(f"[DB] ✓ {table_name}.{column} hinzugefügt")
             except Exception as e:
-                print(f"[DB] ⚠️  Konnte {table}.{column} nicht prüfen/hinzufügen: {e}")
+                print(f"[DB] ⚠️  Konnte {table_name}.{column} nicht prüfen/hinzufügen: {e}")
         
         # Erstelle Index für email_verification_token falls nicht vorhanden
         try:
@@ -514,18 +512,17 @@ def init_db():
         except Exception as e:
             print(f"[DB] ⚠️  Index konnte nicht erstellt werden: {e}")
         
-        # Prüfe ob properties.user_id VARCHAR ist (für UUIDs)
+        # Prüfe ob properties.user_id VARCHAR ist (für UUIDs) - DB-unabhängig
         try:
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT data_type 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'properties' AND column_name = 'user_id'
-                """)).fetchone()
-                if result and 'int' in result[0].lower():
-                    print(f"[DB] ⚠️  properties.user_id ist Integer, aber UUIDs werden gespeichert - ändere Spalte zu VARCHAR(36)...")
-                    conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36) USING user_id::VARCHAR(36)"))
-                    conn.commit()
+            props_columns = {col['name']: col['type'] for col in insp.get_columns('properties')}
+            if 'user_id' in props_columns:
+                col_type = str(props_columns['user_id']).upper()
+                if 'INT' in col_type and 'VARCHAR' not in col_type:
+                    print(f"[DB] ⚠️  properties.user_id ist Integer, ändere zu VARCHAR(36)...")
+                    # SQLite/PostgreSQL kompatibel
+                    with engine.connect() as conn:
+                        conn.execute(text("ALTER TABLE properties ALTER COLUMN user_id TYPE VARCHAR(36)"))
+                        conn.commit()
                     print(f"[DB] ✓ user_id Spalte geändert zu VARCHAR(36)")
         except Exception as e:
             print(f"[DB] ⚠️  Konnte user_id Spalte nicht prüfen/ändern: {e}")
