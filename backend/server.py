@@ -1033,8 +1033,9 @@ async def verify_email(request: Request, data: VerifyEmailRequest, db: Session =
         
         # Aktiviere E-Mail
         user.is_email_verified = True
-        user.email_verification_token = None
-        user.email_verification_token_expires = None
+        # Token behalten statt auf NULL zu setzen (SQLite UNIQUE Constraint Problem)
+        # user.email_verification_token = None
+        # user.email_verification_token_expires = None
         db.commit()
         
         # Sende Welcome Email
