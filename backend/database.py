@@ -22,7 +22,7 @@ class User(Base):
     is_demo = Column(Boolean, default=False)
     is_email_verified = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)  # Admin-Rechte für Nutzerverwaltung
-    email_verification_token = Column(String(64), unique=True, index=True)
+    email_verification_token = Column(String(64), index=True)  # Removed unique=True for SQLite NULL support
     email_verification_token_expires = Column(DateTime)
     # Subscription
     plan = Column(String(20), default='free')  # free, starter, pro, enterprise
