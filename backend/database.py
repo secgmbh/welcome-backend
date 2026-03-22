@@ -500,15 +500,21 @@ def init_db():
             except Exception as e:
                 print(f"[DB] ⚠️  Konnte {table_name}.{column} nicht prüfen/hinzufügen: {e}")
         
-        # Erstelle Index für email_verification_token falls nicht vorhanden
+        # Entferne UNIQUE Constraint von email_verification_token (SQLite kann keine NULL-Werte)
+        # Erstelle normalen Index für schnellere Suche
         try:
             with engine.connect() as conn:
+                # Drop old UNIQUE index if exists
+                conn.execute(text("DROP INDEX IF EXISTS ix_users_email_verification_token"))
+                conn.commit()
+                print(f"[DB] ✓ Alter Index entfernt")
+                # Create new non-unique index
                 conn.execute(text("""
-                    CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_verification_token 
+                    CREATE INDEX IF NOT EXISTS ix_users_email_verification_token 
                     ON users (email_verification_token)
                 """))
                 conn.commit()
-                print(f"[DB] ✓ Index erstellt")
+                print(f"[DB] ✓ Neuer Index erstellt (non-unique)")
         except Exception as e:
             print(f"[DB] ⚠️  Index konnte nicht erstellt werden: {e}")
         
