@@ -1271,7 +1271,7 @@ def delete_property(property_id: str, user: DBUser = Depends(get_current_user), 
 
 @api_router.get("/")
 def root():
-    return {"message": "Welcome Link API", "version": "2.8.4", "status": "healthy"}
+    return {"message": "Welcome Link API", "version": "2.10.0", "status": "healthy"}
 
 @api_router.get("/health")
 def health_check(db: Session = Depends(get_db)):
@@ -1282,7 +1282,7 @@ def health_check(db: Session = Depends(get_db)):
     health = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.8.4",
+        "version": "2.10.0",
         "environment": ENVIRONMENT,
         "services": {}
     }
@@ -2921,7 +2921,7 @@ def health_check():
     health_response = {
         "status": "healthy" if db_healthy else "degraded",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.8.4",
+        "version": "2.10.0",
         "environment": ENVIRONMENT,
         "services": {
             "database": {
