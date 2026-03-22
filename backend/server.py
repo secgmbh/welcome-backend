@@ -2953,9 +2953,6 @@ def health_check():
     
     return health_response
 
-# Include the router in the main app AFTER all routes are defined
-app.include_router(api_router)
-
 # ============ DAILY STATS ENDPOINT ============
 @api_router.get("/admin/daily-stats")
 def get_daily_stats(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -4940,3 +4937,6 @@ def get_audit_logs(request: Request, credentials: HTTPAuthorizationCredentials =
 # ============ RATE LIMITING FOR ALL API ENDPOINTS ============
 # Note: Rate limiting is handled by SecurityHeadersMiddleware and per-endpoint limits
 # API key rate limiting is done in the endpoint handlers themselves
+
+# Include the router in the main app AFTER all routes are defined
+app.include_router(api_router)
