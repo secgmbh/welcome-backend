@@ -155,6 +155,47 @@ def send_welcome_email(email: str, name: str):
     
     return send_email(email, f"Willkommen bei Welcome Link, {name}!", html)
 
+def send_verification_email(email: str, name: str, token: str):
+    """Sende E-Mail-Bestätigungs-E-Mail"""
+    verify_url = f"https://www.welcome-link.de/verify-email?token={token}"
+    html = f"""
+    <html>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #F27C2C 0%, #FF9F4A 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">E-Mail bestätigen 📧</h1>
+        </div>
+        <div style="background: #fff; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hallo {name}!</h2>
+            <p style="color: #666; font-size: 16px;">Vielen Dank für Ihre Registrierung! Bitte bestätigen Sie Ihre E-Mail-Adresse, um fortzufahren.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{verify_url}" style="display: inline-block; background: #F27C2C; color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                    E-Mail bestätigen
+                </a>
+            </div>
+            
+            <p style="color: #666; font-size: 14px;">Oder kopieren Sie diesen Link in Ihren Browser:</p>
+            <p style="color: #F27C2C; font-size: 14px; word-break: break-all;">{verify_url}</p>
+            
+            <p style="color: #999; font-size: 13px; margin-top: 30px;">Dieser Link ist 24 Stunden gültig.</p>
+            <p style="color: #999; font-size: 13px;">Bei Fragen erreichen Sie uns unter support@welcome-link.de</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text = f"""E-Mail bestätigen - Welcome Link
+
+Hallo {name}!
+
+Bitte bestätigen Sie Ihre E-Mail-Adresse:
+{verify_url}
+
+Dieser Link ist 24 Stunden gültig.
+"""
+    
+    return send_email(email, "Bestätigen Sie Ihre E-Mail - Welcome Link", html, text)
+
 def send_booking_confirmation_email(email: str, name: str, property_name: str, checkin: str, checkout: str, guests: int, total: float):
     """Sende Buchungsbestätigungs-E-Mail"""
     html = f"""
@@ -595,6 +636,9 @@ class UserLogin(BaseModel):
 class MagicLinkRequest(BaseModel):
     email: EmailStr
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -605,6 +649,7 @@ class User(BaseModel):
     plan: Optional[str] = "free"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_demo: bool = False
+    is_email_verified: bool = False
     # Invoice data
     invoice_name: Optional[str] = None
     invoice_address: Optional[str] = None
@@ -861,27 +906,36 @@ async def register(request: Request, data: UserRegister, db: Session = Depends(g
         db.commit()
         db.refresh(db_user)
         
-        # Sende Welcome Email (im Hintergrund, blockiert nicht)
-        try:
-            send_welcome_email(db_user.email, db_user.name)
-            logger.info(f"Welcome E-Mail gesendet an: {db_user.email}")
-        except Exception as email_error:
-            # E-Mail-Fehler blockiert die Registrierung nicht
-            logger.warning(f"Welcome E-Mail konnte nicht gesendet werden: {email_error}")
+        # Generiere E-Mail-Bestätigungs-Token
+        verification_token = secrets.token_urlsafe(32)
+        db_user.email_verification_token = verification_token
+        db_user.email_verification_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        db_user.is_email_verified = False
+        db.commit()
         
-        # Erstelle Token
+        # Sende Verification Email
+        try:
+            send_verification_email(db_user.email, db_user.name, verification_token)
+            logger.info(f"Verification E-Mail gesendet an: {db_user.email}")
+        except Exception as email_error:
+            logger.warning(f"Verification E-Mail konnte nicht gesendet werden: {email_error}")
+            # E-Mail-Fehler blockiert die Registrierung nicht
+        
+        # Erstelle Token (für Demo-Zwecke oder wenn Verifikation deaktiviert)
         token = create_token(user_id, db_user.email)
         logger.info(f"Neuer Benutzer registriert: {data.email}")
         
-        return AuthResponse(
-            token=token,
-            user=User(
-                id=user_id,
-                email=db_user.email,
-                name=db_user.name,
-                is_demo=False
-            )
-        )
+        return {
+            "token": token,
+            "user": {
+                "id": user_id,
+                "email": db_user.email,
+                "name": db_user.name,
+                "is_demo": False,
+                "is_email_verified": False
+            },
+            "message": "Bitte bestätigen Sie Ihre E-Mail-Adresse. Prüfen Sie Ihr Postfach."
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -905,6 +959,14 @@ async def login(request: Request, data: UserLogin, db: Session = Depends(get_db)
         if not verify_password(data.password, user.password_hash):
             logger.warning(f"Falsches Passwort für: {data.email}")
             raise HTTPException(status_code=401, detail="E-Mail oder Passwort falsch")
+        
+        # Prüfe E-Mail-Bestätigung (außer für Demo-Accounts)
+        if not user.is_demo and not user.is_email_verified:
+            logger.warning(f"E-Mail nicht bestätigt: {data.email}")
+            raise HTTPException(
+                status_code=403, 
+                detail="Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse. Prüfen Sie Ihr Postfach."
+            )
         
         # Erstelle Token
         token = create_token(user.id, user.email)
@@ -944,9 +1006,95 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Sessi
         logger.info(f"Magic Link angefordert für: {data.email} (SMTP nicht konfiguriert)")
         return {
             "message": "Magic Link wurde angefordert. SMTP nicht konfiguriert - prüfen Sie die Logs.",
-            "email": data.email,
-            "demo_url": f"https://www.welcome-link.de/auth/magic?token={token}"
+            "email": data.email
         }
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+@api_router.post("/auth/verify-email")
+async def verify_email(request: Request, data: VerifyEmailRequest, db: Session = Depends(get_db)):
+    """Bestätige E-Mail-Adresse mit Token"""
+    try:
+        # Finde Benutzer mit Token
+        user = db.query(DBUser).filter(
+            DBUser.email_verification_token == data.token
+        ).first()
+        
+        if not user:
+            logger.warning(f"Ungültiger Verification-Token: {data.token[:20]}...")
+            raise HTTPException(status_code=400, detail="Ungültiger oder abgelaufener Bestätigungs-Link")
+        
+        # Prüfe ob Token abgelaufen
+        if user.email_verification_token_expires:
+            if user.email_verification_token_expires < datetime.now(timezone.utc):
+                logger.warning(f"Abgelaufener Verification-Token für: {user.email}")
+                raise HTTPException(status_code=400, detail="Bestätigungs-Link ist abgelaufen. Bitte fordern Sie einen neuen an.")
+        
+        # Aktiviere E-Mail
+        user.is_email_verified = True
+        user.email_verification_token = None
+        user.email_verification_token_expires = None
+        db.commit()
+        
+        # Sende Welcome Email
+        try:
+            send_welcome_email(user.email, user.name)
+            logger.info(f"Welcome E-Mail gesendet an: {user.email}")
+        except Exception as e:
+            logger.warning(f"Welcome E-Mail konnte nicht gesendet werden: {e}")
+        
+        # Erstelle Token für automatischen Login
+        token = create_token(user.id, user.email)
+        logger.info(f"E-Mail bestätigt für: {user.email}")
+        
+        return {
+            "message": "E-Mail erfolgreich bestätigt!",
+            "token": token,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "is_email_verified": True
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fehler bei E-Mail-Bestätigung: {str(e)}")
+        raise HTTPException(status_code=500, detail="Bestätigung fehlgeschlagen")
+
+@api_router.post("/auth/resend-verification")
+@limiter.limit("3/hour")
+async def resend_verification(request: Request, data: ResendVerificationRequest, db: Session = Depends(get_db)):
+    """Sende Bestätigungs-E-Mail erneut"""
+    try:
+        user = db.query(DBUser).filter(DBUser.email == data.email.lower()).first()
+        
+        if not user:
+            # Aus Security-Gründen keine Info über existierende E-Mail
+            return {"message": "Wenn die E-Mail existiert, wurde eine Bestätigung gesendet."}
+        
+        if user.is_email_verified:
+            return {"message": "E-Mail bereits bestätigt. Sie können sich einloggen."}
+        
+        # Generiere neuen Token
+        verification_token = secrets.token_urlsafe(32)
+        user.email_verification_token = verification_token
+        user.email_verification_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        db.commit()
+        
+        # Sende E-Mail
+        try:
+            send_verification_email(user.email, user.name, verification_token)
+            logger.info(f"Verification E-Mail erneut gesendet an: {user.email}")
+        except Exception as e:
+            logger.warning(f"Verification E-Mail konnte nicht gesendet werden: {e}")
+        
+        return {"message": "Bestätigungs-E-Mail wurde erneut gesendet."}
+    except Exception as e:
+        logger.error(f"Fehler bei resend-verification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Fehler beim Senden der E-Mail")
 
 @api_router.get("/auth/me", response_model=User)
 def get_me(user: DBUser = Depends(get_current_user)):
