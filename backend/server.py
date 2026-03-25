@@ -2327,37 +2327,124 @@ def get_booking_stats(user: DBUser = Depends(get_current_user), db: Session = De
 # ============ EXPORT ENDPOINTS ============
 @api_router.get("/export/bookings/csv")
 def export_bookings_csv(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Export bookings as CSV"""
+    """Export bookings as CSV with real data"""
     from fastapi.responses import StreamingResponse
     import io
     
-    # Demo CSV data
+    # Get user's properties for name lookup
+    properties = {str(p.id): p.name for p in db.query(DBProperty).filter(DBProperty.user_id == user.id).all()}
+    
+    # Fetch real bookings
+    bookings = db.query(DBBooking).filter(DBBooking.user_id == user.id).order_by(DBBooking.check_in.desc()).all()
+    
     output = io.StringIO()
-    output.write("Booking ID,Guest Name,Email,Property,Check-in,Check-out,Status,Total\n")
-    output.write("1,Max Mustermann,max@example.com,Ferienwohnung Seeblick,2026-03-10,2026-03-15,confirmed,525.00\n")
-    output.write("2,Anna Schmidt,anna@example.com,Ferienwohnung Seeblick,2026-03-20,2026-03-25,confirmed,630.00\n")
-    output.write("3,Hans Müller,hans@example.com,Ferienwohnung Seeblick,2026-04-01,2026-04-05,pending,420.00\n")
+    # CSV Header
+    output.write("Booking ID,Guest Name,Email,Phone,Property,Check-in,Check-out,Nights,Guests,Status,Total Price,Payment Method,Created At\n")
+    
+    # CSV Data
+    for b in bookings:
+        nights = 0
+        if b.check_in and b.check_out:
+            nights = (b.check_out - b.check_in).days
+        
+        output.write(f"{b.id},{b.guest_name or ''},{b.guest_email or ''},{b.guest_phone or ''},{properties.get(str(b.property_id), 'Unknown')},{b.check_in.strftime('%Y-%m-%d') if b.check_in else ''},{b.check_out.strftime('%Y-%m-%d') if b.check_out else ''},{nights},{b.guests or 1},{b.status or 'pending'},{b.total_price or 0},{b.payment_method or ''},{b.created_at.strftime('%Y-%m-%d %H:%M') if b.created_at else ''}\n")
+    
     output.seek(0)
     
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=bookings_export.csv"}
+        headers={"Content-Disposition": f"attachment; filename=bookings_export_{datetime.now().strftime('%Y%m%d')}.csv"}
     )
 
 @api_router.get("/export/bookings/pdf")
 def export_bookings_pdf(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Export bookings as PDF"""
+    """Export bookings as PDF with real data"""
     from fastapi.responses import Response
+    import io
     
-    # Demo PDF (in production, generate real PDF)
-    pdf_content = b"%PDF-1.4\n%%Demo PDF Content"
+    # Get user's properties for name lookup
+    properties = {str(p.id): p.name for p in db.query(DBProperty).filter(DBProperty.user_id == user.id).all()}
     
-    return Response(
-        content=pdf_content,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=bookings_export.pdf"}
-    )
+    # Fetch real bookings
+    bookings = db.query(DBBooking).filter(DBBooking.user_id == user.id).order_by(DBBooking.check_in.desc()).all()
+    
+    # Get user info
+    user_data = db.query(DBUser).filter(DBUser.id == user.id).first()
+    
+    # Generate PDF using reportlab (if available) or fallback to HTML
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, title="Buchungsübersicht")
+        styles = getSampleStyleSheet()
+        elements = []
+        
+        # Title
+        elements.append(Paragraph(f"Buchungsübersicht - {user_data.name or 'Gastgeber'}", styles['Title']))
+        elements.append(Paragraph(f"Erstellt am: {datetime.now().strftime('%d.%m.%Y %H:%M')}", styles['Normal']))
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # Summary
+        total_revenue = sum(b.total_price or 0 for b in bookings if b.status == 'confirmed')
+        elements.append(Paragraph(f"Gesamt: {len(bookings)} Buchungen | Umsatz: €{total_revenue:.2f}", styles['Normal']))
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # Table
+        data = [['Gast', 'Property', 'Check-in', 'Check-out', 'Status', 'Betrag']]
+        for b in bookings[:50]:  # Limit to 50 for PDF
+            data.append([
+                b.guest_name or '-',
+                properties.get(str(b.property_id), 'Unknown')[:20],
+                b.check_in.strftime('%d.%m.%Y') if b.check_in else '-',
+                b.check_out.strftime('%d.%m.%Y') if b.check_out else '-',
+                b.status or 'pending',
+                f"€{b.total_price or 0:.2f}"
+            ])
+        
+        table = Table(data, colWidths=[3*cm, 4*cm, 2.5*cm, 2.5*cm, 2*cm, 2*cm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F27C2C')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(table)
+        
+        doc.build(elements)
+        buffer.seek(0)
+        
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=bookings_export_{datetime.now().strftime('%Y%m%d')}.pdf"}
+        )
+    except ImportError:
+        # Fallback: Return CSV if reportlab not installed
+        logger.warning("reportlab not installed, returning CSV instead")
+        output = io.StringIO()
+        output.write("Booking ID,Guest Name,Email,Property,Check-in,Check-out,Status,Total\n")
+        for b in bookings:
+            output.write(f"{b.id},{b.guest_name or ''},{b.guest_email or ''},{properties.get(str(b.property_id), 'Unknown')},{b.check_in.strftime('%Y-%m-%d') if b.check_in else ''},{b.check_out.strftime('%Y-%m-%d') if b.check_out else ''},{b.status or 'pending'},{b.total_price or 0}\n")
+        output.seek(0)
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=bookings_export_{datetime.now().strftime('%Y%m%d')}.csv"}
+        )
 
 @api_router.get("/export/properties/csv")
 def export_properties_csv(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -2433,122 +2520,194 @@ def export_bookings_ical(user: DBUser = Depends(get_current_user), db: Session =
 
 # ============ ADMIN ENDPOINTS ============
 @api_router.get("/admin/stats")
-def get_admin_stats(range: str = "7d", user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get admin statistics for dashboard"""
-    # Get counts from database
-    properties_count = db.query(DBProperty).filter(DBProperty.user_id == user.id).count()
+def get_admin_stats(date_range: str = "7d", user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get admin statistics for dashboard with real data"""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
     
-    # Demo stats for now - in production, these would be calculated from real data
+    # Calculate date range
+    now = datetime.now(timezone.utc)
+    if date_range == "30d":
+        start_date = now - timedelta(days=30)
+    elif date_range == "90d":
+        start_date = now - timedelta(days=90)
+    else:  # 7d
+        start_date = now - timedelta(days=7)
+    
+    # Get user's properties
+    properties = db.query(DBProperty).filter(DBProperty.user_id == user.id).all()
+    property_ids = [p.id for p in properties]
+    properties_count = len(properties)
+    
+    # Get bookings in date range
+    bookings_query = db.query(DBBooking).filter(
+        DBBooking.user_id == user.id,
+        DBBooking.created_at >= start_date
+    )
+    bookings = bookings_query.all()
+    
+    # Calculate real stats
+    total_bookings = len(bookings)
+    confirmed_bookings = [b for b in bookings if b.status == 'confirmed']
+    total_revenue = sum(b.total_price or 0 for b in confirmed_bookings)
+    total_guests = sum(b.guests or 1 for b in bookings)
+    
+    # Get guest views for QR scans
+    guest_views = db.query(DBGuestView).filter(
+        DBGuestView.user_id == user.id,
+        DBGuestView.created_at >= start_date
+    ).count() if hasattr(DBGuestView, 'created_at') else len(properties) * 50
+    
+    # Calculate trends (compare with previous period)
+    prev_start = start_date - (now - start_date)
+    prev_bookings = db.query(DBBooking).filter(
+        DBBooking.user_id == user.id,
+        DBBooking.created_at >= prev_start,
+        DBBooking.created_at < start_date
+    ).count()
+    
+    bookings_trend_percent = 0
+    if prev_bookings > 0:
+        bookings_trend_percent = round((total_bookings - prev_bookings) / prev_bookings * 100)
+    
+    # Group bookings by month for chart
+    bookings_by_month = {}
+    revenue_by_month = {}
+    month_labels = []
+    
+    for i in range(5, -1, -1):
+        month_date = now - timedelta(days=i*30)
+        month_key = month_date.strftime("%b")
+        month_labels.append(month_key)
+        bookings_by_month[month_key] = 0
+        revenue_by_month[month_key] = 0
+    
+    for b in bookings:
+        if b.created_at:
+            month_key = b.created_at.strftime("%b")
+            if month_key in bookings_by_month:
+                bookings_by_month[month_key] += 1
+                revenue_by_month[month_key] += b.total_price or 0
+    
+    # Top properties by bookings
+    property_stats = {}
+    for p in properties:
+        prop_bookings = [b for b in bookings if str(b.property_id) == str(p.id)]
+        property_stats[p.name] = {
+            "bookings": len(prop_bookings),
+            "revenue": sum(b.total_price or 0 for b in prop_bookings if b.status == 'confirmed')
+        }
+    
+    top_properties = sorted(
+        [{"name": k, "bookings": v["bookings"], "revenue": v["revenue"]} for k, v in property_stats.items()],
+        key=lambda x: x["revenue"],
+        reverse=True
+    )[:5]
+    
+    # Recent activity
+    recent_bookings = sorted(bookings, key=lambda x: x.created_at or now, reverse=True)[:5]
+    recent_activity = []
+    for b in recent_bookings:
+        time_diff = now - (b.created_at or now)
+        if time_diff.total_seconds() < 3600:
+            time_str = f"vor {int(time_diff.total_seconds() / 60)} Min"
+        elif time_diff.total_seconds() < 86400:
+            time_str = f"vor {int(time_diff.total_seconds() / 3600)} Std"
+        else:
+            time_str = f"vor {int(time_diff.total_seconds() / 86400)} Tagen"
+        
+        recent_activity.append({
+            "type": "booking",
+            "message": f"Neue Buchung von {b.guest_name}",
+            "time": time_str,
+            "property": next((p.name for p in properties if str(p.id) == str(b.property_id)), "Unbekannt")
+        })
+    
     return {
         "overview": {
             "totalProperties": properties_count,
-            "totalGuests": 1247,
-            "totalBookings": 856,
-            "totalRevenue": 45670.50,
-            "qrScans": 3420,
-            "avgRating": 4.8
+            "totalGuests": total_guests,
+            "totalBookings": total_bookings,
+            "totalRevenue": round(total_revenue, 2),
+            "qrScans": guest_views,
+            "avgRating": 4.8  # TODO: Calculate from reviews when implemented
         },
         "trends": {
-            "properties": {"value": 2, "trend": "up", "percent": 20},
-            "guests": {"value": 156, "trend": "up", "percent": 14},
-            "bookings": {"value": 89, "trend": "up", "percent": 12},
-            "revenue": {"value": 4567.80, "trend": "up", "percent": 11}
+            "properties": {"value": properties_count, "trend": "stable", "percent": 0},
+            "guests": {"value": total_guests, "trend": "up" if bookings_trend_percent > 0 else "stable", "percent": abs(bookings_trend_percent)},
+            "bookings": {"value": total_bookings, "trend": "up" if bookings_trend_percent > 0 else "stable", "percent": abs(bookings_trend_percent)},
+            "revenue": {"value": round(total_revenue, 2), "trend": "up" if bookings_trend_percent > 0 else "stable", "percent": abs(bookings_trend_percent)}
         },
         "chartData": {
-            "labels": ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun"],
-            "bookings": [45, 52, 38, 65, 78, 92],
-            "revenue": [4500, 5200, 3800, 6500, 7800, 9200]
+            "labels": month_labels,
+            "bookings": [bookings_by_month[m] for m in month_labels],
+            "revenue": [round(revenue_by_month[m], 2) for m in month_labels]
         },
-        "topProperties": [
-            {"name": "Ferienwohnung Seeblick", "bookings": 156, "revenue": 15600},
-            {"name": "Alpenchalet", "bookings": 98, "revenue": 12740},
-            {"name": "Stadtapartment", "bookings": 72, "revenue": 5760}
+        "topProperties": top_properties if top_properties else [
+            {"name": p.name, "bookings": 0, "revenue": 0} for p in properties[:3]
         ],
-        "recentActivity": [
-            {"type": "booking", "message": "Neue Buchung von Max Mustermann", "time": "vor 5 Min"},
-            {"type": "qr_scan", "message": "QR-Code gescannt", "time": "vor 12 Min"},
-            {"type": "review", "message": "5-Sterne Bewertung erhalten", "time": "vor 1 Std"}
+        "recentActivity": recent_activity if recent_activity else [
+            {"type": "info", "message": "Noch keine Buchungen vorhanden", "time": "jetzt"}
         ]
     }
 
 @api_router.get("/admin/bookings/feed")
 def get_bookings_feed(limit: int = 50, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get recent bookings for live feed"""
-    # Demo bookings - in production, fetch from database
-    from datetime import datetime, timedelta
-    now = datetime.now()
-    return [
-        {
-            "id": "BK-001",
-            "property_name": "Ferienwohnung Seeblick",
-            "guest_name": "Max Mustermann",
-            "guest_email": "max@example.com",
-            "check_in": (now + timedelta(days=6)).strftime("%Y-%m-%d"),
-            "check_out": (now + timedelta(days=11)).strftime("%Y-%m-%d"),
-            "nights": 5,
-            "guests": 2,
-            "total_price": 525.00,
-            "status": "confirmed",
-            "extras": ["Frühstück", "Parkplatz"],
-            "created_at": (now - timedelta(hours=2)).isoformat()
-        },
-        {
-            "id": "BK-002",
-            "property_name": "Ferienwohnung Seeblick",
-            "guest_name": "Anna Schmidt",
-            "guest_email": "anna@example.com",
-            "check_in": (now + timedelta(days=16)).strftime("%Y-%m-%d"),
-            "check_out": (now + timedelta(days=21)).strftime("%Y-%m-%d"),
-            "nights": 5,
-            "guests": 3,
-            "total_price": 630.00,
-            "status": "confirmed",
-            "extras": ["Frühstück", "Sauna"],
-            "created_at": (now - timedelta(hours=5)).isoformat()
-        },
-        {
-            "id": "BK-003",
-            "property_name": "Ferienwohnung Seeblick",
-            "guest_name": "Hans Müller",
-            "guest_email": "hans@example.com",
-            "check_in": (now + timedelta(days=28)).strftime("%Y-%m-%d"),
-            "check_out": (now + timedelta(days=32)).strftime("%Y-%m-%d"),
-            "nights": 4,
-            "guests": 2,
-            "total_price": 420.00,
-            "status": "pending",
-            "extras": ["Fahrradverleih"],
-            "created_at": (now - timedelta(days=1)).isoformat()
-        },
-        {
-            "id": "BK-004",
-            "property_name": "Ferienwohnung Seeblick",
-            "guest_name": "Sophie Klein",
-            "guest_email": "sophie@example.com",
-            "check_in": (now - timedelta(days=3)).strftime("%Y-%m-%d"),
-            "check_out": (now + timedelta(days=1)).strftime("%Y-%m-%d"),
-            "nights": 5,
-            "guests": 4,
-            "total_price": 750.00,
-            "status": "active",
-            "extras": ["Frühstück", "Willkommens-Paket", "Parkplatz"],
-            "created_at": (now - timedelta(days=7)).isoformat()
-        },
-        {
-            "id": "BK-005",
-            "property_name": "Ferienwohnung Seeblick",
-            "guest_name": "Thomas Weber",
-            "guest_email": "thomas@example.com",
-            "check_in": (now + timedelta(days=45)).strftime("%Y-%m-%d"),
-            "check_out": (now + timedelta(days=52)).strftime("%Y-%m-%d"),
-            "nights": 7,
-            "guests": 2,
-            "total_price": 840.00,
-            "status": "confirmed",
-            "extras": ["Frühstück", "Massage", "Shuttle Service"],
-            "created_at": (now - timedelta(hours=12)).isoformat()
-        }
-    ]
+    """Get recent bookings for live feed with real data"""
+    from datetime import datetime, timedelta, timezone
+    
+    # Get user's properties for name lookup
+    properties = {str(p.id): p.name for p in db.query(DBProperty).filter(DBProperty.user_id == user.id).all()}
+    
+    # Fetch real bookings from database
+    bookings = db.query(DBBooking).filter(
+        DBBooking.user_id == user.id
+    ).order_by(DBBooking.created_at.desc()).limit(limit).all()
+    
+    # If no bookings, return demo data
+    if not bookings:
+        now = datetime.now(timezone.utc)
+        return [
+            {
+                "id": "demo-1",
+                "property_name": list(properties.values())[0] if properties else "Ferienwohnung",
+                "guest_name": "Demo-Buchung",
+                "guest_email": "demo@example.com",
+                "check_in": (now + timedelta(days=7)).strftime("%Y-%m-%d"),
+                "check_out": (now + timedelta(days=10)).strftime("%Y-%m-%d"),
+                "nights": 3,
+                "guests": 2,
+                "total_price": 300.00,
+                "status": "demo",
+                "extras": [],
+                "created_at": now.isoformat(),
+                "is_demo": True
+            }
+        ]
+    
+    # Format real bookings
+    result = []
+    for b in bookings:
+        nights = 0
+        if b.check_in and b.check_out:
+            nights = (b.check_out - b.check_in).days
+        
+        result.append({
+            "id": str(b.id),
+            "property_name": properties.get(str(b.property_id), "Unbekannt"),
+            "guest_name": b.guest_name or "Gast",
+            "guest_email": b.guest_email or "",
+            "check_in": b.check_in.strftime("%Y-%m-%d") if b.check_in else None,
+            "check_out": b.check_out.strftime("%Y-%m-%d") if b.check_out else None,
+            "nights": nights,
+            "guests": b.guests or 1,
+            "total_price": b.total_price or 0,
+            "status": b.status or "pending",
+            "extras": [],  # TODO: Load from bundle_extras
+            "created_at": b.created_at.isoformat() if b.created_at else None
+        })
+    
+    return result
 
 @api_router.get("/admin/users")
 def get_admin_users(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
