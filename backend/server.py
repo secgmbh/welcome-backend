@@ -1735,6 +1735,241 @@ def create_extra(property_id: int, data: ExtraCreate, user = Depends(get_current
     EXTRAS_STORE[property_id].append(extra)
     return extra
 
+# ============ QR CODE ENDPOINTS ============
+import qrcode
+from qrcode.image.styledpil import StyledPilImage
+from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+from io import BytesIO
+import base64
+
+@api_router.get("/properties/{property_id}/qr")
+def get_property_qr(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Generate QR code for property guest view"""
+    try:
+        # Convert property_id to int if possible, otherwise use string
+        try:
+            prop_id_int = int(property_id)
+            property = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+        except ValueError:
+            property = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+        
+        if not property:
+            # Try public_id
+            property = db.query(DBProperty).filter(DBProperty.public_id == property_id).first()
+        
+        if not property:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        # Generate guestview URL
+        base_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
+        guestview_url = f"{base_url}/guestview/{property.public_id if hasattr(property, 'public_id') and property.public_id else property.id}"
+        
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(guestview_url)
+        qr.make(fit=True)
+        
+        # Create styled QR code
+        img = qr.make_image(
+            image_factory=StyledPilImage,
+            module_drawer=RoundedModuleDrawer(),
+            fill_color="#F27C2C",
+            back_color="white"
+        )
+        
+        # Convert to base64
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        return {
+            "qr_code": f"data:image/png;base64,{img_base64}",
+            "url": guestview_url,
+            "property_name": property.name,
+            "property_id": str(property.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error generating QR code: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate QR code")
+
+@api_router.get("/properties/{property_id}/qr/download")
+def download_property_qr(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Download QR code as PNG file"""
+    from fastapi.responses import Response
+    
+    try:
+        # Convert property_id to int if possible
+        try:
+            prop_id_int = int(property_id)
+            property = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+        except ValueError:
+            property = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+        
+        if not property:
+            property = db.query(DBProperty).filter(DBProperty.public_id == property_id).first()
+        
+        if not property:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        # Generate guestview URL
+        base_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
+        guestview_url = f"{base_url}/guestview/{property.public_id if hasattr(property, 'public_id') and property.public_id else property.id}"
+        
+        # Generate high-res QR code for printing
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=20,
+            border=4,
+        )
+        qr.add_data(guestview_url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(
+            image_factory=StyledPilImage,
+            module_drawer=RoundedModuleDrawer(),
+            fill_color="#F27C2C",
+            back_color="white"
+        )
+        
+        # Return as downloadable file
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        
+        return Response(
+            content=buffer.getvalue(),
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f"attachment; filename=qr-{property.name.replace(' ', '-')}.png"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error downloading QR code: {e}")
+        raise HTTPException(status_code=500, detail="Failed to download QR code")
+
+@api_router.post("/properties/{property_id}/qr/pdf")
+def generate_qr_pdf(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Generate print-ready PDF with QR code for property"""
+    from fastapi.responses import Response
+    
+    try:
+        # Convert property_id
+        try:
+            prop_id_int = int(property_id)
+            property = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+        except ValueError:
+            property = db.query(DBProperty).filter(DBProperty.id == property_id).first()
+        
+        if not property:
+            property = db.query(DBProperty).filter(DBProperty.public_id == property_id).first()
+        
+        if not property:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        # Generate guestview URL
+        base_url = os.environ.get('FRONTEND_URL', 'https://www.welcome-link.de')
+        guestview_url = f"{base_url}/guestview/{property.public_id if hasattr(property, 'public_id') and property.public_id else property.id}"
+        
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=15,
+            border=2,
+        )
+        qr.add_data(guestview_url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(
+            image_factory=StyledPilImage,
+            module_drawer=RoundedModuleDrawer(),
+            fill_color="#F27C2C",
+            back_color="white"
+        )
+        
+        # Create PDF
+        buffer = BytesIO()
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.platypus import SimpleDocTemplate, Image as RLImage, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib import colors
+            from reportlab.lib.units import cm
+            
+            doc = SimpleDocTemplate(buffer, pagesize=A4, title=f"QR-Code {property.name}")
+            styles = getSampleStyleSheet()
+            elements = []
+            
+            # Title
+            elements.append(Paragraph(f"QR-Code: {property.name}", styles['Title']))
+            elements.append(Paragraph(f"Erstellt am: {datetime.now().strftime('%d.%m.%Y %H:%M')}", styles['Normal']))
+            elements.append(Spacer(1, 1*cm))
+            
+            # QR Code image
+            img_buffer = BytesIO()
+            img.save(img_buffer, format="PNG")
+            img_buffer.seek(0)
+            
+            # Add image (centered)
+            elements.append(RLImage(img_buffer, width=10*cm, height=10*cm))
+            elements.append(Spacer(1, 1*cm))
+            
+            # Instructions
+            elements.append(Paragraph("Anleitung:", styles['Heading2']))
+            elements.append(Paragraph("1. Scannen Sie den QR-Code mit Ihrem Smartphone", styles['Normal']))
+            elements.append(Paragraph("2. Sie gelangen direkt zur digitalen Gästemappe", styles['Normal']))
+            elements.append(Paragraph("3. Teilen Sie diesen Code mit Ihren Gästen", styles['Normal']))
+            elements.append(Spacer(1, 0.5*cm))
+            
+            # URL
+            elements.append(Paragraph("URL:", styles['Heading2']))
+            elements.append(Paragraph(guestview_url, styles['Normal']))
+            elements.append(Spacer(1, 1*cm))
+            
+            # Property info
+            elements.append(Paragraph("Unterkunft:", styles['Heading2']))
+            elements.append(Paragraph(property.name, styles['Normal']))
+            if property.address:
+                elements.append(Paragraph(property.address, styles['Normal']))
+            
+            doc.build(elements)
+            buffer.seek(0)
+            
+            return Response(
+                content=buffer.getvalue(),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename=qr-{property.name.replace(' ', '-')}.pdf"
+                }
+            )
+        except ImportError:
+            # Fallback: return PNG if reportlab not available
+            img_buffer = BytesIO()
+            img.save(img_buffer, format="PNG")
+            img_buffer.seek(0)
+            
+            return Response(
+                content=img_buffer.getvalue(),
+                media_type="image/png",
+                headers={
+                    "Content-Disposition": f"attachment; filename=qr-{property.name.replace(' ', '-')}.png"
+                }
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error generating QR PDF: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate QR PDF")
+
 # ============ CHECKOUT MODELS & ROUTES ============
 
 class CheckoutItem(BaseModel):
