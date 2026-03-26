@@ -2518,6 +2518,275 @@ def init_demo_data(db: Session = Depends(get_db)):
         "guestview_token": "QEJHEXP1QF"
     }
 
+# ============ FEEDBACK ENDPOINTS ============
+from database import Feedback as DBFeedback
+
+class FeedbackCreate(BaseModel):
+    property_id: str
+    booking_id: Optional[str] = None
+    guest_name: Optional[str] = None
+    guest_email: Optional[str] = None
+    rating: int = Field(..., ge=1, le=5)
+    title: Optional[str] = None
+    comment: Optional[str] = None
+    pros: Optional[List[str]] = None
+    cons: Optional[List[str]] = None
+    would_recommend: Optional[bool] = None
+    photos: Optional[List[str]] = None
+    is_public: bool = False
+
+class FeedbackResponse(BaseModel):
+    response: str
+
+class FeedbackUpdate(BaseModel):
+    is_public: Optional[bool] = None
+    response: Optional[str] = None
+
+@api_router.post("/feedback")
+def create_feedback(data: FeedbackCreate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new feedback/review for a property"""
+    # Verify property belongs to user
+    property = db.query(DBProperty).filter(
+        DBProperty.id == data.property_id,
+        DBProperty.user_id == user.id
+    ).first()
+    
+    if not property:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    feedback = DBFeedback(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        property_id=data.property_id,
+        booking_id=data.booking_id,
+        guest_name=data.guest_name,
+        guest_email=data.guest_email,
+        rating=data.rating,
+        title=data.title,
+        comment=data.comment,
+        pros=json.dumps(data.pros) if data.pros else None,
+        cons=json.dumps(data.cons) if data.cons else None,
+        would_recommend=data.would_recommend,
+        photos=json.dumps(data.photos) if data.photos else None,
+        is_public=data.is_public,
+        is_verified=False,
+        created_at=datetime.now(timezone.utc)
+    )
+    
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+    
+    return {
+        "id": feedback.id,
+        "rating": feedback.rating,
+        "title": feedback.title,
+        "comment": feedback.comment,
+        "created_at": feedback.created_at.isoformat(),
+        "message": "Feedback erfolgreich erstellt"
+    }
+
+@api_router.get("/feedback")
+def get_feedback_list(
+    property_id: Optional[str] = None,
+    rating: Optional[int] = None,
+    is_public: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0,
+    user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get feedback list for user's properties"""
+    query = db.query(DBFeedback).filter(DBFeedback.user_id == user.id)
+    
+    if property_id:
+        query = query.filter(DBFeedback.property_id == property_id)
+    if rating:
+        query = query.filter(DBFeedback.rating == rating)
+    if is_public is not None:
+        query = query.filter(DBFeedback.is_public == is_public)
+    
+    total = query.count()
+    feedbacks = query.order_by(DBFeedback.created_at.desc()).offset(offset).limit(limit).all()
+    
+    # Get property names
+    property_ids = list(set(f.property_id for f in feedbacks))
+    properties = {str(p.id): p.name for p in db.query(DBProperty).filter(DBProperty.id.in_(property_ids)).all()}
+    
+    return {
+        "total": total,
+        "feedback": [
+            {
+                "id": f.id,
+                "property_id": f.property_id,
+                "property_name": properties.get(str(f.property_id), "Unknown"),
+                "booking_id": f.booking_id,
+                "guest_name": f.guest_name,
+                "guest_email": f.guest_email,
+                "rating": f.rating,
+                "title": f.title,
+                "comment": f.comment,
+                "pros": json.loads(f.pros) if f.pros else [],
+                "cons": json.loads(f.cons) if f.cons else [],
+                "would_recommend": f.would_recommend,
+                "photos": json.loads(f.photos) if f.photos else [],
+                "is_public": f.is_public,
+                "is_verified": f.is_verified,
+                "response": f.response,
+                "response_at": f.response_at.isoformat() if f.response_at else None,
+                "created_at": f.created_at.isoformat() if f.created_at else None
+            }
+            for f in feedbacks
+        ]
+    }
+
+@api_router.get("/feedback/{feedback_id}")
+def get_feedback_detail(feedback_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get single feedback detail"""
+    feedback = db.query(DBFeedback).filter(
+        DBFeedback.id == feedback_id,
+        DBFeedback.user_id == user.id
+    ).first()
+    
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    property = db.query(DBProperty).filter(DBProperty.id == feedback.property_id).first()
+    
+    return {
+        "id": feedback.id,
+        "property_id": feedback.property_id,
+        "property_name": property.name if property else "Unknown",
+        "booking_id": feedback.booking_id,
+        "guest_name": feedback.guest_name,
+        "guest_email": feedback.guest_email,
+        "rating": feedback.rating,
+        "title": feedback.title,
+        "comment": feedback.comment,
+        "pros": json.loads(feedback.pros) if feedback.pros else [],
+        "cons": json.loads(feedback.cons) if feedback.cons else [],
+        "would_recommend": feedback.would_recommend,
+        "photos": json.loads(feedback.photos) if feedback.photos else [],
+        "is_public": feedback.is_public,
+        "is_verified": feedback.is_verified,
+        "response": feedback.response,
+        "response_at": feedback.response_at.isoformat() if feedback.response_at else None,
+        "created_at": feedback.created_at.isoformat() if feedback.created_at else None
+    }
+
+@api_router.put("/feedback/{feedback_id}")
+def update_feedback(feedback_id: str, data: FeedbackUpdate, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update feedback (e.g., add response or change visibility)"""
+    feedback = db.query(DBFeedback).filter(
+        DBFeedback.id == feedback_id,
+        DBFeedback.user_id == user.id
+    ).first()
+    
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    if data.is_public is not None:
+        feedback.is_public = data.is_public
+    
+    if data.response:
+        feedback.response = data.response
+        feedback.response_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(feedback)
+    
+    return {"message": "Feedback aktualisiert", "id": feedback.id}
+
+@api_router.delete("/feedback/{feedback_id}")
+def delete_feedback(feedback_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete feedback"""
+    feedback = db.query(DBFeedback).filter(
+        DBFeedback.id == feedback_id,
+        DBFeedback.user_id == user.id
+    ).first()
+    
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    db.delete(feedback)
+    db.commit()
+    
+    return {"message": "Feedback gelöscht"}
+
+@api_router.get("/feedback/stats/summary")
+def get_feedback_stats(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get feedback statistics summary"""
+    from sqlalchemy import func
+    
+    # Get all feedback for user's properties
+    feedbacks = db.query(DBFeedback).filter(DBFeedback.user_id == user.id).all()
+    
+    if not feedbacks:
+        return {
+            "total_reviews": 0,
+            "average_rating": 0,
+            "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
+            "would_recommend_percentage": 0,
+            "recent_reviews": []
+        }
+    
+    total = len(feedbacks)
+    avg_rating = sum(f.rating for f in feedbacks) / total if total > 0 else 0
+    
+    # Rating distribution
+    rating_dist = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for f in feedbacks:
+        if f.rating in rating_dist:
+            rating_dist[f.rating] += 1
+    
+    # Would recommend percentage
+    recommend_count = sum(1 for f in feedbacks if f.would_recommend)
+    recommend_pct = (recommend_count / total * 100) if total > 0 else 0
+    
+    # Recent reviews
+    recent = sorted(feedbacks, key=lambda x: x.created_at or datetime.min, reverse=True)[:5]
+    
+    return {
+        "total_reviews": total,
+        "average_rating": round(avg_rating, 1),
+        "rating_distribution": rating_dist,
+        "would_recommend_percentage": round(recommend_pct, 1),
+        "recent_reviews": [
+            {
+                "id": f.id,
+                "rating": f.rating,
+                "title": f.title,
+                "comment": f.comment[:100] + "..." if f.comment and len(f.comment) > 100 else f.comment,
+                "guest_name": f.guest_name,
+                "created_at": f.created_at.isoformat() if f.created_at else None
+            }
+            for f in recent
+        ]
+    }
+
+@api_router.get("/feedback/public/{property_id}")
+def get_public_feedback(property_id: str, db: Session = Depends(get_db)):
+    """Get public feedback for a property (no auth required)"""
+    feedbacks = db.query(DBFeedback).filter(
+        DBFeedback.property_id == property_id,
+        DBFeedback.is_public == True
+    ).order_by(DBFeedback.created_at.desc()).limit(20).all()
+    
+    return {
+        "feedback": [
+            {
+                "id": f.id,
+                "guest_name": f.guest_name or "Gast",
+                "rating": f.rating,
+                "title": f.title,
+                "comment": f.comment,
+                "would_recommend": f.would_recommend,
+                "created_at": f.created_at.isoformat() if f.created_at else None
+            }
+            for f in feedbacks
+        ]
+    }
+
 # ============ STATS ENDPOINTS ============
 @api_router.get("/stats/global")
 def get_global_stats(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):

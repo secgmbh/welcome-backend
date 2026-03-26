@@ -147,9 +147,29 @@ class Partner(Base):
     email = Column(String(200))
     website = Column(String(500))
     image_url = Column(String(500))
-    commission_rate = Column(Float, default=0)
-    is_active = Column(Boolean, default=True)
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Property owner
+    property_id = Column(String(36), nullable=False, index=True)
+    booking_id = Column(String(36), index=True)  # Optional: link to booking
+    guest_name = Column(String(200))
+    guest_email = Column(String(200))
+    rating = Column(Integer, nullable=False)  # 1-5 stars
+    title = Column(String(200))
+    comment = Column(Text)
+    pros = Column(Text)  # JSON array of positive points
+    cons = Column(Text)  # JSON array of negative points
+    would_recommend = Column(Boolean)  # Would recommend to others
+    photos = Column(Text)  # JSON array of photo URLs
+    is_public = Column(Boolean, default=False)  # Show on public profile
+    is_verified = Column(Boolean, default=False)  # Verified stay
+    response = Column(Text)  # Owner response
+    response_at = Column(DateTime)  # When owner responded
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class SmartRule(Base):
