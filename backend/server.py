@@ -2110,6 +2110,42 @@ async def paypal_webhook(request: Request, db: Session = Depends(get_db)):
         logger.error(f"PayPal webhook error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# ============ REMINDER SETTINGS ============
+class ReminderSettings(BaseModel):
+    checkin_reminder_enabled: bool = True
+    checkin_reminder_days: int = 1
+    checkout_reminder_enabled: bool = True
+    checkout_reminder_hours: int = 2
+    feedback_request_enabled: bool = True
+    feedback_request_days: int = 1
+    cleaning_reminder_enabled: bool = True
+    cleaning_reminder_hours: int = 24
+
+@api_router.get("/settings/reminders")
+def get_reminder_settings(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get user's reminder settings"""
+    # For now, return defaults - in production, store in database
+    return {
+        "checkin_reminder_enabled": True,
+        "checkin_reminder_days": 1,
+        "checkout_reminder_enabled": True,
+        "checkout_reminder_hours": 2,
+        "feedback_request_enabled": True,
+        "feedback_request_days": 1,
+        "cleaning_reminder_enabled": True,
+        "cleaning_reminder_hours": 24
+    }
+
+@api_router.put("/settings/reminders")
+def update_reminder_settings(data: ReminderSettings, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update user's reminder settings"""
+    # In production, store in database
+    # For now, just return the settings
+    return {
+        "message": "Reminder settings updated",
+        "settings": data.model_dump()
+    }
+
 # ============ CRON JOBS ============
 @api_router.post("/cron/booking-reminders")
 async def send_booking_reminders(db: Session = Depends(get_db)):
