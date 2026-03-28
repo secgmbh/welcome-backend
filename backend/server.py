@@ -2506,6 +2506,109 @@ def trigger_webhooks(event_type: str, data: dict, user_id: str):
             webhook["failure_count"] = webhook.get("failure_count", 0) + 1
             logger.error(f"Webhook delivery failed: {e}")
 
+# ============ GOOGLE CALENDAR SYNC ============
+
+# In-memory storage for calendar tokens (in production, use database)
+CALENDAR_TOKENS = {}
+
+@api_router.get("/calendar/status")
+def get_calendar_status(user: DBUser = Depends(get_current_user)):
+    """Get Google Calendar connection status"""
+    user_token = CALENDAR_TOKENS.get(str(user.id))
+    
+    if user_token:
+        return {
+            "connected": True,
+            "calendar_name": user_token.get("calendar_name", "Google Calendar"),
+            "last_sync": user_token.get("last_sync"),
+            "events_count": user_token.get("events_count", 0)
+        }
+    
+    return {"connected": False}
+
+@api_router.post("/calendar/connect")
+def connect_calendar(user: DBUser = Depends(get_current_user)):
+    """Initiate Google Calendar OAuth flow"""
+    # In production, use real Google OAuth
+    # For demo, return mock auth URL
+    return {
+        "auth_url": f"https://accounts.google.com/o/oauth2/v2/auth?client_id=demo&redirect_uri=https://www.welcome-link.de/calendar/callback&scope=https://www.googleapis.com/auth/calendar&state={user.id}"
+    }
+
+@api_router.post("/calendar/callback")
+def calendar_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """Handle Google Calendar OAuth callback"""
+    # In production, exchange code for tokens
+    # For demo, store mock token
+    user_id = state
+    
+    CALENDAR_TOKENS[user_id] = {
+        "access_token": "mock_token",
+        "refresh_token": "mock_refresh",
+        "calendar_name": "Welcome Link Bookings",
+        "connected_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    return {"message": "Calendar verbunden", "connected": True}
+
+@api_router.post("/calendar/sync")
+def sync_calendar(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Sync bookings to Google Calendar"""
+    user_token = CALENDAR_TOKENS.get(str(user.id))
+    
+    if not user_token:
+        raise HTTPException(status_code=400, detail="Calendar nicht verbunden")
+    
+    # Get user's bookings
+    bookings = db.query(DBBooking).filter(DBBooking.user_id == user.id).all()
+    properties = {str(p.id): p.name for p in db.query(DBProperty).filter(DBProperty.user_id == user.id).all()}
+    
+    # In production, create Google Calendar events
+    # For demo, return mock sync result
+    events_synced = len(bookings)
+    
+    # Update last sync time
+    CALENDAR_TOKENS[str(user.id)]["last_sync"] = datetime.now(timezone.utc).isoformat()
+    CALENDAR_TOKENS[str(user.id)]["events_count"] = events_synced
+    
+    return {
+        "message": "Kalender synchronisiert",
+        "events_synced": events_synced
+    }
+
+@api_router.get("/calendar/events")
+def get_calendar_events(user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get synced calendar events"""
+    user_token = CALENDAR_TOKENS.get(str(user.id))
+    
+    if not user_token:
+        return {"events": []}
+    
+    # Get user's bookings as events
+    bookings = db.query(DBBooking).filter(DBBooking.user_id == user.id).all()
+    properties = {str(p.id): p.name for p in db.query(DBProperty).filter(DBProperty.user_id == user.id).all()}
+    
+    events = []
+    for b in bookings:
+        events.append({
+            "id": str(b.id),
+            "summary": f"{b.guest_name or 'Gast'} - {properties.get(str(b.property_id), 'Unterkunft')}",
+            "start": b.check_in.isoformat() if b.check_in else None,
+            "end": b.check_out.isoformat() if b.check_out else None,
+            "status": b.status or "pending",
+            "htmlLink": f"https://calendar.google.com"
+        })
+    
+    return {"events": events}
+
+@api_router.post("/calendar/disconnect")
+def disconnect_calendar(user: DBUser = Depends(get_current_user)):
+    """Disconnect Google Calendar"""
+    if str(user.id) in CALENDAR_TOKENS:
+        del CALENDAR_TOKENS[str(user.id)]
+    
+    return {"message": "Calendar Verbindung getrennt"}
+
 # ============ CHECKOUT ENDPOINTS ============
 def get_invoice(checkout_id: str):
     """Get invoice PDF for checkout"""
