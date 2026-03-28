@@ -2356,7 +2356,157 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         logger.error(f"Stripe webhook error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@api_router.get("/checkout/{checkout_id}/invoice")
+# ============ WEBHOOK MANAGEMENT ============
+
+class WebhookEndpoint(BaseModel):
+    url: str
+    events: List[str]  # booking.created, booking.updated, booking.cancelled, etc.
+    secret: Optional[str] = None
+    is_active: bool = True
+
+class WebhookEndpointUpdate(BaseModel):
+    url: Optional[str] = None
+    events: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+# In-memory storage for webhooks (in production, use database)
+WEBHOOKS_STORE = {}
+
+@api_router.get("/webhooks")
+def get_webhooks(user: DBUser = Depends(get_current_user)):
+    """Get all webhook endpoints for user"""
+    user_webhooks = WEBHOOKS_STORE.get(str(user.id), [])
+    return {"webhooks": user_webhooks}
+
+@api_router.post("/webhooks")
+def create_webhook(data: WebhookEndpoint, user: DBUser = Depends(get_current_user)):
+    """Create a new webhook endpoint"""
+    import httpx
+    
+    webhook_id = str(uuid.uuid4())
+    webhook = {
+        "id": webhook_id,
+        "url": data.url,
+        "events": data.events,
+        "secret": data.secret or secrets.token_urlsafe(32),
+        "is_active": data.is_active,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_triggered": None,
+        "success_count": 0,
+        "failure_count": 0
+    }
+    
+    if str(user.id) not in WEBHOOKS_STORE:
+        WEBHOOKS_STORE[str(user.id)] = []
+    
+    WEBHOOKS_STORE[str(user.id)].append(webhook)
+    
+    return {"message": "Webhook erstellt", "webhook": webhook}
+
+@api_router.put("/webhooks/{webhook_id}")
+def update_webhook(webhook_id: str, data: WebhookEndpointUpdate, user: DBUser = Depends(get_current_user)):
+    """Update webhook endpoint"""
+    user_webhooks = WEBHOOKS_STORE.get(str(user.id), [])
+    
+    for webhook in user_webhooks:
+        if webhook["id"] == webhook_id:
+            if data.url:
+                webhook["url"] = data.url
+            if data.events:
+                webhook["events"] = data.events
+            if data.is_active is not None:
+                webhook["is_active"] = data.is_active
+            return {"message": "Webhook aktualisiert", "webhook": webhook}
+    
+    raise HTTPException(status_code=404, detail="Webhook nicht gefunden")
+
+@api_router.delete("/webhooks/{webhook_id}")
+def delete_webhook(webhook_id: str, user: DBUser = Depends(get_current_user)):
+    """Delete webhook endpoint"""
+    user_webhooks = WEBHOOKS_STORE.get(str(user.id), [])
+    
+    for i, webhook in enumerate(user_webhooks):
+        if webhook["id"] == webhook_id:
+            user_webhooks.pop(i)
+            return {"message": "Webhook gelöscht"}
+    
+    raise HTTPException(status_code=404, detail="Webhook nicht gefunden")
+
+@api_router.post("/webhooks/{webhook_id}/test")
+def test_webhook(webhook_id: str, user: DBUser = Depends(get_current_user)):
+    """Test webhook endpoint by sending a test payload"""
+    import httpx
+    
+    user_webhooks = WEBHOOKS_STORE.get(str(user.id), [])
+    
+    for webhook in user_webhooks:
+        if webhook["id"] == webhook_id:
+            test_payload = {
+                "event": "test",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": {
+                    "message": "This is a test webhook",
+                    "user_id": str(user.id)
+                }
+            }
+            
+            try:
+                response = httpx.post(
+                    webhook["url"],
+                    json=test_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Webhook-Secret": webhook["secret"]
+                    },
+                    timeout=10.0
+                )
+                
+                return {
+                    "success": response.status_code == 200,
+                    "status_code": response.status_code,
+                    "response": response.text[:500]
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+    
+    raise HTTPException(status_code=404, detail="Webhook nicht gefunden")
+
+def trigger_webhooks(event_type: str, data: dict, user_id: str):
+    """Internal function to trigger webhooks for events"""
+    import httpx
+    
+    user_webhooks = WEBHOOKS_STORE.get(user_id, [])
+    
+    for webhook in user_webhooks:
+        if not webhook["is_active"]:
+            continue
+        
+        if event_type not in webhook["events"]:
+            continue
+        
+        payload = {
+            "event": event_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": data
+        }
+        
+        try:
+            httpx.post(
+                webhook["url"],
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Webhook-Secret": webhook["secret"]
+                },
+                timeout=5.0
+            )
+            webhook["success_count"] = webhook.get("success_count", 0) + 1
+            webhook["last_triggered"] = datetime.now(timezone.utc).isoformat()
+        except Exception as e:
+            webhook["failure_count"] = webhook.get("failure_count", 0) + 1
+            logger.error(f"Webhook delivery failed: {e}")
+
+# ============ CHECKOUT ENDPOINTS ============
 def get_invoice(checkout_id: str):
     """Get invoice PDF for checkout"""
     checkout = CHECKOUTS_STORE.get(checkout_id)
@@ -3464,6 +3614,18 @@ def create_booking(data: dict, user: DBUser = Depends(get_current_user), db: Ses
             logger.info(f"Booking confirmation email sent to: {guest_email}")
         except Exception as e:
             logger.error(f"Failed to send booking email: {str(e)}")
+    
+    # Trigger webhooks for booking.created event
+    trigger_webhooks("booking.created", {
+        "booking_id": booking_id,
+        "property_id": data.get("property_id"),
+        "guest_name": guest_name,
+        "guest_email": guest_email,
+        "check_in": check_in,
+        "check_out": check_out,
+        "total_price": total_price,
+        "status": "pending"
+    }, str(user.id))
     
     return {
         "id": booking_id,
