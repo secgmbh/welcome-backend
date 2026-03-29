@@ -2793,17 +2793,16 @@ def init_demo_data(db: Session = Depends(get_db)):
         db.commit()
         db.refresh(property)
     else:
-        # Update existing property with image if missing
-        if not property.image_url:
-            property.image_url = "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1200&h=800&fit=crop"
+        # Update existing property with description if missing
+        if not getattr(property, 'description', None):
             property.description = "Gemütliche 3-Zimmer Ferienwohnung mit atemberaubendem Blick auf den Chiemsee. Perfekt für Familien und Paare, die Erholung und Natur suchen."
             db.commit()
     
-    # Return the property with its actual database ID
+    # Return the property with its actual database ID (use getattr for safety)
     return {
         "success": True,
         "user": {"id": user.id, "email": user.email, "name": user.name},
-        "property": {"id": property.id, "name": property.name, "image_url": property.image_url},
+        "property": {"id": property.id, "name": property.name, "image_url": getattr(property, 'image_url', "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1200&h=800&fit=crop")},
         "guestview_token": "QEJHEXP1QF"
     }
 
