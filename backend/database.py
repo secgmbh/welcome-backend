@@ -53,10 +53,25 @@ class Property(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text)
     address = Column(String(500))
+    # Property Image
+    image_url = Column(String(500))
     # Key-Safe Info
     keysafe_location = Column(String(500))
     keysafe_code = Column(String(50))
     keysafe_instructions = Column(Text)
+    # Check-in/Check-out
+    checkin_time = Column(String(10), default="15:00")
+    checkout_time = Column(String(10), default="11:00")
+    # Branding
+    brand_color = Column(String(7), default="#F27C2C")
+    # Contact
+    contact_phone = Column(String(50))
+    contact_email = Column(String(255))
+    # House Rules
+    house_rules = Column(Text)  # JSON array stored as text
+    # WiFi Info
+    wifi_name = Column(String(100))
+    wifi_password = Column(String(100))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class StatusCheck(Base):
