@@ -67,5 +67,5 @@ alembic==1.18.4
 reportlab==4.2.0
 httpx>=0.24.0
 psutil>=5.9.0
-qrcode==8.0
+qrcode[pil]==7.4.2
 Pillow==11.0.0
