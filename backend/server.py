@@ -1736,15 +1736,15 @@ def create_extra(property_id: int, data: ExtraCreate, user = Depends(get_current
     return extra
 
 # ============ QR CODE ENDPOINTS ============
-import qrcode
-from qrcode.image.styledpil import StyledPilImage
-from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
-from io import BytesIO
-import base64
 
 @api_router.get("/properties/{property_id}/qr")
 def get_property_qr(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Generate QR code for property guest view"""
+    import qrcode
+    from qrcode.image.styledpil import StyledPilImage
+    from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+    from io import BytesIO
+    import base64
     try:
         # Convert property_id to int if possible, otherwise use string
         try:
@@ -1802,8 +1802,12 @@ def get_property_qr(property_id: str, user: DBUser = Depends(get_current_user), 
 @api_router.get("/properties/{property_id}/qr/download")
 def download_property_qr(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Download QR code as PNG file"""
+    import qrcode
+    from qrcode.image.styledpil import StyledPilImage
+    from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+    from io import BytesIO
     from fastapi.responses import Response
-    
+
     try:
         # Convert property_id to int if possible
         try:
@@ -1859,8 +1863,12 @@ def download_property_qr(property_id: str, user: DBUser = Depends(get_current_us
 @api_router.post("/properties/{property_id}/qr/pdf")
 def generate_qr_pdf(property_id: str, user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Generate print-ready PDF with QR code for property"""
+    import qrcode
+    from qrcode.image.styledpil import StyledPilImage
+    from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+    from io import BytesIO
     from fastapi.responses import Response
-    
+
     try:
         # Convert property_id
         try:
